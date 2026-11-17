@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -64,14 +65,37 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
-            if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
-                keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: ""
-                keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
+            // Load local gitignored android/keystore.properties if present; CI environment variables take precedence
+            val keystoreProps = Properties().apply {
+                val propsFile = rootProject.file("keystore.properties")
+                if (propsFile.exists()) {
+                    propsFile.inputStream().use { load(it) }
+                }
+            }
+
+            val rawStorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+                ?: keystoreProps.getProperty("storeFile")
+            val resolvedStoreFile = rawStorePath?.takeIf { it.isNotBlank() }?.let { p ->
+                val direct = file(p)
+                if (direct.exists()) direct else rootProject.file(p)
+            }
+
+            if (resolvedStoreFile != null && resolvedStoreFile.exists()) {
+                storeFile = resolvedStoreFile
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                    ?: keystoreProps.getProperty("storePassword")
+                    ?: ""
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                    ?: keystoreProps.getProperty("keyAlias")
+                    ?: ""
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                    ?: keystoreProps.getProperty("keyPassword")
+                    ?: ""
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             } else {
-                // Fallback to standard debug signing so CI builds are directly installable
+                // Fallback to standard debug signing so unconfigured builds remain directly installable
                 initWith(getByName("debug"))
             }
         }
