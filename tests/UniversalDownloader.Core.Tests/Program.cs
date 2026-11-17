@@ -204,5 +204,12 @@ RunTest("UpdateChecker.IsInstalledInProgramFiles detects MSI install location on
     }
 });
 
+RunTest("UpdateChecker.ExtractVersionFromReleaseUrl parses GitHub redirect tag URLs", () =>
+{
+    AssertEqual("2.3.0", UpdateChecker.ExtractVersionFromReleaseUrl("https://github.com/Antony-Gh/Universal-Donwloader/releases/tag/v2.3.0"));
+    AssertEqual("3.1.4", UpdateChecker.ExtractVersionFromReleaseUrl("https://github.com/Antony-Gh/Universal-Donwloader/releases/tag/v3.1.4-beta?ref=latest"));
+    AssertEqual("", UpdateChecker.ExtractVersionFromReleaseUrl("https://github.com/Antony-Gh/Universal-Donwloader/releases"));
+});
+
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

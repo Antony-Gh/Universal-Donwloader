@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -7,8 +9,8 @@ namespace UniversalDownloader.Core;
 
 public record AppUpdateInfo
 {
-    public string CurrentVersion { get; init; } = "2.2.0";
-    public string LatestVersion { get; init; } = "2.2.0";
+    public string CurrentVersion { get; init; } = "2.3.0";
+    public string LatestVersion { get; init; } = "2.3.0";
     public bool IsUpdateAvailable { get; init; }
     public string ReleaseTitle { get; init; } = string.Empty;
     public string ReleaseUrl { get; init; } = "https://github.com/Antony-Gh/Universal-Donwloader/releases/latest";
@@ -28,11 +30,66 @@ public static class UpdateChecker
     public static string RepoOwner => GetAssemblyMetadata("GitHubOwner") ?? "Antony-Gh";
     public static string RepoName => GetAssemblyMetadata("GitHubRepo") ?? "Universal-Donwloader";
     public static string AppDisplayName => GetAssemblyMetadata("AppDisplayName") ?? "Universal Media Downloader";
-    public static int AppVersionCode => int.TryParse(GetAssemblyMetadata("AppVersionCode"), out var code) ? code : 150;
+    public static int AppVersionCode => int.TryParse(GetAssemblyMetadata("AppVersionCode"), out var code) ? code : 230;
     public static string LatestReleaseApiUrl => $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest";
     public static string LatestReleaseWebUrl => $"https://github.com/{RepoOwner}/{RepoName}/releases/latest";
 
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(12) };
+    private static readonly HttpClient ApiHttp = new(CreateHttpHandler(allowAutoRedirect: true))
+    {
+        Timeout = TimeSpan.FromSeconds(25)
+    };
+
+    private static readonly HttpClient RedirectHttp = new(CreateHttpHandler(allowAutoRedirect: false))
+    {
+        Timeout = TimeSpan.FromSeconds(15)
+    };
+
+    private static readonly HttpClient DownloadHttp = new(CreateHttpHandler(allowAutoRedirect: true))
+    {
+        Timeout = TimeSpan.FromMinutes(15)
+    };
+
+    private static SocketsHttpHandler CreateHttpHandler(bool allowAutoRedirect)
+    {
+        return new SocketsHttpHandler
+        {
+            AllowAutoRedirect = allowAutoRedirect,
+            AutomaticDecompression = DecompressionMethods.All,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+            ConnectCallback = async (context, ct) =>
+            {
+                // Prefer IPv4 addresses first to avoid Windows IPv6 blackhole stalls against GitHub endpoints
+                var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, ct);
+                var ordered = addresses
+                    .OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)
+                    .ToArray();
+
+                Exception? lastError = null;
+                foreach (var addr in ordered)
+                {
+                    var socket = new Socket(addr.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
+                    {
+                        NoDelay = true
+                    };
+                    try
+                    {
+                        using var perAttemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        perAttemptCts.CancelAfter(TimeSpan.FromSeconds(8));
+                        await socket.ConnectAsync(addr, context.DnsEndPoint.Port, perAttemptCts.Token);
+                        return new NetworkStream(socket, ownsSocket: true);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                    {
+                        socket.Dispose();
+                        lastError = ex;
+                    }
+                }
+
+                throw lastError ?? new SocketException((int)SocketError.HostNotFound);
+            }
+        };
+    }
 
     private static string? GetAssemblyMetadata(string key)
     {
@@ -49,19 +106,73 @@ public static class UpdateChecker
     {
         var ver = Assembly.GetEntryAssembly()?.GetName().Version
             ?? typeof(UpdateChecker).Assembly.GetName().Version;
-        if (ver == null) return "2.2.0";
+        if (ver == null) return "2.3.0";
         return $"{ver.Major}.{ver.Minor}.{Math.Max(0, ver.Build)}";
     }
 
     public static async Task<AppUpdateInfo> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
     {
         var currentVersionStr = GetCurrentVersion();
+        Exception? apiError = null;
 
+        // Primary: GitHub Releases REST API (with 1 automatic retry on transient timeout/network error)
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            try
+            {
+                return await CheckViaGitHubApiAsync(currentVersionStr, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                apiError = ex;
+                if (attempt == 0)
+                {
+                    await Task.Delay(500, cancellationToken);
+                }
+            }
+        }
+
+        // Fallback: follow github.com/<owner>/<repo>/releases/latest redirect (fast, never API-rate-limited)
+        try
+        {
+            var fallbackInfo = await TryCheckViaLatestRedirectAsync(currentVersionStr, cancellationToken);
+            if (fallbackInfo != null)
+            {
+                return fallbackInfo;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // Surface clean primary error below
+        }
+
+        if (apiError is TaskCanceledException || apiError is TimeoutException)
+        {
+            throw new TimeoutException(
+                "Timed out connecting to GitHub Releases. Please check your internet connection and try again.",
+                apiError);
+        }
+
+        throw apiError ?? new HttpRequestException("Unable to reach GitHub Releases.");
+    }
+
+    private static async Task<AppUpdateInfo> CheckViaGitHubApiAsync(
+        string currentVersionStr,
+        CancellationToken cancellationToken)
+    {
         using var req = new HttpRequestMessage(HttpMethod.Get, LatestReleaseApiUrl);
         req.Headers.Add("User-Agent", $"UniversalDownloader/{currentVersionStr}");
         req.Headers.Add("Accept", "application/vnd.github+json");
 
-        using var resp = await Http.SendAsync(req, cancellationToken);
+        using var resp = await ApiHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadAsStringAsync(cancellationToken);
@@ -123,6 +234,58 @@ public static class UpdateChecker
         };
     }
 
+    private static async Task<AppUpdateInfo?> TryCheckViaLatestRedirectAsync(
+        string currentVersionStr,
+        CancellationToken cancellationToken)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Head, LatestReleaseWebUrl);
+        req.Headers.Add("User-Agent", $"UniversalDownloader/{currentVersionStr}");
+        using var resp = await RedirectHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        var location = resp.Headers.Location?.ToString();
+        if (string.IsNullOrWhiteSpace(location)) return null;
+
+        var resolvedUrl = location.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? location
+            : $"https://github.com{location}";
+
+        var latestVersionStr = ExtractVersionFromReleaseUrl(resolvedUrl);
+        if (string.IsNullOrWhiteSpace(latestVersionStr)) return null;
+
+        var tag = $"v{latestVersionStr}";
+        string? assetName = null;
+        string downloadUrl = resolvedUrl;
+        if (PlatformUtils.IsWindows)
+        {
+            assetName = IsInstalledInProgramFiles()
+                ? "UniversalDownloader-Setup-x64.msi"
+                : "UniversalDownloader.exe";
+            downloadUrl = $"https://github.com/{RepoOwner}/{RepoName}/releases/download/{tag}/{assetName}";
+        }
+
+        return new AppUpdateInfo
+        {
+            CurrentVersion = currentVersionStr,
+            LatestVersion = latestVersionStr,
+            IsUpdateAvailable = CompareVersions(latestVersionStr, currentVersionStr) > 0,
+            ReleaseTitle = $"{AppDisplayName} {tag}",
+            ReleaseUrl = resolvedUrl,
+            DownloadUrl = downloadUrl,
+            AssetName = assetName,
+            ChecksumsAssetUrl = $"https://github.com/{RepoOwner}/{RepoName}/releases/download/{tag}/SHA256SUMS.txt",
+        };
+    }
+
+    public static string ExtractVersionFromReleaseUrl(string releaseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(releaseUrl)) return string.Empty;
+        var marker = "/releases/tag/";
+        var idx = releaseUrl.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return string.Empty;
+        var tag = releaseUrl[(idx + marker.Length)..].Split(['?', '#', '/'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        return NormalizeVersion(tag);
+    }
+
     /// <summary>
     /// Download the update asset to a temporary staging folder and verify its SHA-256 against SHA256SUMS.txt if published.
     /// </summary>
@@ -138,7 +301,7 @@ public static class UpdateChecker
 
         using var req = new HttpRequestMessage(HttpMethod.Get, info.DownloadUrl);
         req.Headers.Add("User-Agent", $"UniversalDownloader/{GetCurrentVersion()}");
-        using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var resp = await DownloadHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         resp.EnsureSuccessStatusCode();
 
         var totalBytes = resp.Content.Headers.ContentLength ?? info.AssetSizeBytes;
@@ -164,7 +327,7 @@ public static class UpdateChecker
         {
             using var sumReq = new HttpRequestMessage(HttpMethod.Get, info.ChecksumsAssetUrl);
             sumReq.Headers.Add("User-Agent", $"UniversalDownloader/{GetCurrentVersion()}");
-            using var sumResp = await Http.SendAsync(sumReq, cancellationToken);
+            using var sumResp = await ApiHttp.SendAsync(sumReq, cancellationToken);
             if (sumResp.IsSuccessStatusCode)
             {
                 var sumsText = await sumResp.Content.ReadAsStringAsync(cancellationToken);
