@@ -285,6 +285,8 @@ class YTDLPExtractor:
 
             return info
 
+        except ExtractionError:
+            raise
         except self.yt_dlp.utils.DownloadError as exc:
             raise ExtractionError(clean_error_message(str(exc))) from exc
         except Exception as exc:

@@ -26,7 +26,14 @@ from universal_downloader.history import clear_history, get_db_path, get_history
 from universal_downloader.logging_utils import configure_logging, format_download_error
 from universal_downloader.models import ContentType, DetectedTarget, Platform
 from universal_downloader.notify import send_notification
-from universal_downloader.profile import USERNAME_PLATFORM_PREFIXES
+from universal_downloader.profile import (
+    USERNAME_PLATFORM_PREFIXES,
+    extract_profile_title,
+    extract_public_profile_images,
+    extract_username_from_profile_url,
+    fetch_public_html,
+    load_cookie_jar,
+)
 from universal_downloader.protocol import clean_protocol_url, register_protocol, unregister_protocol
 from universal_downloader.updater import update_ytdlp
 from universal_downloader.utils.net import detect_target
@@ -673,6 +680,40 @@ def main() -> int:
             meta_url = clean_protocol_url(args.metadata)
             try:
                 target = detect_target(meta_url, timeout=config.timeout)
+                if target.content_type == ContentType.PROFILE and target.platform in {
+                    Platform.FACEBOOK,
+                    Platform.INSTAGRAM,
+                    Platform.TWITTER,
+                    Platform.THREADS,
+                }:
+                    cookie_jar = load_cookie_jar(config)
+                    page = fetch_public_html(target.normalized_url, config.timeout, cookie_jar=cookie_jar)
+                    imgs = extract_public_profile_images(page, base_url=target.normalized_url)
+                    username = extract_username_from_profile_url(target.normalized_url, target.platform) or "Profile"
+                    prof_title = extract_profile_title(page) or username
+                    payload = {
+                        "url": target.normalized_url,
+                        "platform": target.platform.value,
+                        "title": prof_title,
+                        "uploader": username,
+                        "duration": None,
+                        "duration_string": None,
+                        "thumbnail": imgs[0] if imgs else None,
+                        "description": "Profile page — click 'Profile Pic' or 'Start Download' to save the publicly available avatar.",
+                        "view_count": None,
+                        "is_playlist": False,
+                        "playlist_count": 0,
+                        "qualities": [],
+                        "entries": [],
+                    }
+                    if config.json_output or config.json_stream:
+                        print(json.dumps(payload, indent=2))
+                    else:
+                        print(f"Title:     {payload['title']}")
+                        print(f"Uploader:  {payload['uploader']}")
+                        print(f"Thumbnail: {payload['thumbnail']}")
+                    return 0
+
                 is_pl = target.content_type == ContentType.PLAYLIST
                 info_data = engine.inspect(
                     target.normalized_url,

@@ -107,11 +107,25 @@ class DownloadEngine:
         if target.platform == Platform.UNKNOWN and not self.config.json_output:
             warning("Unknown domain; attempting generic extraction.", self.config)
 
-        if target.content_type == ContentType.PROFILE and not self.config.json_output:
-            warning(
-                "This appears to be a profile URL. Use --profile for profile-picture mode.",
-                self.config,
-            )
+        if target.content_type == ContentType.PROFILE:
+            if target.platform in {
+                Platform.FACEBOOK,
+                Platform.INSTAGRAM,
+                Platform.TWITTER,
+                Platform.THREADS,
+            }:
+                saved_profile = self.download_profile(target.normalized_url)
+                return DownloadResult(
+                    success=True,
+                    url=target.normalized_url,
+                    files=[saved_profile],
+                    metadata={"title": saved_profile.stem, "platform": target.platform.value},
+                )
+            if not self.config.json_output:
+                warning(
+                    "This appears to be a profile URL. Use --profile for profile-picture mode.",
+                    self.config,
+                )
 
         # Dry-run mode: extract metadata only and report
         if self.config.dry_run:

@@ -288,9 +288,17 @@ def detect_content_type(url: str, platform: Platform) -> ContentType:
         return ContentType.UNKNOWN
 
     if platform == Platform.FACEBOOK:
-        if "/watch" in path or "/reel" in path or "/videos/" in path:
+        if "/watch" in path or "/reel" in path or "/videos/" in path or "/share/v/" in path or "/share/r/" in path:
             return ContentType.VIDEO
         if "/profile.php" in path or "/people/" in path:
+            return ContentType.PROFILE
+        fb_segments = [s for s in path.split("/") if s]
+        fb_reserved = {
+            "watch", "reel", "reels", "videos", "share", "story.php", "photo", "photo.php",
+            "permalink.php", "groups", "events", "marketplace", "gaming", "login", "help",
+            "pages", "hashtag", "posts", "stories", "live", "sharer",
+        }
+        if len(fb_segments) == 1 and fb_segments[0].lower() not in fb_reserved:
             return ContentType.PROFILE
 
     if platform == Platform.TWITTER:

@@ -51,6 +51,10 @@ def test_detect_content_type():
     assert detect_content_type("https://instagram.com/p/C123/", Platform.INSTAGRAM) == ContentType.POST
     assert detect_content_type("https://instagram.com/reel/C123/", Platform.INSTAGRAM) == ContentType.VIDEO
     assert detect_content_type("https://instagram.com/username", Platform.INSTAGRAM) == ContentType.PROFILE
+    assert detect_content_type("https://www.facebook.com/example.user", Platform.FACEBOOK) == ContentType.PROFILE
+    assert detect_content_type("https://www.facebook.com/profile.php?id=1000123", Platform.FACEBOOK) == ContentType.PROFILE
+    assert detect_content_type("https://www.facebook.com/reel/123456789", Platform.FACEBOOK) == ContentType.VIDEO
+    assert detect_content_type("https://www.facebook.com/watch/?v=123456", Platform.FACEBOOK) == ContentType.VIDEO
     assert detect_content_type("https://soundcloud.com/artist/track", Platform.SOUNDCLOUD) == ContentType.AUDIO
 
 

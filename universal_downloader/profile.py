@@ -196,6 +196,20 @@ def _unescape_embedded_url(raw: str) -> str:
     return html.unescape(cleaned).strip()
 
 
+def extract_profile_title(html_text: str) -> Optional[str]:
+    for pattern in (
+        re.compile(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)', re.I),
+        re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title', re.I),
+        re.compile(r'<title[^>]*>(.*?)</title>', re.I | re.S),
+    ):
+        match = pattern.search(html_text)
+        if match:
+            title = html.unescape(match.group(1)).strip()
+            if title:
+                return title
+    return None
+
+
 def extract_meta_image(html_text: str) -> Optional[str]:
     patterns = [
         re.compile(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', re.I),
@@ -477,24 +491,42 @@ class ProfilePhotoResolver:
             info("Resolving publicly exposed profile image...", self.config)
 
         candidates: list[str] = []
+        html_first_platforms = {
+            Platform.FACEBOOK,
+            Platform.INSTAGRAM,
+            Platform.TWITTER,
+            Platform.THREADS,
+            Platform.BLUESKY,
+            Platform.REDDIT,
+        }
 
-        # 1. First attempt: yt-dlp metadata (automatically uses configured cookies)
-        try:
-            extracted = self.extractor.extract_info(
-                target.normalized_url,
-                download=False,
-                extra={"skip_download": True, "extract_flat": True},
-            )
-            candidates.extend(extract_thumbnail_candidates(extracted))
-        except ExtractionError as exc:
-            LOGGER.info("yt-dlp profile metadata unavailable: %s", exc)
+        def try_html_lookup() -> None:
+            try:
+                page = fetch_public_html(target.normalized_url, self.config.timeout, cookie_jar=cookie_jar)
+                candidates.extend(extract_public_profile_images(page, base_url=target.normalized_url))
+            except ProfileError as exc:
+                LOGGER.info("Profile HTML lookup failed: %s", exc)
 
-        # 2. Second attempt: standard profile page HTML metadata (public SSR, JSON-LD, OpenGraph)
-        try:
-            page = fetch_public_html(target.normalized_url, self.config.timeout, cookie_jar=cookie_jar)
-            candidates.extend(extract_public_profile_images(page, base_url=target.normalized_url))
-        except ProfileError as exc:
-            LOGGER.info("Profile HTML lookup failed: %s", exc)
+        def try_ytdlp_lookup() -> None:
+            try:
+                extracted = self.extractor.extract_info(
+                    target.normalized_url,
+                    download=False,
+                    extra={"skip_download": True, "extract_flat": True},
+                )
+                candidates.extend(extract_thumbnail_candidates(extracted))
+            except ExtractionError as exc:
+                LOGGER.info("yt-dlp profile metadata unavailable: %s", exc)
+
+        if platform in html_first_platforms:
+            # Prefer direct public HTML/SSR metadata first to avoid noisy yt-dlp generic fallback on profile pages
+            try_html_lookup()
+            if not candidates:
+                try_ytdlp_lookup()
+        else:
+            try_ytdlp_lookup()
+            if not candidates:
+                try_html_lookup()
 
         unique_candidates: list[str] = []
         seen: set[str] = set()
