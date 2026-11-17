@@ -36,3 +36,4 @@ test_dist/
 *.bak
 *.orig
 *.rej
+instructions.txt

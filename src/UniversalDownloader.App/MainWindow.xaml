@@ -267,6 +267,53 @@
                 </Border>
             </TabItem>
 
+            <!-- TAB 4: CONSOLE LOGS -->
+            <TabItem Header="Console Logs">
+                <Border Background="{StaticResource CardBgBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="18" Margin="0,15,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Log Toolbar -->
+                        <Grid Grid.Row="0" Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" Text="Backend Engine Logs" VerticalAlignment="Center" FontWeight="Bold" Foreground="{StaticResource TextBrush}" FontSize="15"/>
+                            <CheckBox x:Name="WpfAutoScrollCheck" Grid.Column="1" Content="Auto-Scroll" IsChecked="True" Margin="14,0,0,0" Foreground="{StaticResource SubtextBrush}" FontSize="12" VerticalAlignment="Center"/>
+                            <CheckBox x:Name="WpfWordWrapCheck" Grid.Column="2" Content="Wrap Lines" IsChecked="True" Margin="10,0,0,0" Foreground="{StaticResource SubtextBrush}" FontSize="12" VerticalAlignment="Center" Checked="WpfWordWrapCheck_Changed" Unchecked="WpfWordWrapCheck_Changed"/>
+                            <TextBox x:Name="WpfLogsFilterBox" Grid.Column="3" Margin="14,0,12,0" VerticalContentAlignment="Center" TextChanged="WpfLogsFilterBox_TextChanged"/>
+                            <Button x:Name="WpfSaveLogsButton" Grid.Column="4" Content="💾 Save Logs" Margin="0,0,8,0" Style="{StaticResource SecondaryButton}" Click="WpfSaveLogsButton_Click"/>
+                            <Button x:Name="WpfCopyLogsButton" Grid.Column="5" Content="📋 Copy All" Margin="0,0,8,0" Style="{StaticResource SecondaryButton}" Click="WpfCopyLogsButton_Click"/>
+                            <Button x:Name="WpfClearLogsButton" Grid.Column="6" Content="🧹 Clear" Style="{StaticResource SecondaryButton}" Click="WpfClearLogsButton_Click"/>
+                        </Grid>
+
+                        <!-- Log Text Box -->
+                        <Border Grid.Row="1" Background="#090A0F" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12" MinHeight="360">
+                            <TextBox x:Name="WpfLogTextBox"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="True"
+                                     FontFamily="Cascadia Code, Consolas, Courier New, monospace"
+                                     FontSize="12"
+                                     Foreground="#86EFAC"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     VerticalScrollBarVisibility="Auto"/>
+                        </Border>
+                    </Grid>
+                </Border>
+            </TabItem>
+
         </TabControl>
 
         <!-- Status Bar -->

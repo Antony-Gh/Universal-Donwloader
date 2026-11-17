@@ -37,6 +37,16 @@ public record FormatInfoModel
     public bool HasVideo => !string.IsNullOrWhiteSpace(VCodec) && VCodec != "none";
     public bool HasAudio => !string.IsNullOrWhiteSpace(ACodec) && ACodec != "none";
 
+    public string FilesizeFormatted => Filesize.HasValue ? PlatformUtils.FormatBytes(Filesize.Value) : "Unknown size";
+
+    public string CodecSummary => (HasVideo && HasAudio) ? $"Video: {VCodec} • Audio: {ACodec}" :
+                                  HasVideo ? $"Video: {VCodec}" :
+                                  HasAudio ? $"Audio: {ACodec}" : "Direct Stream";
+
+    public string ResolutionFormatted => !string.IsNullOrWhiteSpace(Resolution) && Resolution != "audio only"
+        ? (Fps.HasValue ? $"{Resolution} @ {Fps:0}fps" : Resolution)
+        : (HasAudio ? "Audio Only" : "Stream");
+
     public string DisplayText => $"{Resolution} ({Extension}) {(Fps.HasValue ? Fps + "fps" : "")} - {FormatNote}".Trim();
 }
 

@@ -11,6 +11,7 @@ namespace UniversalDownloader.App;
 public partial class MainWindow : Window
 {
     private readonly DownloaderClient _client;
+    private readonly List<string> _allLogs = new();
     private CancellationTokenSource? _downloadCts;
 
     public MainWindow()
@@ -22,8 +23,39 @@ public partial class MainWindow : Window
         _client.DownloadCompleted += OnDownloadCompleted;
         _client.DownloadFailed += OnDownloadFailed;
         _client.StatusChanged += OnStatusChanged;
+        _client.RawOutputReceived += OnRawOutputReceived;
 
         Loaded += async (s, e) => await LoadHistoryAsync();
+    }
+
+    private void OnRawOutputReceived(object? sender, string line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return;
+
+        var timestamped = $"[{DateTime.Now:HH:mm:ss}] {line}";
+        _allLogs.Add(timestamped);
+
+        Dispatcher.Invoke(() =>
+        {
+            var filter = WpfLogsFilterBox.Text?.Trim();
+            if (string.IsNullOrEmpty(filter) || timestamped.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrEmpty(WpfLogTextBox.Text))
+                {
+                    WpfLogTextBox.Text = timestamped;
+                }
+                else
+                {
+                    WpfLogTextBox.Text += Environment.NewLine + timestamped;
+                }
+
+                if (WpfAutoScrollCheck.IsChecked == true)
+                {
+                    WpfLogTextBox.CaretIndex = WpfLogTextBox.Text.Length;
+                    WpfLogTextBox.ScrollToEnd();
+                }
+            }
+        });
     }
 
     private void OnProgressChanged(object? sender, DownloadProgressEvent e)
@@ -329,6 +361,68 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             MessageBox.Show($"Failed to register protocol: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void WpfSaveLogsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(WpfLogTextBox.Text)) return;
+
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Save Console Logs",
+            FileName = $"universal-downloader-log-{DateTime.Now:yyyyMMdd-HHmmss}.txt",
+            DefaultExt = ".txt",
+            Filter = "Text documents (.txt)|*.txt|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            File.WriteAllText(dialog.FileName, WpfLogTextBox.Text);
+            WpfSaveLogsButton.Content = "✓ Saved!";
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            timer.Tick += (s, ev) => { WpfSaveLogsButton.Content = "💾 Save Logs"; timer.Stop(); };
+            timer.Start();
+        }
+    }
+
+    private void WpfWordWrapCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        WpfLogTextBox.TextWrapping = WpfWordWrapCheck.IsChecked == true
+            ? TextWrapping.Wrap
+            : TextWrapping.NoWrap;
+    }
+
+    private void WpfCopyLogsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(WpfLogTextBox.Text))
+        {
+            Clipboard.SetText(WpfLogTextBox.Text);
+            WpfCopyLogsButton.Content = "✓ Copied!";
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            timer.Tick += (s, ev) => { WpfCopyLogsButton.Content = "📋 Copy All"; timer.Stop(); };
+            timer.Start();
+        }
+    }
+
+    private void WpfClearLogsButton_Click(object sender, RoutedEventArgs e)
+    {
+        _allLogs.Clear();
+        WpfLogTextBox.Clear();
+    }
+
+    private void WpfLogsFilterBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var filter = WpfLogsFilterBox.Text?.Trim();
+        var filtered = string.IsNullOrEmpty(filter)
+            ? _allLogs
+            : _allLogs.Where(l => l.Contains(filter, StringComparison.OrdinalIgnoreCase));
+
+        WpfLogTextBox.Text = string.Join(Environment.NewLine, filtered);
+        if (WpfAutoScrollCheck.IsChecked == true)
+        {
+            WpfLogTextBox.CaretIndex = WpfLogTextBox.Text.Length;
+            WpfLogTextBox.ScrollToEnd();
         }
     }
 }

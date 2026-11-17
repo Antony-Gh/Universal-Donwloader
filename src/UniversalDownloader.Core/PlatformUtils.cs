@@ -126,4 +126,16 @@ public static class PlatformUtils
     {
         return IsWindows ? $"{baseName}.exe" : baseName;
     }
+
+    /// <summary>
+    /// Format raw bytes into human-readable representation (e.g. 15.4 MB, 1.2 GB).
+    /// </summary>
+    public static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0) return "0 B";
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        int digitGroups = (int)(Math.Log10(bytes) / Math.Log10(1024));
+        digitGroups = Math.Clamp(digitGroups, 0, units.Length - 1);
+        return $"{bytes / Math.Pow(1024, digitGroups):F1} {units[digitGroups]}";
+    }
 }

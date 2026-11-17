@@ -1,0 +1,43 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="UniversalDownloader.Avalonia.LogWindow"
+        Title="Universal Downloader — Live Execution Logs"
+        Icon="/Assets/app-icon.ico"
+        Width="900" Height="550"
+        WindowStartupLocation="CenterOwner"
+        Background="#0D0D11">
+
+    <Grid Margin="16" RowDefinitions="Auto,*,Auto">
+        <!-- Toolbar -->
+        <Grid Grid.Row="0" Margin="0,0,0,12" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+            <TextBlock Grid.Column="0" Text="Console Logs" VerticalAlignment="Center" FontWeight="Bold" Foreground="#F4F4F8" FontSize="16"/>
+            <TextBox x:Name="FilterBox" Grid.Column="1" Watermark="Filter logs..." Margin="16,0,12,0" TextChanged="FilterBox_TextChanged"/>
+            <CheckBox x:Name="WordWrapCheck" Grid.Column="2" Content="Wrap lines" IsChecked="True" Margin="0,0,12,0" VerticalAlignment="Center" IsCheckedChanged="WordWrapCheck_IsCheckedChanged"/>
+            <CheckBox x:Name="AutoScrollCheck" Grid.Column="3" Content="Auto-scroll" IsChecked="True" Margin="0,0,12,0" VerticalAlignment="Center"/>
+            <Button x:Name="SaveButton" Grid.Column="4" Content="💾 Save Logs" Margin="0,0,8,0" Padding="12,6" Background="#374151" Foreground="White" Click="SaveButton_Click"/>
+            <Button x:Name="CopyButton" Grid.Column="5" Content="📋 Copy All" Margin="0,0,8,0" Padding="12,6" Background="#374151" Foreground="White" Click="CopyButton_Click"/>
+            <Button x:Name="ClearButton" Grid.Column="6" Content="🧹 Clear" Padding="12,6" Background="#374151" Foreground="White" Click="ClearButton_Click"/>
+        </Grid>
+
+        <!-- Log Area -->
+        <Border Grid.Row="1" Background="#07090E" CornerRadius="6" BorderBrush="#1F2937" BorderThickness="1" Padding="10">
+            <TextBox x:Name="LogTextBox"
+                     IsReadOnly="True"
+                     TextWrapping="Wrap"
+                     AcceptsReturn="True"
+                     FontFamily="Cascadia Code, Consolas, Courier New, monospace"
+                     FontSize="12"
+                     Foreground="#A7F3D0"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+        </Border>
+
+        <!-- Status Footer -->
+        <Grid Grid.Row="2" Margin="0,8,0,0" ColumnDefinitions="*,Auto">
+            <TextBlock x:Name="LogCountLabel" Grid.Column="0" Text="0 lines" Foreground="#9CA3AF" FontSize="11" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="Universal Downloader v1.0.0" Foreground="#6B7280" FontSize="11" VerticalAlignment="Center"/>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,32 +1,35 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="UniversalDownloader.Avalonia.MainWindow"
-        Title="Universal Media Downloader (Avalonia)"
+        Title="Universal Media Downloader"
         Icon="/Assets/app-icon.ico"
-        Width="960" Height="680"
+        Width="920" Height="720"
         WindowStartupLocation="CenterScreen"
-        Background="#121214">
+        Background="#0E0E12">
 
-    <Grid Margin="24" RowDefinitions="Auto,*,Auto">
+    <Grid Margin="20" RowDefinitions="Auto,*,Auto">
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,20">
-            <TextBlock Text="Universal Media Downloader" FontSize="24" FontWeight="Bold" Foreground="#F4F4F8"/>
-            <TextBlock Text="High-speed Cross-Platform Avalonia UI (.NET 9)" FontSize="13" Foreground="#9CA3AF" Margin="0,4,0,0"/>
-        </StackPanel>
+        <Grid Grid.Row="0" Margin="0,0,0,16" ColumnDefinitions="Auto,*">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <Image Source="/Assets/app-icon.png" Width="36" Height="36"/>
+                <TextBlock Text="Universal Media Downloader" FontSize="20" FontWeight="Bold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
 
-        <!-- Main Body -->
-        <TabControl Grid.Row="1">
+        <!-- Main Tab Control -->
+        <TabControl x:Name="MainTabControl" Grid.Row="1">
+            <!-- DOWNLOAD TAB -->
             <TabItem Header="Download">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Spacing="16" Margin="0,15,0,0">
-                        <!-- URL Card -->
+                <ScrollViewer Margin="0,15,0,0">
+                    <StackPanel Spacing="16">
+                        <!-- URL Input Card -->
                         <Border Background="#1E1E24" CornerRadius="8" Padding="16">
                             <StackPanel Spacing="10">
                                 <TextBlock Text="Media URL" FontWeight="SemiBold" Foreground="#F4F4F8"/>
                                 <Grid ColumnDefinitions="*,Auto,Auto">
-                                    <TextBox x:Name="UrlTextBox" Grid.Column="0" Watermark="Paste video/media URL here..."/>
-                                    <Button x:Name="PasteButton" Grid.Column="1" Content="Paste" Margin="8,0,0,0" Click="PasteButton_Click"/>
-                                    <Button x:Name="InspectButton" Grid.Column="2" Content="Inspect Formats" Margin="8,0,0,0" Click="InspectButton_Click"/>
+                                    <TextBox x:Name="UrlTextBox" Grid.Column="0" Watermark="Paste video, audio, or playlist URL here..."/>
+                                    <Button x:Name="PasteButton" Grid.Column="1" Content="📋 Paste" Margin="8,0,0,0" Click="PasteButton_Click"/>
+                                    <Button x:Name="InspectButton" Grid.Column="2" Content="🔍 Inspect Streams" Margin="8,0,0,0" Background="#374151" Click="InspectButton_Click"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -63,6 +66,16 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <!-- Output Directory -->
+                                <StackPanel Spacing="6" Margin="0,4,0,0">
+                                    <TextBlock Text="Save Directory" Foreground="#9CA3AF" FontSize="12"/>
+                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                        <TextBox x:Name="OutputDirBox" Grid.Column="0" Watermark="Default directory (or ~/Downloads)"/>
+                                        <Button x:Name="BrowseDirButton" Grid.Column="1" Content="📁 Browse..." Margin="8,0,0,0" Click="BrowseDirButton_Click"/>
+                                        <Button x:Name="OpenDirButton" Grid.Column="2" Content="📂 Open" Margin="8,0,0,0" Background="#374151" Click="OpenDirButton_Click"/>
+                                    </Grid>
+                                </StackPanel>
+
                                 <WrapPanel Margin="0,6,0,0">
                                     <CheckBox x:Name="EmbedMetadataCheck" Content="Embed Metadata" IsChecked="True" Margin="0,0,16,0"/>
                                     <CheckBox x:Name="EmbedThumbnailCheck" Content="Embed Cover Art" IsChecked="True" Margin="0,0,16,0"/>
@@ -92,10 +105,67 @@
                                 </Grid>
                             </StackPanel>
                         </Border>
+
+                        <!-- Inline Terminal Logs -->
+                        <Border Background="#1E1E24" CornerRadius="8" Padding="14">
+                            <StackPanel Spacing="8">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="Live Terminal Output" FontWeight="SemiBold" Foreground="#F4F4F8"/>
+                                    <Button x:Name="QuickCopyLogsButton" Grid.Column="1" Content="📋 Copy Output" Padding="10,4" FontSize="11" Background="#27272A" Foreground="#E2E8F0" Click="QuickCopyLogsButton_Click"/>
+                                </Grid>
+                                <Border Background="#090A0F" CornerRadius="6" BorderBrush="#27272A" BorderThickness="1" Padding="8" MaxHeight="150">
+                                    <TextBox x:Name="QuickLogBox"
+                                             IsReadOnly="True"
+                                             TextWrapping="Wrap"
+                                             AcceptsReturn="True"
+                                             FontFamily="Cascadia Code, Consolas, Courier New, monospace"
+                                             FontSize="11"
+                                             Foreground="#86EFAC"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
+            <!-- STREAMS EXPLORER TAB -->
+            <TabItem x:Name="StreamsTab" Header="Streams">
+                <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock x:Name="StreamsStatusHeader" Grid.Column="0" Text="Inspect a media URL on the Download tab to view all formats." FontWeight="SemiBold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
+                            <Button x:Name="RefreshStreamsButton" Grid.Column="1" Content="🔄 Refresh Streams" Padding="10,6" Background="#374151" Foreground="White" Click="InspectButton_Click"/>
+                        </Grid>
+
+                        <ListBox x:Name="StreamsListBox" MaxHeight="450" Background="#18181B">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="120,80,*,120,Auto" Margin="6,4">
+                                        <!-- Resolution / Type -->
+                                        <TextBlock Grid.Column="0" Text="{Binding ResolutionFormatted}" VerticalAlignment="Center" FontWeight="Bold" Foreground="#A7F3D0"/>
+                                        <!-- Extension & ID -->
+                                        <TextBlock Grid.Column="1" Text="{Binding Extension}" VerticalAlignment="Center" Foreground="#9CA3AF"/>
+                                        <!-- Codecs & Note -->
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding CodecSummary}" Foreground="#F4F4F8" FontSize="12"/>
+                                            <TextBlock Text="{Binding FormatNote}" Foreground="#6B7280" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <!-- File size -->
+                                        <TextBlock Grid.Column="3" Text="{Binding FilesizeFormatted}" VerticalAlignment="Center" Foreground="#CBD5E1" HorizontalAlignment="Right" Margin="0,0,12,0"/>
+                                        <!-- Download button -->
+                                        <Button Grid.Column="4" Content="⚡ Download" Padding="10,5" Background="#6366F1" Foreground="White" FontWeight="SemiBold" FontSize="11" Click="DownloadStream_Click"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </Border>
+            </TabItem>
+
+            <!-- HISTORY TAB -->
             <TabItem Header="History">
                 <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
                     <StackPanel Spacing="12">
@@ -105,7 +175,7 @@
                             <Button x:Name="HistoryRefreshButton" Grid.Column="2" Content="Refresh" Margin="8,0,0,0" Click="HistoryRefreshButton_Click"/>
                             <Button x:Name="HistoryClearButton" Grid.Column="3" Content="Clear All" Margin="8,0,0,0" Background="#374151" Click="HistoryClearButton_Click"/>
                         </Grid>
-                        <ListBox x:Name="HistoryListBox" MaxHeight="420" Background="#18181B">
+                        <ListBox x:Name="HistoryListBox" MaxHeight="450" Background="#18181B">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="4">
@@ -118,6 +188,46 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
                     </StackPanel>
+                </Border>
+            </TabItem>
+
+            <!-- CONSOLE LOGS TAB -->
+            <TabItem Header="Console Logs">
+                <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
+                    <Grid RowDefinitions="Auto,*,Auto">
+                        <!-- Toolbar -->
+                        <Grid Grid.Row="0" Margin="0,0,0,12" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
+                            <TextBlock Grid.Column="0" Text="Backend Engine Logs" VerticalAlignment="Center" FontWeight="Bold" Foreground="#F4F4F8" FontSize="15"/>
+                            <CheckBox x:Name="AutoScrollCheck" Grid.Column="1" Content="Auto-Scroll" IsChecked="True" Margin="14,0,0,0" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                            <CheckBox x:Name="MainLogWordWrapCheck" Grid.Column="2" Content="Wrap Lines" IsChecked="True" Margin="10,0,0,0" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" IsCheckedChanged="MainLogWordWrap_IsCheckedChanged"/>
+                            <TextBox x:Name="LogsFilterBox" Grid.Column="3" Watermark="Search / filter logs..." Margin="14,0,10,0" TextChanged="LogsFilterBox_TextChanged"/>
+                            <Button x:Name="SaveAllLogsButton" Grid.Column="4" Content="💾 Save Logs" Margin="0,0,8,0" Padding="10,6" Background="#374151" Foreground="White" Click="SaveAllLogsButton_Click"/>
+                            <Button x:Name="CopyAllLogsButton" Grid.Column="5" Content="📋 Copy All" Margin="0,0,8,0" Padding="10,6" Background="#374151" Foreground="White" Click="CopyAllLogsButton_Click"/>
+                            <Button x:Name="ClearLogsButton" Grid.Column="6" Content="🧹 Clear" Margin="0,0,8,0" Padding="10,6" Background="#374151" Foreground="White" Click="ClearLogsButton_Click"/>
+                            <Button x:Name="PopOutLogsButton" Grid.Column="7" Content="↗ Pop Out" Padding="10,6" Background="#4F46E5" Foreground="White" FontWeight="SemiBold" Click="PopOutLogsButton_Click"/>
+                        </Grid>
+
+                        <!-- Main Log Terminal Box -->
+                        <Border Grid.Row="1" Background="#090A0F" CornerRadius="6" BorderBrush="#27272A" BorderThickness="1" Padding="12" MinHeight="380">
+                            <TextBox x:Name="MainLogTextBox"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="True"
+                                     FontFamily="Cascadia Code, Consolas, Courier New, monospace"
+                                     FontSize="12"
+                                     Foreground="#86EFAC"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                        </Border>
+
+                        <!-- Footer line with counter -->
+                        <Grid Grid.Row="2" Margin="0,8,0,0" ColumnDefinitions="*,Auto">
+                            <TextBlock x:Name="MainLogCountLabel" Grid.Column="0" Text="0 log lines" Foreground="#9CA3AF" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="Live Real-time Diagnostics" Foreground="#6B7280" FontSize="11" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Grid>
                 </Border>
             </TabItem>
         </TabControl>
