@@ -1,0 +1,52 @@
+name: Continuous Integration (Python + .NET + Android Tests)
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test-python:
+    name: Python Backend Tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run pytest
+        run: python -m pytest -v
+
+  test-dotnet:
+    name: .NET 9 Core Tests & Avalonia Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Run UniversalDownloader.Core Unit Tests
+        run: dotnet run --project tests/UniversalDownloader.Core.Tests/UniversalDownloader.Core.Tests.csproj -c Release
+      - name: Verify Avalonia Desktop Build
+        run: dotnet build src/UniversalDownloader.Avalonia/UniversalDownloader.Avalonia.csproj -c Release
+
+  test-android:
+    name: Android Unit Tests (JUnit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+      - name: Run Android Debug Unit Tests
+        working-directory: android
+        run: gradle testDebugUnitTest --no-daemon
