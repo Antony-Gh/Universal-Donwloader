@@ -89,7 +89,7 @@ class DownloadEngine:
             },
         )
 
-    def download_once(self, target: DetectedTarget) -> DownloadResult:
+    def download_once(self, target: DetectedTarget, attempt: int = 1) -> DownloadResult:
         if target.platform == Platform.WHATSAPP:
             raise UnsupportedPlatformError(
                 "WhatsApp is not implemented as a private-client downloader. "
@@ -128,6 +128,7 @@ class DownloadEngine:
             output_template,
             selector,
             progress,
+            attempt=attempt,
         )
 
         files_and_info: list[tuple[Path, dict[str, Any]]] = []
@@ -226,6 +227,7 @@ class DownloadEngine:
         output_template: str,
         selector: str,
         progress: ProgressRenderer,
+        attempt: int = 1,
     ) -> dict[str, Any]:
         if target.platform != Platform.TIKTOK:
             return self.extractor.download(
@@ -234,6 +236,7 @@ class DownloadEngine:
                 selector,
                 progress,
                 platform=target.platform,
+                attempt=attempt,
             )
 
         last_error: Optional[DownloadError] = None
@@ -288,7 +291,7 @@ class DownloadEngine:
 
         for attempt in range(1, self.config.retries + 2):
             try:
-                res = self.download_once(target)
+                res = self.download_once(target, attempt=attempt)
 
                 # History tracking
                 if not self.config.no_history:

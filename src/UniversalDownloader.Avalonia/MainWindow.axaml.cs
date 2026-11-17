@@ -4,6 +4,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -17,13 +18,18 @@ public partial class MainWindow : Window
 {
     private const int MaxLogCapacity = 5000;
     private readonly DownloaderClient _client;
-    private readonly List<string> _allLogs = new();
+    private readonly List<LogMessage> _allLogs = new();
+    private readonly ObservableCollection<LogMessage> _quickLogs = new();
+    private readonly ObservableCollection<LogMessage> _filteredMainLogs = new();
     private LogWindow? _logWindow;
     private CancellationTokenSource? _cts;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        QuickLogListBox.ItemsSource = _quickLogs;
+        MainLogListBox.ItemsSource = _filteredMainLogs;
 
         _client = new DownloaderClient();
         _client.ProgressChanged += OnProgressChanged;
@@ -39,42 +45,36 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(line)) return;
 
-        var timestamped = $"[{DateTime.Now:HH:mm:ss}] {line}";
+        var log = LogMessage.Create(line);
         if (_allLogs.Count >= MaxLogCapacity)
         {
             _allLogs.RemoveRange(0, 500);
         }
-        _allLogs.Add(timestamped);
+        _allLogs.Add(log);
 
         Dispatcher.UIThread.Post(() =>
         {
-            // Update quick log box on download page
-            if (string.IsNullOrEmpty(QuickLogBox.Text))
+            // Update quick log box on download page (keep last 50)
+            if (_quickLogs.Count >= 50)
             {
-                QuickLogBox.Text = timestamped;
+                _quickLogs.RemoveAt(0);
             }
-            else
-            {
-                QuickLogBox.Text += Environment.NewLine + timestamped;
-            }
-            QuickLogBox.CaretIndex = QuickLogBox.Text.Length;
+            _quickLogs.Add(log);
+            QuickLogListBox.ScrollIntoView(log);
 
             // Update main log tab if matching filter
             var filter = LogsFilterBox.Text?.Trim();
-            if (string.IsNullOrEmpty(filter) || timestamped.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(filter) || log.FormattedText.Contains(filter, StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrEmpty(MainLogTextBox.Text))
+                if (_filteredMainLogs.Count >= MaxLogCapacity)
                 {
-                    MainLogTextBox.Text = timestamped;
+                    _filteredMainLogs.RemoveAt(0);
                 }
-                else
-                {
-                    MainLogTextBox.Text += Environment.NewLine + timestamped;
-                }
+                _filteredMainLogs.Add(log);
 
                 if (AutoScrollCheck.IsChecked ?? true)
                 {
-                    MainLogTextBox.CaretIndex = MainLogTextBox.Text.Length;
+                    MainLogListBox.ScrollIntoView(log);
                 }
             }
 
@@ -112,7 +112,7 @@ public partial class MainWindow : Window
         {
             DownloadProgressBar.Value = 100;
             PercentLabel.Text = "100%";
-            StatusLabel.Text = "✓ Download finished!";
+            StatusLabel.Text = "Download finished!";
             GlobalStatusText.Text = $"Successfully downloaded: {e.Title ?? e.Url}";
             SetDownloading(false);
             await LoadHistoryAsync();
@@ -123,7 +123,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.UIThread.Post(() =>
         {
-            StatusLabel.Text = "✗ Download failed";
+            StatusLabel.Text = "Download failed";
             GlobalStatusText.Text = $"Failed: {e.Error}";
             SetDownloading(false);
         });
@@ -353,28 +353,30 @@ public partial class MainWindow : Window
     private async void QuickCopyLogsButton_Click(object? sender, RoutedEventArgs e)
     {
         var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard != null && !string.IsNullOrEmpty(QuickLogBox.Text))
+        if (clipboard != null && _quickLogs.Count > 0)
         {
-            await clipboard.SetTextAsync(QuickLogBox.Text);
-            QuickCopyLogsButton.Content = "✓ Copied!";
-            DispatcherTimer.RunOnce(() => QuickCopyLogsButton.Content = "📋 Copy Output", TimeSpan.FromSeconds(2));
+            var fullText = string.Join(Environment.NewLine, _quickLogs.Select(l => l.FormattedText));
+            await clipboard.SetTextAsync(fullText);
+            QuickCopyText.Text = "Copied!";
+            DispatcherTimer.RunOnce(() => QuickCopyText.Text = "Copy Output", TimeSpan.FromSeconds(2));
         }
     }
 
     private async void CopyAllLogsButton_Click(object? sender, RoutedEventArgs e)
     {
         var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard != null && !string.IsNullOrEmpty(MainLogTextBox.Text))
+        if (clipboard != null && _filteredMainLogs.Count > 0)
         {
-            await clipboard.SetTextAsync(MainLogTextBox.Text);
-            CopyAllLogsButton.Content = "✓ Copied!";
-            DispatcherTimer.RunOnce(() => CopyAllLogsButton.Content = "📋 Copy All", TimeSpan.FromSeconds(2));
+            var fullText = string.Join(Environment.NewLine, _filteredMainLogs.Select(l => l.FormattedText));
+            await clipboard.SetTextAsync(fullText);
+            CopyAllLogsText.Text = "Copied!";
+            DispatcherTimer.RunOnce(() => CopyAllLogsText.Text = "Copy All", TimeSpan.FromSeconds(2));
         }
     }
 
     private async void SaveAllLogsButton_Click(object? sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(MainLogTextBox.Text)) return;
+        if (_filteredMainLogs.Count == 0) return;
 
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel == null) return;
@@ -390,47 +392,46 @@ public partial class MainWindow : Window
         {
             await using var stream = await file.OpenWriteAsync();
             await using var writer = new StreamWriter(stream);
-            await writer.WriteAsync(MainLogTextBox.Text);
-            SaveAllLogsButton.Content = "✓ Saved!";
-            DispatcherTimer.RunOnce(() => SaveAllLogsButton.Content = "💾 Save Logs", TimeSpan.FromSeconds(2));
+            var fullText = string.Join(Environment.NewLine, _filteredMainLogs.Select(l => l.FormattedText));
+            await writer.WriteAsync(fullText);
+            SaveAllLogsText.Text = "Saved!";
+            DispatcherTimer.RunOnce(() => SaveAllLogsText.Text = "Save Logs", TimeSpan.FromSeconds(2));
         }
-    }
-
-    private void MainLogWordWrap_IsCheckedChanged(object? sender, RoutedEventArgs e)
-    {
-        MainLogTextBox.TextWrapping = (MainLogWordWrapCheck.IsChecked ?? true)
-            ? global::Avalonia.Media.TextWrapping.Wrap
-            : global::Avalonia.Media.TextWrapping.NoWrap;
     }
 
     private void ClearLogsButton_Click(object? sender, RoutedEventArgs e)
     {
         _allLogs.Clear();
-        QuickLogBox.Text = string.Empty;
-        MainLogTextBox.Text = string.Empty;
+        _quickLogs.Clear();
+        _filteredMainLogs.Clear();
         UpdateMainLogCount();
     }
 
     private void LogsFilterBox_TextChanged(object? sender, TextChangedEventArgs e)
     {
         var filter = LogsFilterBox.Text?.Trim();
-        var filtered = string.IsNullOrEmpty(filter)
+        var matching = string.IsNullOrEmpty(filter)
             ? _allLogs
-            : _allLogs.Where(l => l.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            : _allLogs.Where(l => l.FormattedText.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        MainLogTextBox.Text = string.Join(Environment.NewLine, filtered);
-        if (AutoScrollCheck.IsChecked ?? true)
+        _filteredMainLogs.Clear();
+        foreach (var log in matching)
         {
-            MainLogTextBox.CaretIndex = MainLogTextBox.Text?.Length ?? 0;
+            _filteredMainLogs.Add(log);
         }
 
-        UpdateMainLogCount(filtered.Count);
+        if ((AutoScrollCheck.IsChecked ?? true) && _filteredMainLogs.Count > 0)
+        {
+            MainLogListBox.ScrollIntoView(_filteredMainLogs[^1]);
+        }
+
+        UpdateMainLogCount(matching.Count);
     }
 
     private void UpdateMainLogCount(int? filteredCount = null)
     {
         var total = _allLogs.Count;
-        var shown = filteredCount ?? total;
+        var shown = filteredCount ?? _filteredMainLogs.Count;
         MainLogCountLabel.Text = total == shown
             ? $"Total: {total} log lines"
             : $"Showing {shown} of {total} log lines (filtered)";

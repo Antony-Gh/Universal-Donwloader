@@ -379,9 +379,9 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == true)
         {
             File.WriteAllText(dialog.FileName, WpfLogTextBox.Text);
-            WpfSaveLogsButton.Content = "✓ Saved!";
+            WpfSaveLogsButton.Content = "Saved!";
             var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-            timer.Tick += (s, ev) => { WpfSaveLogsButton.Content = "💾 Save Logs"; timer.Stop(); };
+            timer.Tick += (s, ev) => { WpfSaveLogsButton.Content = "Save Logs"; timer.Stop(); };
             timer.Start();
         }
     }
@@ -398,9 +398,9 @@ public partial class MainWindow : Window
         if (!string.IsNullOrEmpty(WpfLogTextBox.Text))
         {
             Clipboard.SetText(WpfLogTextBox.Text);
-            WpfCopyLogsButton.Content = "✓ Copied!";
+            WpfCopyLogsButton.Content = "Copied!";
             var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-            timer.Tick += (s, ev) => { WpfCopyLogsButton.Content = "📋 Copy All"; timer.Stop(); };
+            timer.Tick += (s, ev) => { WpfCopyLogsButton.Content = "Copy All"; timer.Stop(); };
             timer.Start();
         }
     }

@@ -103,12 +103,13 @@ def format_download_error(
             "  • Or use Firefox cookies: --cookies-from-browser firefox"
         )
 
-    if "sign in to confirm you're not a bot" in lowered or "bot detection" in lowered:
+    if "sign in to confirm you're not a bot" in lowered or "bot detection" in lowered or "the page needs to be reloaded" in lowered or "ssap" in lowered:
         return (
             f"{message}\n\n"
-            "YouTube bot verification triggered. Suggestions:\n"
-            "  • Provide browser cookies: --cookies-from-browser chrome (or edge/firefox)\n"
-            "  • Provide an exported cookie file: --cookies cookies.txt\n"
+            "YouTube verification/SSAP reload triggered. Suggestions:\n"
+            "  • The engine automatically rotates client player profiles (Android, iOS, mWeb)\n"
+            "  • If issues persist, supply browser cookies: --cookies-from-browser chrome (or edge/firefox)\n"
+            "  • Supply an exported Netscape cookie file: --cookies cookies.txt\n"
             "  • Use a proxy: --proxy http://username:password@proxyserver:port"
         )
 

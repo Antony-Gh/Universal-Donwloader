@@ -1,59 +1,59 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using UniversalDownloader.Core.Models;
 
 namespace UniversalDownloader.Avalonia;
 
 public partial class LogWindow : Window
 {
     private const int MaxLogCapacity = 5000;
-    private readonly List<string> _allLogs = new();
+    private readonly List<LogMessage> _allLogs = new();
+    private readonly ObservableCollection<LogMessage> _filteredLogs = new();
 
     public LogWindow()
     {
         InitializeComponent();
+        LogListBox.ItemsSource = _filteredLogs;
     }
 
     public void AppendLog(string message)
     {
-        var timestamped = $"[{DateTime.Now:HH:mm:ss}] {message}";
+        var log = LogMessage.Create(message);
 
         if (_allLogs.Count >= MaxLogCapacity)
         {
             _allLogs.RemoveRange(0, 500);
         }
-        _allLogs.Add(timestamped);
+        _allLogs.Add(log);
 
         Dispatcher.UIThread.Post(() =>
         {
             var filter = FilterBox.Text?.Trim();
-            if (string.IsNullOrEmpty(filter) || timestamped.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(filter) || log.FormattedText.Contains(filter, StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrEmpty(LogTextBox.Text))
+                if (_filteredLogs.Count >= MaxLogCapacity)
                 {
-                    LogTextBox.Text = timestamped;
+                    _filteredLogs.RemoveAt(0);
                 }
-                else
-                {
-                    LogTextBox.Text += Environment.NewLine + timestamped;
-                }
+                _filteredLogs.Add(log);
 
                 if (AutoScrollCheck.IsChecked ?? true)
                 {
-                    LogTextBox.CaretIndex = LogTextBox.Text.Length;
+                    LogListBox.ScrollIntoView(log);
                 }
             }
             UpdateCountLabel();
         });
     }
 
-    public void LoadLogs(IEnumerable<string> existingLogs)
+    public void LoadLogs(IEnumerable<LogMessage> existingLogs)
     {
         _allLogs.Clear();
         _allLogs.AddRange(existingLogs.TakeLast(MaxLogCapacity));
@@ -63,23 +63,28 @@ public partial class LogWindow : Window
     private void ApplyFilter()
     {
         var filter = FilterBox.Text?.Trim();
-        var filtered = string.IsNullOrEmpty(filter)
+        var matching = string.IsNullOrEmpty(filter)
             ? _allLogs
-            : _allLogs.Where(l => l.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            : _allLogs.Where(l => l.FormattedText.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        LogTextBox.Text = string.Join(Environment.NewLine, filtered);
-        if (AutoScrollCheck.IsChecked ?? true)
+        _filteredLogs.Clear();
+        foreach (var item in matching)
         {
-            LogTextBox.CaretIndex = LogTextBox.Text?.Length ?? 0;
+            _filteredLogs.Add(item);
         }
 
-        UpdateCountLabel(filtered.Count);
+        if ((AutoScrollCheck.IsChecked ?? true) && _filteredLogs.Count > 0)
+        {
+            LogListBox.ScrollIntoView(_filteredLogs[^1]);
+        }
+
+        UpdateCountLabel(matching.Count);
     }
 
     private void UpdateCountLabel(int? filteredCount = null)
     {
         var total = _allLogs.Count;
-        var shown = filteredCount ?? total;
+        var shown = filteredCount ?? _filteredLogs.Count;
         LogCountLabel.Text = total == shown
             ? $"Total: {total} log lines"
             : $"Showing {shown} of {total} log lines (filtered)";
@@ -90,27 +95,21 @@ public partial class LogWindow : Window
         ApplyFilter();
     }
 
-    private void WordWrapCheck_IsCheckedChanged(object? sender, RoutedEventArgs e)
-    {
-        LogTextBox.TextWrapping = (WordWrapCheck.IsChecked ?? true)
-            ? global::Avalonia.Media.TextWrapping.Wrap
-            : global::Avalonia.Media.TextWrapping.NoWrap;
-    }
-
     private async void CopyButton_Click(object? sender, RoutedEventArgs e)
     {
         var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard != null && !string.IsNullOrEmpty(LogTextBox.Text))
+        if (clipboard != null && _filteredLogs.Count > 0)
         {
-            await clipboard.SetTextAsync(LogTextBox.Text);
-            CopyButton.Content = "✓ Copied!";
-            DispatcherTimer.RunOnce(() => CopyButton.Content = "📋 Copy All", TimeSpan.FromSeconds(2));
+            var fullText = string.Join(Environment.NewLine, _filteredLogs.Select(l => l.FormattedText));
+            await clipboard.SetTextAsync(fullText);
+            CopyButtonText.Text = "Copied!";
+            DispatcherTimer.RunOnce(() => CopyButtonText.Text = "Copy All", TimeSpan.FromSeconds(2));
         }
     }
 
     private async void SaveButton_Click(object? sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(LogTextBox.Text)) return;
+        if (_filteredLogs.Count == 0) return;
 
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel == null) return;
@@ -126,16 +125,17 @@ public partial class LogWindow : Window
         {
             await using var stream = await file.OpenWriteAsync();
             await using var writer = new StreamWriter(stream);
-            await writer.WriteAsync(LogTextBox.Text);
-            SaveButton.Content = "✓ Saved!";
-            DispatcherTimer.RunOnce(() => SaveButton.Content = "💾 Save Logs", TimeSpan.FromSeconds(2));
+            var fullText = string.Join(Environment.NewLine, _filteredLogs.Select(l => l.FormattedText));
+            await writer.WriteAsync(fullText);
+            SaveButtonText.Text = "Saved!";
+            DispatcherTimer.RunOnce(() => SaveButtonText.Text = "Save Logs", TimeSpan.FromSeconds(2));
         }
     }
 
     private void ClearButton_Click(object? sender, RoutedEventArgs e)
     {
         _allLogs.Clear();
-        LogTextBox.Text = string.Empty;
+        _filteredLogs.Clear();
         UpdateCountLabel();
     }
 }

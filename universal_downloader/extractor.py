@@ -142,6 +142,14 @@ class YTDLPExtractor:
         if ffmpeg_bin:
             options["ffmpeg_location"] = str(ffmpeg_bin.parent)
 
+        # Bypasses YouTube SSAP server-side ads experiment and 'page needs to be reloaded' blocks
+        options["extractor_args"] = {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb", "web"],
+                "player_skip": ["webpage", "configs"],
+            }
+        }
+
         if self.config.cookies_file:
             options["cookiefile"] = str(self.config.cookies_file)
 
@@ -185,11 +193,34 @@ class YTDLPExtractor:
 
         return options
 
-    def platform_extra_options(self, platform: Platform) -> dict[str, Any]:
+    def platform_extra_options(
+        self,
+        platform: Platform,
+        attempt: int = 1,
+    ) -> dict[str, Any]:
         if platform == Platform.TIKTOK:
             return {
                 "extractor_retries": 2,
                 "sleep_interval_requests": 1,
+            }
+        if platform == Platform.YOUTUBE:
+            # Rotate client signatures across attempts to bypass bot checks & SSAP reload gates
+            if attempt == 2:
+                clients = ["ios", "web"]
+            elif attempt == 3:
+                clients = ["mweb", "web"]
+            elif attempt >= 4:
+                clients = ["tv_embedded", "web"]
+            else:
+                clients = ["android", "ios", "mweb", "web"]
+
+            return {
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": clients,
+                        "player_skip": ["webpage", "configs"],
+                    }
+                }
             }
         return {}
 
@@ -198,8 +229,10 @@ class YTDLPExtractor:
         url: str,
         download: bool = False,
         extra: Optional[dict[str, Any]] = None,
+        platform: Platform = Platform.UNKNOWN,
     ) -> dict[str, Any]:
         options = self.base_options()
+        options.update(self.platform_extra_options(platform))
         if extra:
             options.update(extra)
 
@@ -227,9 +260,10 @@ class YTDLPExtractor:
         format_selector: str,
         progress_hook: Callable[[dict[str, Any]], None],
         platform: Platform = Platform.UNKNOWN,
+        attempt: int = 1,
     ) -> dict[str, Any]:
         options = self.base_options()
-        options.update(self.platform_extra_options(platform))
+        options.update(self.platform_extra_options(platform, attempt=attempt))
 
         postprocessors: list[dict[str, Any]] = []
 
