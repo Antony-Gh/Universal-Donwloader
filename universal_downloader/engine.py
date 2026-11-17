@@ -18,6 +18,7 @@ from universal_downloader.exceptions import (
 )
 from universal_downloader.extractor import YTDLPExtractor
 from universal_downloader.formats import quality_to_selector
+from universal_downloader.history import get_db_path, record_download
 from universal_downloader.logging_utils import (
     TIKTOK_INTERNAL_RETRIES,
     TIKTOK_RETRY_DELAYS,
@@ -32,12 +33,13 @@ from universal_downloader.models import (
     DownloadResult,
     Platform,
 )
+from universal_downloader.notify import send_notification
 from universal_downloader.profile import (
     ProfilePhotoResolver,
     extract_username_from_profile_url,
     resolve_profile_input,
 )
-from universal_downloader.progress import ProgressRenderer
+from universal_downloader.progress import ProgressRenderer, emit_json_event
 from universal_downloader.utils.fs import (
     ensure_inside_directory,
     platform_directory,
@@ -118,7 +120,7 @@ class DownloadEngine:
             )
 
         output_template = self.choose_output_template(target)
-        selector = quality_to_selector(self.config.quality, self.config.audio_only)
+        selector = quality_to_selector(self.config.quality, self.config.audio_only, self.config.prefer_codec)
         progress = ProgressRenderer(self.config)
 
         downloaded_info = self._download_media(
@@ -286,7 +288,36 @@ class DownloadEngine:
 
         for attempt in range(1, self.config.retries + 2):
             try:
-                return self.download_once(target)
+                res = self.download_once(target)
+
+                # History tracking
+                if not self.config.no_history:
+                    record_download(
+                        get_db_path(self.config.output_dir),
+                        target.normalized_url,
+                        res.files,
+                        res.metadata,
+                        status="completed",
+                    )
+
+                # Desktop notification
+                if self.config.notify:
+                    title_str = res.metadata.get("title") or "Download Complete"
+                    send_notification("Universal Downloader", f"Downloaded: {title_str}")
+
+                # JSON streaming event
+                if self.config.json_stream:
+                    emit_json_event(
+                        "complete",
+                        {
+                            "url": target.normalized_url,
+                            "files": [str(p) for p in res.files],
+                            "title": res.metadata.get("title"),
+                            "uploader": res.metadata.get("uploader"),
+                        },
+                    )
+
+                return res
 
             except (
                 DownloadError,
@@ -333,6 +364,25 @@ class DownloadEngine:
                 break
 
         if last_error:
+            if not self.config.no_history:
+                record_download(
+                    get_db_path(self.config.output_dir),
+                    target.normalized_url,
+                    [],
+                    {},
+                    status="failed",
+                    error=str(last_error),
+                )
+
+            if self.config.notify:
+                send_notification("Universal Downloader", f"Failed: {last_error}")
+
+            if self.config.json_stream:
+                emit_json_event(
+                    "error",
+                    {"url": target.normalized_url, "error": str(last_error)},
+                )
+
             raise last_error
 
         raise DownloadError("Download failed for an unknown reason.")

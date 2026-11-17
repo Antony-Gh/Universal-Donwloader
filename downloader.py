@@ -23,7 +23,9 @@ from universal_downloader.cli import (
 from universal_downloader.config import (
     build_config,
     env_value,
+    generate_default_config,
     load_json_config,
+    parse_config_bool,
     parse_config_int,
     parse_dotenv,
 )
@@ -53,6 +55,8 @@ from universal_downloader.extractor import (
     check_ffprobe,
     discover_js_runtimes,
     import_yt_dlp,
+    parse_rate_limit,
+    parse_timestamp_seconds,
 )
 from universal_downloader.formats import (
     format_sort_key,
@@ -60,6 +64,13 @@ from universal_downloader.formats import (
     print_formats,
     quality_to_selector,
     unique_video_heights,
+)
+from universal_downloader.history import (
+    clear_history,
+    get_db_path,
+    get_history,
+    init_db,
+    record_download,
 )
 from universal_downloader.logging_utils import (
     ANSI_ESCAPE_RE,
@@ -82,6 +93,7 @@ from universal_downloader.models import (
     FormatInfo,
     Platform,
 )
+from universal_downloader.notify import send_notification
 from universal_downloader.profile import (
     USERNAME_PLATFORM_PREFIXES,
     ProfilePhotoResolver,
@@ -95,10 +107,17 @@ from universal_downloader.profile import (
 )
 from universal_downloader.progress import (
     ProgressRenderer,
+    emit_json_event,
     human_eta,
     human_size,
     human_speed,
 )
+from universal_downloader.protocol import (
+    clean_protocol_url,
+    register_protocol,
+    unregister_protocol,
+)
+from universal_downloader.updater import get_installed_ytdlp_version, update_ytdlp
 from universal_downloader.utils.fs import (
     INVALID_FILENAME_CHARS,
     WINDOWS_RESERVED_NAMES,
@@ -125,6 +144,7 @@ from universal_downloader.utils.net import (
     normalize_url,
     resolve_url_redirect,
 )
+from universal_downloader.watcher import get_windows_clipboard_text, watch_clipboard
 
 __all__ = [
     "APP_NAME",
@@ -155,6 +175,7 @@ __all__ = [
     "BatchSummary",
     "SecretFilter",
     "ProgressRenderer",
+    "emit_json_event",
     "YTDLPLogger",
     "YTDLPExtractor",
     "ProfilePhotoResolver",
@@ -175,11 +196,15 @@ __all__ = [
     "check_ffmpeg",
     "check_ffprobe",
     "discover_js_runtimes",
+    "parse_rate_limit",
+    "parse_timestamp_seconds",
     "parse_dotenv",
     "load_json_config",
     "env_value",
     "parse_config_int",
+    "parse_config_bool",
     "build_config",
+    "generate_default_config",
     "normalize_url",
     "get_domain",
     "resolve_url_redirect",
@@ -220,6 +245,19 @@ __all__ = [
     "platform_python_version",
     "validate_url_option",
     "main",
+    "init_db",
+    "record_download",
+    "get_history",
+    "clear_history",
+    "get_db_path",
+    "send_notification",
+    "clean_protocol_url",
+    "register_protocol",
+    "unregister_protocol",
+    "get_installed_ytdlp_version",
+    "update_ytdlp",
+    "get_windows_clipboard_text",
+    "watch_clipboard",
 ]
 
 if __name__ == "__main__":

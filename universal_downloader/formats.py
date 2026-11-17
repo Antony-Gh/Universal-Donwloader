@@ -146,19 +146,40 @@ def print_formats(info: dict[str, Any], config: AppConfig) -> None:
 def quality_to_selector(
     quality: str,
     audio_only: bool,
+    prefer_codec: Optional[str] = None,
 ) -> str:
     quality = quality.strip().lower()
 
     if audio_only or quality in {"audio", "audio-only"}:
         return "bestaudio/best"
 
+    codec_clause = ""
+    if prefer_codec:
+        codec_lower = prefer_codec.strip().lower()
+        if codec_lower in {"h264", "avc", "avc1"}:
+            codec_clause = "[vcodec^=avc1]"
+        elif codec_lower in {"vp9", "vp09"}:
+            codec_clause = "[vcodec^=vp9]"
+        elif codec_lower in {"av1", "av01"}:
+            codec_clause = "[vcodec^=av01]"
+        elif codec_lower in {"hevc", "h265"}:
+            codec_clause = "[vcodec^=hev1]"
+
     if quality in {"best", "maximum", "max"}:
+        if codec_clause:
+            return f"bestvideo*{codec_clause}+bestaudio/bestvideo*+bestaudio/best"
         return "bestvideo*+bestaudio/best"
 
     match = re.fullmatch(r"(\d{3,4})p", quality)
 
     if match:
         height = int(match.group(1))
+        if codec_clause:
+            return (
+                f"bestvideo*{codec_clause}[height<={height}]+bestaudio/"
+                f"bestvideo*[height<={height}]+bestaudio/"
+                f"best[height<={height}]/best"
+            )
         return (
             f"bestvideo*[height<={height}]+bestaudio/"
             f"best[height<={height}]/best"

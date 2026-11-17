@@ -44,6 +44,24 @@ def discover_js_runtimes() -> dict[str, dict[str, str]]:
     return runtimes
 
 
+def parse_timestamp_seconds(val: Optional[str]) -> Optional[float]:
+    """Convert timestamp strings like '01:30:15', '03:15', or '90' to seconds."""
+    if not val:
+        return None
+    val = val.strip().lstrip("*")
+    try:
+        parts = val.split(":")
+        if len(parts) == 3:
+            return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+        if len(parts) == 2:
+            return float(parts[0]) * 60 + float(parts[1])
+        if len(parts) == 1:
+            return float(parts[0])
+    except ValueError:
+        return None
+    return None
+
+
 def parse_rate_limit(rate_str: Optional[str]) -> Optional[int]:
     """Parse strings like '5M', '500K', '1024' into bytes per second."""
     if not rate_str:
@@ -144,6 +162,17 @@ class YTDLPExtractor:
         if self.config.max_downloads:
             options["max_downloads"] = self.config.max_downloads
 
+        if self.config.concurrent_fragments:
+            options["concurrent_fragment_downloads"] = max(1, self.config.concurrent_fragments)
+
+        min_fs = parse_rate_limit(self.config.min_filesize)
+        if min_fs:
+            options["min_filesize"] = min_fs
+
+        max_fs = parse_rate_limit(self.config.max_filesize)
+        if max_fs:
+            options["max_filesize"] = max_fs
+
         return options
 
     def platform_extra_options(self, platform: Platform) -> dict[str, Any]:
@@ -202,10 +231,35 @@ class YTDLPExtractor:
                 "retries": 0,
                 "fragment_retries": 0,
                 "ignoreerrors": False,
-                "writethumbnail": self.config.embed_thumbnail,
+                "writethumbnail": self.config.write_thumbnail or self.config.embed_thumbnail,
                 "writeinfojson": False,
             }
         )
+
+        # Time range / Section slicing
+        range_start: Optional[float] = None
+        range_end: Optional[float] = None
+
+        if self.config.download_sections:
+            sec_spec = self.config.download_sections.strip().lstrip("*")
+            if "-" in sec_spec:
+                s_part, e_part = sec_spec.split("-", 1)
+                range_start = parse_timestamp_seconds(s_part) or 0.0
+                range_end = parse_timestamp_seconds(e_part)
+            else:
+                range_start = parse_timestamp_seconds(sec_spec) or 0.0
+
+        if self.config.start_time is not None:
+            range_start = parse_timestamp_seconds(self.config.start_time) or 0.0
+
+        if self.config.end_time is not None:
+            range_end = parse_timestamp_seconds(self.config.end_time)
+
+        if range_start is not None or range_end is not None:
+            from yt_dlp.utils import download_range_func
+            start_val = range_start or 0.0
+            options["download_ranges"] = download_range_func(None, [(start_val, range_end)])
+            options["force_keyframes_at_cuts"] = True
 
         wants_audio = (
             self.config.audio_only

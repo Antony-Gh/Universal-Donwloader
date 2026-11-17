@@ -1,7 +1,8 @@
-"""Terminal progress formatting and rendering."""
+"""Terminal progress formatting and streaming JSON event rendering."""
 
 from __future__ import annotations
 
+import json
 import sys
 from typing import Any, Optional
 
@@ -39,6 +40,12 @@ def human_eta(seconds: Optional[int]) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+def emit_json_event(event_type: str, payload: dict[str, Any]) -> None:
+    """Print line-delimited JSON event to stdout for external C#/GUI consumers."""
+    data = {"event": event_type, **payload}
+    print(json.dumps(data, ensure_ascii=False), flush=True)
+
+
 class ProgressRenderer:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
@@ -53,10 +60,31 @@ class ProgressRenderer:
             self.last_percent = -1
 
     def __call__(self, data: dict[str, Any]) -> None:
-        if self.config.json_output:
+        status = data.get("status")
+
+        if self.config.json_stream:
+            if status == "downloading":
+                downloaded = data.get("downloaded_bytes", 0) or 0
+                total = data.get("total_bytes") or data.get("total_bytes_estimate")
+                percent = (downloaded / total * 100) if total else 0.0
+                emit_json_event(
+                    "progress",
+                    {
+                        "status": "downloading",
+                        "downloaded_bytes": downloaded,
+                        "total_bytes": total,
+                        "percent": round(percent, 2),
+                        "speed": data.get("speed"),
+                        "eta": data.get("eta"),
+                        "filename": data.get("filename"),
+                    },
+                )
+            elif status == "finished":
+                emit_json_event("postprocess", {"status": "processing"})
             return
 
-        status = data.get("status")
+        if self.config.json_output:
+            return
 
         if status == "downloading":
             downloaded = data.get("downloaded_bytes", 0) or 0
