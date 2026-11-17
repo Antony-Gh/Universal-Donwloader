@@ -6,7 +6,7 @@
 **/obj/**
 *.user
 .vs/
-
+**/build_temp/**
 
 # IDEs
 .vscode/**
@@ -25,11 +25,10 @@
 **/logs/**
 
 
-build_exe.py
-
+# Releases & distribution binaries
 downloader.exe
-
-downloader.spec
+releases/
+test_dist/
 
 # Other
 *.bak

@@ -233,6 +233,38 @@ The resulting `dist/downloader.exe` is a single standalone executable that suppo
 
 ---
 
+## One-Click Multi-OS Build & GitHub Release Publisher
+
+To compile the entire project (Python backend + C# Avalonia + C# WPF) into standalone executables for **Windows**, **Linux**, and **macOS**, and publish them directly to GitHub Releases in one command:
+
+```bash
+# Compile and publish release v1.1.0 to GitHub
+python build_and_publish.py -v 1.1.0
+
+# Or build and package all OS archives locally without uploading
+python build_and_publish.py --no-publish
+```
+
+### What It Does:
+1. **Compiles Standalone Python Engine**: Packages `downloader` via PyInstaller with the custom high-resolution application icon.
+2. **Publishes Native .NET 9 Frontends**: Compiles self-contained, single-file executables for:
+   - `win-x64` (Windows Avalonia & WPF apps)
+   - `linux-x64` (Linux Wayland & X11 binary)
+   - `osx-x64` (macOS Intel binary)
+   - `osx-arm64` (macOS Apple Silicon binary)
+3. **Creates Distribution Archives & Checksums**:
+   - `UniversalDownloader-v1.1.0-windows-x64.zip`
+   - `UniversalDownloader-v1.1.0-linux-x64.tar.gz`
+   - `UniversalDownloader-v1.1.0-macos-x64.tar.gz`
+   - `UniversalDownloader-v1.1.0-macos-arm64.tar.gz`
+   - `SHA256SUMS.txt`
+4. **Automated GitHub Release Publishing**:
+   - Tags the repository and pushes to GitHub.
+   - Publishes the GitHub Release via `gh` CLI or GitHub REST API with formatted changelog notes.
+   - Automatically triggers the cloud CI/CD matrix workflow ([.github/workflows/release.yml](file:///e:/Projects/Universal_Downloader/.github/workflows/release.yml)) for native cloud builds on genuine Windows, Ubuntu, and macOS runners.
+
+---
+
 ## C# .NET Desktop Application Suite
 
 The project includes a complete .NET 9 solution (`UniversalDownloader.sln`) with:
