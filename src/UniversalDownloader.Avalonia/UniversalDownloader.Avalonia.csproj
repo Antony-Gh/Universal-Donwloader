@@ -7,8 +7,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationTitle>Universal Media Downloader (Avalonia)</ApplicationTitle>
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
     <Version>1.1.0</Version>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.0" />

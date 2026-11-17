@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="UniversalDownloader.Avalonia.MainWindow"
         Title="Universal Media Downloader (Avalonia)"
+        Icon="/Assets/app-icon.ico"
         Width="960" Height="680"
         WindowStartupLocation="CenterScreen"
         Background="#121214">

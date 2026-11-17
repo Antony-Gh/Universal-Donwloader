@@ -10,6 +10,7 @@
     <UseWPF Condition="$([MSBuild]::IsOSPlatform('Windows'))">true</UseWPF>
     <LangVersion>latest</LangVersion>
     <ApplicationTitle>Universal Media Downloader</ApplicationTitle>
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
     <Version>1.1.0</Version>
   </PropertyGroup>
 
@@ -21,6 +22,7 @@
 
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <ProjectReference Include="..\UniversalDownloader.Core\UniversalDownloader.Core.csproj" />
+    <Resource Include="Assets\app-icon.ico" />
   </ItemGroup>
 
 </Project>
