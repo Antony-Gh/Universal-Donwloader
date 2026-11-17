@@ -18,9 +18,13 @@ public partial class MainWindow : Window
 {
     private const int MaxLogCapacity = 5000;
     private readonly DownloaderClient _client;
+    private readonly object _allLogsLock = new();
     private readonly List<LogMessage> _allLogs = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<LogMessage> _incomingLogs = new();
     private readonly ObservableCollection<LogMessage> _quickLogs = new();
     private readonly ObservableCollection<LogMessage> _filteredMainLogs = new();
+    private readonly DispatcherTimer _logBatchTimer;
+    private long _lastProgressUpdateMs = 0;
     private LogWindow? _logWindow;
     private CancellationTokenSource? _cts;
 
@@ -30,6 +34,14 @@ public partial class MainWindow : Window
 
         QuickLogListBox.ItemsSource = _quickLogs;
         MainLogListBox.ItemsSource = _filteredMainLogs;
+
+        // Background batch timer prevents UI thread saturation and keeps window 100% responsive
+        _logBatchTimer = new DispatcherTimer(
+            TimeSpan.FromMilliseconds(50),
+            DispatcherPriority.Background,
+            (s, e) => FlushPendingLogs()
+        );
+        _logBatchTimer.Start();
 
         _client = new DownloaderClient();
         _client.ProgressChanged += OnProgressChanged;
@@ -46,55 +58,90 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(line)) return;
 
         var log = LogMessage.Create(line);
-        if (_allLogs.Count >= MaxLogCapacity)
-        {
-            _allLogs.RemoveRange(0, 500);
-        }
-        _allLogs.Add(log);
+        _incomingLogs.Enqueue(log);
 
-        Dispatcher.UIThread.Post(() =>
+        // Forward to standalone window if open
+        _logWindow?.AppendLog(line);
+    }
+
+    private void FlushPendingLogs()
+    {
+        if (_incomingLogs.IsEmpty) return;
+
+        var batch = new List<LogMessage>(64);
+        while (batch.Count < 100 && _incomingLogs.TryDequeue(out var log))
         {
-            // Update quick log box on download page (keep last 50)
+            batch.Add(log);
+        }
+
+        if (batch.Count == 0) return;
+
+        lock (_allLogsLock)
+        {
+            if (_allLogs.Count + batch.Count > MaxLogCapacity)
+            {
+                var removeCount = Math.Min(_allLogs.Count, Math.Max(500, (_allLogs.Count + batch.Count) - MaxLogCapacity));
+                _allLogs.RemoveRange(0, removeCount);
+            }
+            _allLogs.AddRange(batch);
+        }
+
+        // Update quick log box on download page (keep last 50)
+        foreach (var log in batch)
+        {
             if (_quickLogs.Count >= 50)
             {
                 _quickLogs.RemoveAt(0);
             }
             _quickLogs.Add(log);
-            QuickLogListBox.ScrollIntoView(log);
+        }
 
-            // Update main log tab if matching filter
-            var filter = LogsFilterBox.Text?.Trim();
-            if (string.IsNullOrEmpty(filter) || log.FormattedText.Contains(filter, StringComparison.OrdinalIgnoreCase))
+        if (_quickLogs.Count > 0)
+        {
+            QuickLogListBox.ScrollIntoView(_quickLogs[^1]);
+        }
+
+        // Update main log tab if matching filter
+        var filter = LogsFilterBox.Text?.Trim();
+        var matching = string.IsNullOrEmpty(filter)
+            ? batch
+            : batch.Where(l => l.FormattedText.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (matching.Count > 0)
+        {
+            foreach (var log in matching)
             {
                 if (_filteredMainLogs.Count >= MaxLogCapacity)
                 {
                     _filteredMainLogs.RemoveAt(0);
                 }
                 _filteredMainLogs.Add(log);
-
-                if (AutoScrollCheck.IsChecked ?? true)
-                {
-                    MainLogListBox.ScrollIntoView(log);
-                }
             }
 
-            UpdateMainLogCount();
+            if ((AutoScrollCheck.IsChecked ?? true) && _filteredMainLogs.Count > 0)
+            {
+                MainLogListBox.ScrollIntoView(_filteredMainLogs[^1]);
+            }
+        }
 
-            // Forward to standalone window if open
-            _logWindow?.AppendLog(line);
-        });
+        UpdateMainLogCount();
     }
 
     private void OnProgressChanged(object? sender, DownloadProgressEvent e)
     {
-        Dispatcher.UIThread.Post(() =>
+        var now = Environment.TickCount64;
+        if (e.Percent >= 100 || now - _lastProgressUpdateMs >= 60)
         {
-            DownloadProgressBar.Value = Math.Clamp(e.Percent, 0, 100);
-            PercentLabel.Text = $"{e.Percent:F1}%";
-            DetailsLabel.Text = $"{e.DownloadedFormatted} / {e.TotalFormatted} • {e.SpeedFormatted}";
-            EtaLabel.Text = $"ETA: {e.EtaFormatted}";
-            GlobalStatusText.Text = $"Downloading: {e.Percent:F1}% at {e.SpeedFormatted}";
-        });
+            _lastProgressUpdateMs = now;
+            Dispatcher.UIThread.Post(() =>
+            {
+                DownloadProgressBar.Value = Math.Clamp(e.Percent, 0, 100);
+                PercentLabel.Text = $"{e.Percent:F1}%";
+                DetailsLabel.Text = $"{e.DownloadedFormatted} / {e.TotalFormatted} • {e.SpeedFormatted}";
+                EtaLabel.Text = $"ETA: {e.EtaFormatted}";
+                GlobalStatusText.Text = $"Downloading: {e.Percent:F1}% at {e.SpeedFormatted}";
+            }, DispatcherPriority.Background);
+        }
     }
 
     private void OnStatusChanged(object? sender, string status)
@@ -401,7 +448,11 @@ public partial class MainWindow : Window
 
     private void ClearLogsButton_Click(object? sender, RoutedEventArgs e)
     {
-        _allLogs.Clear();
+        while (_incomingLogs.TryDequeue(out _)) { }
+        lock (_allLogsLock)
+        {
+            _allLogs.Clear();
+        }
         _quickLogs.Clear();
         _filteredMainLogs.Clear();
         UpdateMainLogCount();
@@ -410,9 +461,13 @@ public partial class MainWindow : Window
     private void LogsFilterBox_TextChanged(object? sender, TextChangedEventArgs e)
     {
         var filter = LogsFilterBox.Text?.Trim();
-        var matching = string.IsNullOrEmpty(filter)
-            ? _allLogs
-            : _allLogs.Where(l => l.FormattedText.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+        List<LogMessage> matching;
+        lock (_allLogsLock)
+        {
+            matching = string.IsNullOrEmpty(filter)
+                ? new List<LogMessage>(_allLogs)
+                : _allLogs.Where(l => l.FormattedText.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
 
         _filteredMainLogs.Clear();
         foreach (var log in matching)
@@ -430,7 +485,11 @@ public partial class MainWindow : Window
 
     private void UpdateMainLogCount(int? filteredCount = null)
     {
-        var total = _allLogs.Count;
+        int total;
+        lock (_allLogsLock)
+        {
+            total = _allLogs.Count;
+        }
         var shown = filteredCount ?? _filteredMainLogs.Count;
         MainLogCountLabel.Text = total == shown
             ? $"Total: {total} log lines"
@@ -443,7 +502,12 @@ public partial class MainWindow : Window
         {
             _logWindow = new LogWindow();
             _logWindow.Closed += (s, ev) => _logWindow = null;
-            _logWindow.LoadLogs(_allLogs);
+            List<LogMessage> copy;
+            lock (_allLogsLock)
+            {
+                copy = new List<LogMessage>(_allLogs);
+            }
+            _logWindow.LoadLogs(copy);
             _logWindow.Show(this);
         }
         else

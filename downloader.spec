@@ -35,11 +35,12 @@ hidden_imports = [
     "ctypes",
     "urllib",
     "mutagen",
+    "certifi",
 ] + collect_submodules("yt_dlp")
 
 datas = [
     ("universal_downloader", "universal_downloader"),
-]
+] + collect_data_files("certifi")
 
 a = Analysis(
     ["downloader.py"],

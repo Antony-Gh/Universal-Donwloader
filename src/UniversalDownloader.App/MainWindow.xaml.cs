@@ -12,11 +12,23 @@ public partial class MainWindow : Window
 {
     private readonly DownloaderClient _client;
     private readonly List<string> _allLogs = new();
+    private readonly object _wpfLogsLock = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _incomingWpfLogs = new();
+    private readonly System.Windows.Threading.DispatcherTimer _wpfLogTimer;
+    private long _lastWpfProgressTick = 0;
     private CancellationTokenSource? _downloadCts;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _wpfLogTimer = new System.Windows.Threading.DispatcherTimer(
+            TimeSpan.FromMilliseconds(50),
+            System.Windows.Threading.DispatcherPriority.Background,
+            (s, e) => FlushWpfLogs(),
+            Dispatcher
+        );
+        _wpfLogTimer.Start();
 
         _client = new DownloaderClient();
         _client.ProgressChanged += OnProgressChanged;
@@ -33,55 +45,73 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(line)) return;
 
         var timestamped = $"[{DateTime.Now:HH:mm:ss}] {line}";
-        _allLogs.Add(timestamped);
+        _incomingWpfLogs.Enqueue(timestamped);
+    }
 
-        Dispatcher.Invoke(() =>
+    private void FlushWpfLogs()
+    {
+        if (_incomingWpfLogs.IsEmpty) return;
+
+        var batch = new List<string>(64);
+        while (batch.Count < 100 && _incomingWpfLogs.TryDequeue(out var line))
         {
-            var filter = WpfLogsFilterBox.Text?.Trim();
-            if (string.IsNullOrEmpty(filter) || timestamped.Contains(filter, StringComparison.OrdinalIgnoreCase))
-            {
-                if (string.IsNullOrEmpty(WpfLogTextBox.Text))
-                {
-                    WpfLogTextBox.Text = timestamped;
-                }
-                else
-                {
-                    WpfLogTextBox.Text += Environment.NewLine + timestamped;
-                }
+            batch.Add(line);
+        }
 
-                if (WpfAutoScrollCheck.IsChecked == true)
-                {
-                    WpfLogTextBox.CaretIndex = WpfLogTextBox.Text.Length;
-                    WpfLogTextBox.ScrollToEnd();
-                }
+        if (batch.Count == 0) return;
+
+        lock (_wpfLogsLock)
+        {
+            _allLogs.AddRange(batch);
+        }
+
+        var filter = WpfLogsFilterBox.Text?.Trim();
+        var matching = string.IsNullOrEmpty(filter)
+            ? batch
+            : batch.Where(l => l.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (matching.Count > 0)
+        {
+            var textToAppend = string.Join(Environment.NewLine, matching) + Environment.NewLine;
+            WpfLogTextBox.AppendText(textToAppend);
+
+            if (WpfAutoScrollCheck.IsChecked == true)
+            {
+                WpfLogTextBox.CaretIndex = WpfLogTextBox.Text.Length;
+                WpfLogTextBox.ScrollToEnd();
             }
-        });
+        }
     }
 
     private void OnProgressChanged(object? sender, DownloadProgressEvent e)
     {
-        Dispatcher.Invoke(() =>
+        var now = Environment.TickCount64;
+        if (e.Percent >= 100 || now - _lastWpfProgressTick >= 60)
         {
-            DownloadProgressBar.Value = Math.Clamp(e.Percent, 0, 100);
-            PercentLabel.Text = $"{e.Percent:F1}%";
-            DetailsLabel.Text = $"{e.DownloadedFormatted} / {e.TotalFormatted} • {e.SpeedFormatted}";
-            EtaLabel.Text = $"ETA: {e.EtaFormatted}";
-            GlobalStatusText.Text = $"Downloading: {e.Percent:F1}% at {e.SpeedFormatted}";
-        });
+            _lastWpfProgressTick = now;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                DownloadProgressBar.Value = Math.Clamp(e.Percent, 0, 100);
+                PercentLabel.Text = $"{e.Percent:F1}%";
+                DetailsLabel.Text = $"{e.DownloadedFormatted} / {e.TotalFormatted} • {e.SpeedFormatted}";
+                EtaLabel.Text = $"ETA: {e.EtaFormatted}";
+                GlobalStatusText.Text = $"Downloading: {e.Percent:F1}% at {e.SpeedFormatted}";
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
     }
 
     private void OnStatusChanged(object? sender, string status)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.BeginInvoke(new Action(() =>
         {
             StatusLabel.Text = status;
             GlobalStatusText.Text = status;
-        });
+        }), System.Windows.Threading.DispatcherPriority.Normal);
     }
 
     private void OnDownloadCompleted(object? sender, DownloadCompleteEvent e)
     {
-        Dispatcher.Invoke(async () =>
+        Dispatcher.BeginInvoke(new Action(async () =>
         {
             DownloadProgressBar.Value = 100;
             PercentLabel.Text = "100%";
@@ -90,18 +120,18 @@ public partial class MainWindow : Window
             SetDownloadingState(false);
 
             await LoadHistoryAsync();
-        });
+        }), System.Windows.Threading.DispatcherPriority.Normal);
     }
 
     private void OnDownloadFailed(object? sender, DownloadErrorEvent e)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.BeginInvoke(new Action(() =>
         {
             StatusLabel.Text = "✗ Download failed";
             GlobalStatusText.Text = $"Failed: {e.Error}";
             SetDownloadingState(false);
             MessageBox.Show(e.Error, "Download Error", MessageBoxButton.OK, MessageBoxImage.Error);
-        });
+        }), System.Windows.Threading.DispatcherPriority.Normal);
     }
 
     private async void DownloadButton_Click(object sender, RoutedEventArgs e)

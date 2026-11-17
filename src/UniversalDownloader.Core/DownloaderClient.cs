@@ -349,10 +349,10 @@ public class DownloaderClient
             var asm = typeof(DownloaderClient).Assembly;
             var entryAsm = System.Reflection.Assembly.GetEntryAssembly();
 
-            // Locate embedded binary resource
+            // Locate embedded binary resource matching binaryName
             var names = asm.GetManifestResourceNames();
-            var resourceName = names.FirstOrDefault(n => n.EndsWith("downloader.exe", StringComparison.OrdinalIgnoreCase) || n.EndsWith("downloader", StringComparison.OrdinalIgnoreCase))
-                ?? entryAsm?.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith("downloader.exe", StringComparison.OrdinalIgnoreCase) || n.EndsWith("downloader", StringComparison.OrdinalIgnoreCase));
+            var resourceName = names.FirstOrDefault(n => n.EndsWith(binaryName, StringComparison.OrdinalIgnoreCase))
+                ?? entryAsm?.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith(binaryName, StringComparison.OrdinalIgnoreCase));
 
             if (resourceName == null) return null;
 
@@ -379,14 +379,26 @@ public class DownloaderClient
                 resourceStream.CopyTo(fileStream);
             }
 
-            if (!PlatformUtils.IsWindows)
+            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
                 try
                 {
-                    var chmod = Process.Start("chmod", $"+x \"{targetFile}\"");
-                    chmod?.WaitForExit();
+                    File.SetUnixFileMode(
+                        targetFile,
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                        UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                        UnixFileMode.OtherRead | UnixFileMode.OtherExecute
+                    );
                 }
-                catch { }
+                catch
+                {
+                    try
+                    {
+                        using var chmod = Process.Start("chmod", $"+x \"{targetFile}\"");
+                        chmod?.WaitForExit(2000);
+                    }
+                    catch { }
+                }
             }
 
             return targetFile;
@@ -401,8 +413,8 @@ public class DownloaderClient
         IEnumerable<string> arguments,
         CancellationToken cancellationToken)
     {
-        var lines = new List<string>();
-        await RunProcessAsync(arguments, line => lines.Add(line), cancellationToken);
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        await RunProcessAsync(arguments, line => lines.Enqueue(line), cancellationToken);
         return string.Join(Environment.NewLine, lines).Trim();
     }
 }
