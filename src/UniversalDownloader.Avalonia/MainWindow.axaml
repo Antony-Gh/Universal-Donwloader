@@ -25,7 +25,31 @@
         <StreamGeometry x:Key="UserIcon">M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z</StreamGeometry>
         <StreamGeometry x:Key="EyeIcon">M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z</StreamGeometry>
         <StreamGeometry x:Key="ClockIcon">M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z</StreamGeometry>
+        <StreamGeometry x:Key="InfoCircleIcon">M11,7H13V9H11V7M11,11H13V17H11V11M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z</StreamGeometry>
     </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="PathIcon.info-icon">
+            <Setter Property="Width" Value="13"/>
+            <Setter Property="Height" Value="13"/>
+            <Setter Property="Foreground" Value="#64748B"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="PathIcon.info-icon:pointerover">
+            <Setter Property="Foreground" Value="#38BDF8"/>
+        </Style>
+        <Style Selector="ToolTip">
+            <Setter Property="Background" Value="#1E1E24"/>
+            <Setter Property="Foreground" Value="#E2E8F0"/>
+            <Setter Property="BorderBrush" Value="#3B82F6"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="MaxWidth" Value="340"/>
+        </Style>
+    </Window.Styles>
 
     <Grid Margin="20" RowDefinitions="Auto,*,Auto">
         <!-- Header -->
@@ -45,7 +69,11 @@
                         <!-- URL Input Card -->
                         <Border Background="#1E1E24" CornerRadius="8" Padding="16">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="Media URL" FontWeight="SemiBold" Foreground="#F4F4F8"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <TextBlock Text="Media URL" FontWeight="SemiBold" Foreground="#F4F4F8"/>
+                                    <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                              ToolTip.Tip="Enter or paste any media URL, playlist, or public post from 1,000+ supported platforms (YouTube, TikTok, Instagram, Facebook, X/Twitter, SoundCloud, Vimeo, Reddit, Twitch, etc.)."/>
+                                </StackPanel>
                                 <Grid ColumnDefinitions="*,Auto,Auto">
                                     <TextBox x:Name="UrlTextBox" Grid.Column="0" Watermark="Paste video, audio, or playlist URL here..." TextChanged="UrlTextBox_TextChanged"/>
                                     <Button x:Name="PasteButton" Grid.Column="1" Margin="8,0,0,0" Padding="12,8" Click="PasteButton_Click">
@@ -112,7 +140,11 @@
                                 <TextBlock Text="Download Options" FontWeight="SemiBold" Foreground="#F4F4F8"/>
                                 <Grid ColumnDefinitions="*,*,*">
                                     <StackPanel Grid.Column="0" Margin="0,0,10,0" Spacing="6">
-                                        <TextBlock Text="Quality" Foreground="#9CA3AF" FontSize="12"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="Quality" Foreground="#9CA3AF" FontSize="12"/>
+                                            <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                      ToolTip.Tip="Select the desired video resolution or audio extraction. 'Best Available' automatically chooses the highest quality stream provided by the source platform."/>
+                                        </StackPanel>
                                         <ComboBox x:Name="QualityComboBox" SelectedIndex="0" HorizontalAlignment="Stretch">
                                             <ComboBoxItem Content="Best Available (Max)"/>
                                             <ComboBoxItem Content="1080p Full HD"/>
@@ -123,7 +155,11 @@
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="1" Margin="0,0,10,0" Spacing="6">
-                                        <TextBlock Text="Codec Preference" Foreground="#9CA3AF" FontSize="12"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="Codec Preference" Foreground="#9CA3AF" FontSize="12"/>
+                                            <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                      ToolTip.Tip="Preferred video compression codec:&#x0a;• Default (Auto): Source default stream.&#x0a;• H.264 / AVC1: Maximum compatibility with TVs, phones, and media players.&#x0a;• VP9: Efficient Google/YouTube codec for 2K/4K resolution.&#x0a;• AV1: Next-generation ultra-efficient compression."/>
+                                        </StackPanel>
                                         <ComboBox x:Name="CodecComboBox" SelectedIndex="0" HorizontalAlignment="Stretch">
                                             <ComboBoxItem Content="Default (Auto)"/>
                                             <ComboBoxItem Content="H.264 / AVC1 (Universal)"/>
@@ -133,14 +169,22 @@
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="2" Spacing="6">
-                                        <TextBlock Text="Fragments" Foreground="#9CA3AF" FontSize="12"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="Fragments" Foreground="#9CA3AF" FontSize="12"/>
+                                            <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                      ToolTip.Tip="Number of concurrent stream chunks downloaded in parallel for DASH and HLS video streams (1 to 16). Higher values significantly accelerate download speeds on fast internet connections."/>
+                                        </StackPanel>
                                         <NumericUpDown x:Name="FragmentsNumeric" Value="4" Minimum="1" Maximum="16"/>
                                     </StackPanel>
                                 </Grid>
 
                                 <!-- Output Directory -->
                                 <StackPanel Spacing="6" Margin="0,4,0,0">
-                                    <TextBlock Text="Save Directory" Foreground="#9CA3AF" FontSize="12"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock Text="Save Directory" Foreground="#9CA3AF" FontSize="12"/>
+                                        <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                  ToolTip.Tip="The local folder on your device where downloaded media files, playlists, and tracks will be stored. Defaults to your user Downloads folder."/>
+                                    </StackPanel>
                                     <Grid ColumnDefinitions="*,Auto,Auto">
                                         <TextBox x:Name="OutputDirBox" Grid.Column="0" Watermark="Default directory (or ~/Downloads)"/>
                                         <Button x:Name="BrowseDirButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,6" Click="BrowseDirButton_Click">
@@ -159,10 +203,29 @@
                                 </StackPanel>
 
                                 <WrapPanel Margin="0,6,0,0">
-                                    <CheckBox x:Name="EmbedMetadataCheck" Content="Embed Metadata" IsChecked="True" Margin="0,0,16,0"/>
-                                    <CheckBox x:Name="EmbedThumbnailCheck" Content="Embed Cover Art" IsChecked="True" Margin="0,0,16,0"/>
-                                    <CheckBox x:Name="EmbedSubsCheck" Content="Embed Subtitles" IsChecked="False" Margin="0,0,16,0"/>
-                                    <CheckBox x:Name="WriteThumbnailCheck" Content="Save Thumbnail File" IsChecked="False"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,0,16,0" VerticalAlignment="Center">
+                                        <CheckBox x:Name="EmbedMetadataCheck" Content="Embed Metadata" IsChecked="True"/>
+                                        <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                  ToolTip.Tip="Embeds tags such as title, artist/uploader, publication date, description, and chapters directly into the media container file tags (ID3 / MP4 atoms)."/>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,0,16,0" VerticalAlignment="Center">
+                                        <CheckBox x:Name="EmbedThumbnailCheck" Content="Embed Cover Art" IsChecked="True"/>
+                                        <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                  ToolTip.Tip="Embeds the high-resolution thumbnail or cover image directly into the audio or video file as embedded album artwork."/>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,0,16,0" VerticalAlignment="Center">
+                                        <CheckBox x:Name="EmbedSubsCheck" Content="Embed Subtitles" IsChecked="False"/>
+                                        <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                  ToolTip.Tip="Embeds available subtitle tracks directly into video containers (MKV/MP4) using FFmpeg without burning them permanently into the video picture."/>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                        <CheckBox x:Name="WriteThumbnailCheck" Content="Save Thumbnail File" IsChecked="False"/>
+                                        <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                  ToolTip.Tip="Saves the original thumbnail image file (JPG/PNG/WebP) alongside the downloaded media in your destination folder."/>
+                                    </StackPanel>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
@@ -197,7 +260,11 @@
                         <Border Background="#1E1E24" CornerRadius="8" Padding="14">
                             <StackPanel Spacing="8">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Text="Live Terminal Output" FontWeight="SemiBold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock Text="Live Terminal Output" FontWeight="SemiBold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
+                                        <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                  ToolTip.Tip="Real-time console output from the downloader engine, displaying download milestones, FFmpeg multiplexing, and diagnostic messages."/>
+                                    </StackPanel>
                                     <Button x:Name="QuickCopyLogsButton" Grid.Column="1" Padding="10,4" FontSize="11" Background="#27272A" Foreground="#E2E8F0" Click="QuickCopyLogsButton_Click">
                                         <StackPanel Orientation="Horizontal" Spacing="5">
                                             <PathIcon Data="{StaticResource CopyIcon}" Width="11" Height="11" Foreground="#94A3B8"/>
@@ -235,7 +302,11 @@
                 <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
                     <StackPanel Spacing="12">
                         <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock x:Name="StreamsStatusHeader" Grid.Column="0" Text="Inspect a media URL on the Download tab to view all formats." FontWeight="SemiBold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock x:Name="StreamsStatusHeader" Text="Inspect a media URL on the Download tab to view all formats." FontWeight="SemiBold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
+                                <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                          ToolTip.Tip="Inspects the URL without downloading to reveal all video and audio streams, codecs, and resolutions available on the hosting platform."/>
+                            </StackPanel>
                             <Button x:Name="RefreshStreamsButton" Grid.Column="1" Padding="10,6" Background="#374151" Foreground="White" Click="InspectButton_Click">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                     <PathIcon Data="{StaticResource RefreshIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
@@ -334,7 +405,11 @@
                     <Grid RowDefinitions="Auto,*,Auto">
                         <!-- Toolbar -->
                         <Grid Grid.Row="0" Margin="0,0,0,12" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
-                            <TextBlock Grid.Column="0" Text="Backend Engine Logs" VerticalAlignment="Center" FontWeight="Bold" Foreground="#F4F4F8" FontSize="15"/>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Text="Backend Engine Logs" VerticalAlignment="Center" FontWeight="Bold" Foreground="#F4F4F8" FontSize="15"/>
+                                <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                          ToolTip.Tip="Full console log output with real-time text filtering, search, export to file, and pop-out multi-window support."/>
+                            </StackPanel>
                             <CheckBox x:Name="AutoScrollCheck" Grid.Column="1" Content="Auto-Scroll" IsChecked="True" Margin="14,0,0,0" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
                             <TextBox x:Name="LogsFilterBox" Grid.Column="2" Watermark="Search / filter logs..." Margin="14,0,10,0" TextChanged="LogsFilterBox_TextChanged"/>
                             <Button x:Name="SaveAllLogsButton" Grid.Column="3" Margin="0,0,8,0" Padding="10,6" Background="#374151" Foreground="White" Click="SaveAllLogsButton_Click">
