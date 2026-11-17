@@ -7,8 +7,8 @@ namespace UniversalDownloader.Core;
 
 public record AppUpdateInfo
 {
-    public string CurrentVersion { get; init; } = "2.1.0";
-    public string LatestVersion { get; init; } = "2.1.0";
+    public string CurrentVersion { get; init; } = "2.2.0";
+    public string LatestVersion { get; init; } = "2.2.0";
     public bool IsUpdateAvailable { get; init; }
     public string ReleaseTitle { get; init; } = string.Empty;
     public string ReleaseUrl { get; init; } = "https://github.com/Antony-Gh/Universal-Donwloader/releases/latest";
@@ -49,7 +49,7 @@ public static class UpdateChecker
     {
         var ver = Assembly.GetEntryAssembly()?.GetName().Version
             ?? typeof(UpdateChecker).Assembly.GetName().Version;
-        if (ver == null) return "2.1.0";
+        if (ver == null) return "2.2.0";
         return $"{ver.Major}.{ver.Minor}.{Math.Max(0, ver.Build)}";
     }
 
