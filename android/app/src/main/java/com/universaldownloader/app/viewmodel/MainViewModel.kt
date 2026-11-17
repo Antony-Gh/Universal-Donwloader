@@ -560,6 +560,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startDownload(explicitFormatId: String? = null) {
         val state = _uiState.value
+        val matchedImage = explicitFormatId?.let { id ->
+            state.streams.firstOrNull { it.formatId == id && it.isImage && !it.directUrl.isNullOrBlank() }
+        }
+        if (matchedImage != null) {
+            downloadDirectStreamImage(matchedImage)
+            return
+        }
+
         val cleaned = repo.normalizeUrl(state.urlInput)
         if (cleaned.isBlank() || state.isDownloading || state.engineStatus != EngineStatus.READY) return
 
@@ -687,6 +695,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isIndeterminateProgress = false,
                 downloadStatusText = "Download canceled.",
                 globalStatus = "Download canceled",
+            )
+        }
+    }
+
+    private fun downloadDirectStreamImage(format: StreamFormat) {
+        val imageUrl = format.directUrl ?: return
+        val sourceUrl = _uiState.value.urlInput.trim()
+        if (_uiState.value.isDownloadingProfilePic) return
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    selectedTab = 0,
+                    isDownloadingProfilePic = true,
+                    globalStatus = "Downloading ${format.resolutionFormatted} image...",
+                )
+            }
+            val result = repo.downloadDirectImage(
+                imageUrl = imageUrl,
+                sourceProfileUrl = sourceUrl,
+                cookiesFilePath = _uiState.value.options.cookiesFilePath,
+                onLog = { line -> appendLog(line) },
+            )
+            result.fold(
+                onSuccess = { savedFile ->
+                    withContext(Dispatchers.IO) {
+                        historyStore.record(
+                            url = sourceUrl,
+                            title = "${format.formatNote ?: "Profile Picture"} (${format.resolutionFormatted})",
+                            platform = repo.detectPlatformLabel(sourceUrl),
+                            filePath = savedFile.absolutePath,
+                        )
+                    }
+                    loadHistory()
+                    _uiState.update {
+                        it.copy(
+                            isDownloadingProfilePic = false,
+                            globalStatus = "Saved image: ${savedFile.name}",
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    val msg = err.message ?: "Image download failed"
+                    appendLog("[Error] $msg")
+                    _uiState.update {
+                        it.copy(
+                            isDownloadingProfilePic = false,
+                            globalStatus = "Image failed: $msg",
+                        )
+                    }
+                },
             )
         }
     }

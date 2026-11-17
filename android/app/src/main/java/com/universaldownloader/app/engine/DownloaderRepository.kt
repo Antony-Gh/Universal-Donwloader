@@ -1,6 +1,7 @@
 package com.universaldownloader.app.engine
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Environment
@@ -110,12 +111,66 @@ class DownloaderRepository(private val appContext: Context) {
         }
     }
 
+    private fun isProfileUrl(url: String): Boolean {
+        val uri = runCatching { URI(url) }.getOrNull() ?: return false
+        val host = (uri.host ?: "").lowercase(Locale.US).removePrefix("www.").removePrefix("m.")
+        val path = (uri.path ?: "").lowercase(Locale.US).trimEnd('/')
+        val segments = path.split('/').filter { it.isNotBlank() }
+
+        return when {
+            host.contains("facebook.com") -> {
+                if (path.contains("/watch") || path.contains("/reel") || path.contains("/videos/")) return false
+                if (path.contains("/profile.php") || path.contains("/people/")) return true
+                val reserved = setOf("watch", "reel", "reels", "videos", "share", "story.php", "photo", "photo.php", "groups", "events", "marketplace", "login", "pages", "hashtag", "posts", "stories", "live")
+                segments.size == 1 && segments[0] !in reserved
+            }
+            host.contains("instagram.com") -> segments.size == 1 && segments[0] !in setOf("reel", "reels", "p", "tv", "stories", "explore")
+            host == "x.com" || host == "twitter.com" -> segments.size == 1 && !path.contains("/status/")
+            host.contains("threads.net") -> segments.size == 1
+            else -> false
+        }
+    }
+
     suspend fun fetchMetadataAndFormats(
         rawUrl: String,
         cookiesFilePath: String? = null,
     ): Result<MediaMetadata> = withContext(Dispatchers.IO) {
         runCatching {
-            val url = normalizeUrl(rawUrl)
+            val url = if (!rawUrl.contains("://") && !rawUrl.startsWith("www.") && rawUrl.contains(':')) {
+                resolveProfileUrl(rawUrl)
+            } else {
+                normalizeUrl(rawUrl)
+            }
+
+            if (isProfileUrl(url)) {
+                val verifiedImages = inspectProfilePictures(url, cookiesFilePath)
+                val formats = verifiedImages.mapIndexed { idx, img ->
+                    StreamFormat(
+                        formatId = "img_$idx",
+                        extension = img.extension,
+                        width = img.width,
+                        height = img.height,
+                        fps = null,
+                        vcodec = "image",
+                        acodec = "none",
+                        formatNote = img.label,
+                        filesizeBytes = img.filesizeBytes,
+                        directUrl = img.url,
+                    )
+                }
+                val username = runCatching { URI(url).path.trim('/').split('/').lastOrNull()?.trimStart('@') }.getOrNull() ?: "Profile"
+                return@runCatching MediaMetadata(
+                    url = url,
+                    platform = detectPlatformLabel(url),
+                    title = username,
+                    uploader = username,
+                    durationSeconds = null,
+                    thumbnailUrl = verifiedImages.firstOrNull()?.url,
+                    viewCount = null,
+                    formats = formats,
+                )
+            }
+
             val request = YoutubeDLRequest(url).apply {
                 addOption("--dump-single-json")
                 addOption("--no-playlist")
@@ -477,10 +532,22 @@ class DownloaderRepository(private val appContext: Context) {
         return bucketPriority * 1_000_000L + tier * 100_000L + maxDim
     }
 
-    private fun extractPublicProfileImages(htmlText: String, baseUrl: String): List<String> {
-        val found = LinkedHashSet<String>()
+    private data class ProbedProfileImage(
+        val url: String,
+        val label: String,
+        val isCover: Boolean,
+        val width: Int?,
+        val height: Int?,
+        val filesizeBytes: Long,
+        val extension: String,
+    ) {
+        val pixelArea: Long get() = if (width != null && height != null) width.toLong() * height.toLong() else 0L
+    }
 
-        fun addCandidate(raw: String?) {
+    private fun extractOwnerProfileCandidates(htmlText: String, baseUrl: String): List<Triple<String, String, Boolean>> {
+        val found = LinkedHashMap<String, Triple<String, String, Boolean>>()
+
+        fun addCandidate(raw: String?, label: String, isCover: Boolean = false) {
             if (raw.isNullOrBlank()) return
             val unescaped = unescapeEmbeddedUrl(raw)
             val resolved = if (unescaped.startsWith("http://") || unescaped.startsWith("https://")) {
@@ -489,41 +556,192 @@ class DownloaderRepository(private val appContext: Context) {
                 runCatching { URI(baseUrl).resolve(unescaped).toString() }.getOrDefault(unescaped)
             }
             if ((resolved.startsWith("http://") || resolved.startsWith("https://")) && !isGenericSiteLogo(resolved)) {
-                upgradePublicAvatarUrl(resolved).forEach { found.add(it) }
+                upgradePublicAvatarUrl(resolved).forEachIndexed { idx, variant ->
+                    if (!found.containsKey(variant)) {
+                        val vLabel = if (idx == 0 && variant != resolved && !label.contains("HD")) "$label (HD)" else label
+                        found[variant] = Triple(variant, vLabel, isCover)
+                    }
+                }
             }
         }
 
-        // 1. Publicly embedded SSR profile avatar fields
-        val embeddedPatterns = listOf(
-            Regex(""""profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex(""""profile_pic_url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex(""""profilePicLarge"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex(""""profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex(""""profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex(""""profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex(""""profile_photo"\s*:\s*\{[^{}]{0,400}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex(""""(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex("""<image[^>]+(?:xlink:)?href=["'](https?://scontent[^"']+)["']""", RegexOption.IGNORE_CASE),
-            Regex(""""avatarLarger"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex(""""avatarMedium"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
-            Regex(""""profile_image_url_https"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+        // Owner-scoped profile avatar & cover fields only (avoids unrelated comment/suggested avatars)
+        val ownerPatterns = listOf(
+            Triple(Regex(""""profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (HD)", false),
+            Triple(Regex(""""profile_pic_url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
+            Triple(Regex(""""profilePicLarge"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Large)", false),
+            Triple(Regex(""""profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
+            Triple(Regex(""""profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Medium)", false),
+            Triple(Regex(""""profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (160px)", false),
+            Triple(Regex(""""profile_photo"\s*:\s*\{[^\r\n]{0,500}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
+            Triple(Regex("""<svg[^>]+aria-label=[^>]*>[^<]{0,600}<image[^>]+(?:xlink:)?href=["'](https?://scontent[^"']+)["']""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)), "Profile Picture (Header)", false),
+            Triple(Regex(""""avatarLarger"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Large)", false),
+            Triple(Regex(""""avatarMedium"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Medium)", false),
+            Triple(Regex(""""profile_image_url_https"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
+            Triple(Regex(""""cover_photo"\s*:\s*\{[^\r\n]{0,600}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Cover Photo", true),
+            Triple(Regex(""""coverPhoto"\s*:\s*\{[^\r\n]{0,600}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Cover Photo", true),
+            Triple(Regex(""""profile_banner_url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Cover Banner", true),
         )
-        for (regex in embeddedPatterns) {
-            regex.findAll(htmlText).forEach { addCandidate(it.groupValues[1]) }
+        for ((regex, label, isCover) in ownerPatterns) {
+            regex.findAll(htmlText).forEach { addCandidate(it.groupValues[1], label, isCover) }
         }
 
-        // 2. Standard OpenGraph / Twitter meta tags
         val metaPatterns = listOf(
-            Regex("""<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)""", RegexOption.IGNORE_CASE),
-            Regex("""<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image""", RegexOption.IGNORE_CASE),
-            Regex("""<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)""", RegexOption.IGNORE_CASE),
-            Regex("""<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image""", RegexOption.IGNORE_CASE),
+            Regex("""<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)""", RegexOption.IGNORE_CASE) to "Profile Picture (OpenGraph)",
+            Regex("""<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image""", RegexOption.IGNORE_CASE) to "Profile Picture (OpenGraph)",
+            Regex("""<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)""", RegexOption.IGNORE_CASE) to "Profile Picture (Meta)",
+            Regex("""<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image""", RegexOption.IGNORE_CASE) to "Profile Picture (Meta)",
         )
-        for (regex in metaPatterns) {
-            regex.findAll(htmlText).forEach { addCandidate(it.groupValues[1]) }
+        for ((regex, label) in metaPatterns) {
+            regex.findAll(htmlText).forEach { addCandidate(it.groupValues[1], label, false) }
         }
 
-        return found.sortedByDescending { estimateImageResolutionScore(it) }
+        return found.values.sortedWith(
+            compareByDescending<Triple<String, String, Boolean>> { if (it.third) 0 else 1 }
+                .thenByDescending { estimateImageResolutionScore(it.first) }
+        )
+    }
+
+    private fun probeProfileImage(
+        imageUrl: String,
+        label: String,
+        isCover: Boolean,
+        cookiesFilePath: String?,
+    ): ProbedProfileImage? {
+        val imgHost = runCatching { URI(imageUrl).host.orEmpty() }.getOrDefault("")
+        val conn = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            instanceFollowRedirects = true
+            connectTimeout = 10_000
+            readTimeout = 12_000
+            setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            )
+            buildCookieHeaderForHost(cookiesFilePath, imgHost)?.let { setRequestProperty("Cookie", it) }
+        }
+        return try {
+            if (conn.responseCode !in 200..299) return null
+            val contentType = (conn.contentType ?: "").lowercase(Locale.US)
+            if (contentType.isNotBlank() && !contentType.startsWith("image/") && !contentType.contains("octet-stream")) {
+                return null
+            }
+            val bytes = conn.inputStream.use { it.readBytes() }
+            if (bytes.size < 512) return null
+
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            val w = bounds.outWidth.takeIf { it > 0 }
+            val h = bounds.outHeight.takeIf { it > 0 }
+            if (w != null && h != null && maxOf(w, h) < 64) return null
+
+            val ext = when {
+                contentType.contains("png") -> "png"
+                contentType.contains("webp") -> "webp"
+                contentType.contains("gif") -> "gif"
+                else -> URI(imageUrl).path.substringAfterLast('.', "").lowercase(Locale.US)
+                    .takeIf { it in setOf("jpg", "jpeg", "png", "webp", "gif") } ?: "jpg"
+            }
+
+            ProbedProfileImage(
+                url = imageUrl,
+                label = label,
+                isCover = isCover,
+                width = w,
+                height = h,
+                filesizeBytes = bytes.size.toLong(),
+                extension = ext,
+            )
+        } catch (_: Exception) {
+            null
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun inspectProfilePictures(profileUrl: String, cookiesFilePath: String?): List<ProbedProfileImage> {
+        val host = runCatching { URI(profileUrl).host.orEmpty() }.getOrDefault("")
+        val rawCandidates = LinkedHashMap<String, Triple<String, String, Boolean>>()
+
+        runCatching {
+            val conn = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                connectTimeout = 15_000
+                readTimeout = 20_000
+                setRequestProperty(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                )
+                buildCookieHeaderForHost(cookiesFilePath, host)?.let { setRequestProperty("Cookie", it) }
+            }
+            try {
+                if (conn.responseCode in 200..299) {
+                    val html = conn.inputStream.bufferedReader().use { it.readText() }
+                    extractOwnerProfileCandidates(html, profileUrl).forEach { cand ->
+                        rawCandidates.putIfAbsent(cand.first, cand)
+                    }
+                }
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+        val probed = rawCandidates.values.take(10).mapNotNull { (url, label, isCover) ->
+            probeProfileImage(url, label, isCover, cookiesFilePath)
+        }
+
+        val sorted = probed.sortedWith(
+            compareByDescending<ProbedProfileImage> { if (it.isCover) 0 else 1 }
+                .thenByDescending { it.pixelArea }
+                .thenByDescending { it.filesizeBytes }
+        )
+
+        val seenSig = HashSet<String>()
+        return sorted.filter { seenSig.add("${it.isCover}_${it.width}_${it.height}_${it.filesizeBytes}") }
+    }
+
+    suspend fun downloadDirectImage(
+        imageUrl: String,
+        sourceProfileUrl: String?,
+        cookiesFilePath: String? = null,
+        onLog: (String) -> Unit,
+    ): Result<File> = withContext(Dispatchers.IO) {
+        runCatching {
+            val outDir = File(getOutputDirectory(audioOnly = false), "profile_pictures").apply { mkdirs() }
+            val safeName = (sourceProfileUrl?.let { runCatching { URI(it).path.trim('/').split('/').lastOrNull()?.trimStart('@') }.getOrNull() } ?: "profile")
+                .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                .ifBlank { "profile" }
+            val imgHost = runCatching { URI(imageUrl).host.orEmpty() }.getOrDefault("")
+            val ext = URI(imageUrl).path.substringAfterLast('.', "").lowercase(Locale.US)
+                .takeIf { it in setOf("jpg", "jpeg", "png", "webp", "gif") } ?: "jpg"
+            val dest = File(outDir, "${safeName}_${System.currentTimeMillis()}.$ext")
+
+            val conn = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                connectTimeout = 15_000
+                readTimeout = 20_000
+                setRequestProperty(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                )
+                buildCookieHeaderForHost(cookiesFilePath, imgHost)?.let { setRequestProperty("Cookie", it) }
+            }
+            try {
+                if (conn.responseCode !in 200..299) {
+                    throw RuntimeException("Image download returned HTTP ${conn.responseCode}")
+                }
+                conn.inputStream.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+            } finally {
+                conn.disconnect()
+            }
+            MediaScannerConnection.scanFile(appContext, arrayOf(dest.absolutePath), null, null)
+            onLog("[Complete] Image saved: ${dest.name}")
+            dest
+        }
     }
 
     /**
@@ -537,128 +755,25 @@ class DownloaderRepository(private val appContext: Context) {
     ): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
             val profileUrl = resolveProfileUrl(profileInput)
-            val host = runCatching { URI(profileUrl).host.orEmpty() }.getOrDefault("")
             val hasCookies = !cookiesFilePath.isNullOrBlank() && File(cookiesFilePath).exists()
             onLog(
-                if (hasCookies) "[Profile] Resolving profile picture using configured cookies: $profileUrl"
-                else "[Profile] Resolving public profile picture: $profileUrl"
+                if (hasCookies) "[Profile] Resolving verified profile pictures using configured cookies: $profileUrl"
+                else "[Profile] Resolving verified public profile pictures: $profileUrl"
             )
 
-            val candidates = mutableListOf<String>()
-
-            // 1. Try yt-dlp flat info (uses user's cookies if configured)
-            runCatching {
-                val req = YoutubeDLRequest(profileUrl).apply {
-                    addOption("--dump-single-json")
-                    addOption("--skip-download")
-                    addOption("--flat-playlist")
-                    if (hasCookies) {
-                        addOption("--cookies", cookiesFilePath!!)
-                    }
-                }
-                val resp = YoutubeDL.getInstance().execute(req, null)
-                val raw = resp.out.trim()
-                val startIdx = raw.indexOf('{')
-                if (startIdx >= 0) {
-                    val json = JSONObject(raw.substring(startIdx))
-                    for (key in listOf("avatar", "channel_thumbnail", "uploader_thumbnail", "thumbnail")) {
-                        val v = json.optString(key, "")
-                        if (v.startsWith("http")) candidates.add(v)
-                    }
-                    val thumbs = json.optJSONArray("thumbnails")
-                    if (thumbs != null) {
-                        for (i in thumbs.length() - 1 downTo 0) {
-                            val u = thumbs.optJSONObject(i)?.optString("url", "") ?: ""
-                            if (u.startsWith("http")) candidates.add(u)
-                        }
-                    }
-                }
-            }
-
-            // 2. Standard profile HTML OpenGraph metadata (with user's session cookies if available)
-            runCatching {
-                val conn = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    instanceFollowRedirects = true
-                    connectTimeout = 15_000
-                    readTimeout = 20_000
-                    setRequestProperty(
-                        "User-Agent",
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-                    )
-                    buildCookieHeaderForHost(cookiesFilePath, host)?.let {
-                        setRequestProperty("Cookie", it)
-                    }
-                }
-                try {
-                    if (conn.responseCode in 200..299) {
-                        val html = conn.inputStream.bufferedReader().use { it.readText() }
-                        candidates.addAll(extractPublicProfileImages(html, profileUrl))
-                    }
-                } finally {
-                    conn.disconnect()
-                }
-            }
-
-            val validCandidates = candidates
-                .flatMap { upgradePublicAvatarUrl(it) }
-                .distinct()
-                .filterNot { isGenericSiteLogo(it) }
-                .sortedByDescending { estimateImageResolutionScore(it) }
-            if (validCandidates.isEmpty()) {
+            val verified = inspectProfilePictures(profileUrl, cookiesFilePath)
+            if (verified.isEmpty()) {
                 throw RuntimeException(
                     if (hasCookies) {
-                        "No profile picture could be resolved with your current session cookies. " +
+                        "No valid profile picture could be resolved with your current session cookies. " +
                             "The account may be private/locked without permission, or cookies may need refreshing."
                     } else {
-                        "No public profile picture found. For profiles your account is authorized to view, sign in via Web Login or import cookies.txt."
+                        "No valid public profile picture found. For profiles your account is authorized to view, sign in via Web Login or import cookies.txt."
                     }
                 )
             }
 
-            val outDir = File(getOutputDirectory(audioOnly = false), "profile_pictures").apply { mkdirs() }
-            val safeName = (URI(profileUrl).path.trim('/').split('/').lastOrNull()?.trimStart('@') ?: "profile")
-                .replace(Regex("[^A-Za-z0-9._-]"), "_")
-                .ifBlank { "profile" }
-
-            var lastError: Exception? = null
-            for (imageUrl in validCandidates) {
-                try {
-                    val imgHost = runCatching { URI(imageUrl).host.orEmpty() }.getOrDefault("")
-                    val ext = URI(imageUrl).path.substringAfterLast('.', "").lowercase(Locale.US)
-                        .takeIf { it in setOf("jpg", "jpeg", "png", "webp", "gif") } ?: "jpg"
-                    val dest = File(outDir, "${safeName}_${System.currentTimeMillis()}.$ext")
-                    val conn = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
-                        requestMethod = "GET"
-                        instanceFollowRedirects = true
-                        connectTimeout = 15_000
-                        readTimeout = 20_000
-                        setRequestProperty(
-                            "User-Agent",
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-                        )
-                        buildCookieHeaderForHost(cookiesFilePath, imgHost)?.let {
-                            setRequestProperty("Cookie", it)
-                        }
-                    }
-                    try {
-                        if (conn.responseCode !in 200..299) {
-                            throw RuntimeException("Image download returned HTTP ${conn.responseCode}")
-                        }
-                        conn.inputStream.use { input ->
-                            dest.outputStream().use { output -> input.copyTo(output) }
-                        }
-                    } finally {
-                        conn.disconnect()
-                    }
-                    MediaScannerConnection.scanFile(appContext, arrayOf(dest.absolutePath), null, null)
-                    onLog("[Complete] Profile picture saved: ${dest.name}")
-                    return@runCatching dest
-                } catch (ex: Exception) {
-                    lastError = ex
-                }
-            }
-            throw lastError ?: RuntimeException("Profile picture could not be downloaded.")
+            downloadDirectImage(verified.first().url, profileUrl, cookiesFilePath, onLog).getOrThrow()
         }
     }
 

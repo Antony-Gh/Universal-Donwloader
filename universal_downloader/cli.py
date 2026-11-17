@@ -28,11 +28,13 @@ from universal_downloader.models import ContentType, DetectedTarget, Platform
 from universal_downloader.notify import send_notification
 from universal_downloader.profile import (
     USERNAME_PLATFORM_PREFIXES,
+    download_direct_profile_image,
     extract_profile_title,
-    extract_public_profile_images,
     extract_username_from_profile_url,
     fetch_public_html,
+    inspect_profile_images,
     load_cookie_jar,
+    resolve_profile_input,
 )
 from universal_downloader.protocol import clean_protocol_url, register_protocol, unregister_protocol
 from universal_downloader.updater import update_ytdlp
@@ -81,6 +83,18 @@ def build_parser() -> argparse.ArgumentParser:
             "Download a publicly exposed profile image from a public "
             "profile URL or platform:username (e.g. instagram:username)."
         ),
+    )
+
+    parser.add_argument(
+        "--profile-image-url",
+        metavar="IMAGE_URL",
+        help="Directly download a specific discovered profile or cover image URL.",
+    )
+
+    parser.add_argument(
+        "--profile-source-url",
+        metavar="PROFILE_URL",
+        help="Optional originating profile URL used for folder/filename organization with --profile-image-url.",
     )
 
     parser.add_argument(
@@ -687,23 +701,37 @@ def main() -> int:
                     Platform.THREADS,
                 }:
                     cookie_jar = load_cookie_jar(config)
-                    page = fetch_public_html(target.normalized_url, config.timeout, cookie_jar=cookie_jar)
-                    imgs = extract_public_profile_images(page, base_url=target.normalized_url)
+                    prof_title = None
+                    try:
+                        page = fetch_public_html(target.normalized_url, config.timeout, cookie_jar=cookie_jar)
+                        prof_title = extract_profile_title(page)
+                    except Exception:
+                        pass
+                    verified_imgs = inspect_profile_images(
+                        target.normalized_url,
+                        platform=target.platform,
+                        config=config,
+                        extractor=engine.extractor,
+                    )
                     username = extract_username_from_profile_url(target.normalized_url, target.platform) or "Profile"
-                    prof_title = extract_profile_title(page) or username
+                    qualities = [
+                        f"{img.width}x{img.height}"
+                        for img in verified_imgs
+                        if img.width and img.height
+                    ]
                     payload = {
                         "url": target.normalized_url,
                         "platform": target.platform.value,
-                        "title": prof_title,
+                        "title": prof_title or username,
                         "uploader": username,
                         "duration": None,
                         "duration_string": None,
-                        "thumbnail": imgs[0] if imgs else None,
-                        "description": "Profile page — click 'Profile Pic' or 'Start Download' to save the publicly available avatar.",
+                        "thumbnail": verified_imgs[0].url if verified_imgs else None,
+                        "description": "Profile page — use 'Inspect Streams' to view all available picture resolutions or click 'Profile Pic'.",
                         "view_count": None,
                         "is_playlist": False,
                         "playlist_count": 0,
-                        "qualities": [],
+                        "qualities": qualities,
                         "entries": [],
                     }
                     if config.json_output or config.json_stream:
@@ -765,11 +793,52 @@ def main() -> int:
                     failure(f"Failed to inspect metadata: {exc}", config)
                 return 1
 
+        # Direct profile image URL download mode (used by Inspect Streams image selection)
+        if getattr(args, "profile_image_url", None):
+            img_url = clean_protocol_url(args.profile_image_url)
+            src_url = getattr(args, "profile_source_url", None)
+            try:
+                saved = download_direct_profile_image(img_url, config, source_profile_url=src_url)
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": True, "saved_profile": str(saved)}))
+                else:
+                    success(f"Image saved: {saved}", config)
+                return 0
+            except (ProfileError, Exception) as exc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(exc)}))
+                else:
+                    failure(f"Image download failed: {exc}", config)
+                return 1
+
         # Formats inspection mode
         if args.formats:
             fmt_url = clean_protocol_url(args.formats)
             try:
+                # Allow platform:username shorthand in Inspect Streams too
+                if "://" not in fmt_url and not fmt_url.startswith("www.") and ":" in fmt_url:
+                    fmt_url = resolve_profile_input(fmt_url)
+
                 target = detect_target(fmt_url, timeout=config.timeout)
+
+                if target.content_type == ContentType.PROFILE:
+                    verified_imgs = inspect_profile_images(
+                        target.normalized_url,
+                        platform=target.platform,
+                        config=config,
+                        extractor=engine.extractor,
+                    )
+                    formats_data = [img.to_format_dict(idx) for idx, img in enumerate(verified_imgs)]
+                    if config.json_output or config.json_stream:
+                        print(json.dumps({"url": target.normalized_url, "formats": formats_data}, indent=2))
+                    else:
+                        print_banner(config)
+                        print(f"Profile:  {target.normalized_url}")
+                        print(f"Pictures: {len(formats_data)} verified image(s)")
+                        for item in formats_data:
+                            print(f"  - {item['format_id']}: {item['resolution']} ({item['ext']}) - {item['format_note']}")
+                    return 0
+
                 is_pl = target.content_type == ContentType.PLAYLIST
 
                 if not config.json_output and not config.json_stream:

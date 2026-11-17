@@ -82,9 +82,18 @@ data class StreamFormat(
     val acodec: String?,
     val formatNote: String?,
     val filesizeBytes: Long?,
+    val directUrl: String? = null,
 ) {
+    val isImage: Boolean
+        get() = vcodec.equals("image", ignoreCase = true)
+
     val resolutionFormatted: String
         get() {
+            if (isImage) {
+                val w = width
+                val h = height
+                return if (w != null && h != null && w > 0 && h > 0) "${w}x${h}" else (formatNote ?: "Image")
+            }
             val isAudioOnly = (vcodec == null || vcodec == "none") && acodec != null && acodec != "none"
             if (isAudioOnly) return "Audio Only"
             val w = width
@@ -95,6 +104,9 @@ data class StreamFormat(
 
     val codecSummary: String
         get() {
+            if (isImage) {
+                return "Image • ${formatNote ?: "Profile Picture"}"
+            }
             val parts = mutableListOf<String>()
             if (!vcodec.isNullOrBlank() && vcodec != "none") parts.add("Video: $vcodec")
             if (!acodec.isNullOrBlank() && acodec != "none") parts.add("Audio: $acodec")

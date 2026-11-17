@@ -985,8 +985,13 @@ public partial class MainWindow : Window
             var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
             var formats = await _client.GetFormatsAsync(url, cookiesFromBrowser: cookiesBrowser, cookiesFile: cookiesFile);
             StreamsListBox.ItemsSource = formats;
-            StreamsStatusHeader.Text = $"Found {formats.Count} streams for: {url}";
-            GlobalStatusText.Text = $"Found {formats.Count} streams available.";
+            var isImageList = formats.Count > 0 && formats.All(f => f.IsImage);
+            StreamsStatusHeader.Text = isImageList
+                ? $"Found {formats.Count} verified picture(s) for: {url}"
+                : $"Found {formats.Count} streams for: {url}";
+            GlobalStatusText.Text = isImageList
+                ? $"Found {formats.Count} verified picture(s) available."
+                : $"Found {formats.Count} streams available.";
         }
         catch (Exception ex)
         {
@@ -1017,6 +1022,58 @@ public partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(url)) return;
 
             MainTabControl.SelectedIndex = 0; // Switch to Download tab
+
+            if (format.IsImage && !string.IsNullOrWhiteSpace(format.DirectUrl))
+            {
+                SaveUserSettings();
+                BeginGlobalActivity($"Downloading {format.ResolutionFormatted} image...");
+                OnRawOutputReceived(this, $"[Profile] Downloading selected image ({format.ResolutionFormatted}, {format.FormatNote})...");
+                try
+                {
+                    var customDir = OutputDirBox.Text?.Trim();
+                    var cookiesFile = GetSelectedCookiesFile();
+                    var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
+
+                    var savedPath = await _client.DownloadDirectImageAsync(
+                        format.DirectUrl,
+                        sourceProfileUrl: url,
+                        outputDirectory: string.IsNullOrWhiteSpace(customDir) ? null : customDir,
+                        cookiesFromBrowser: cookiesBrowser,
+                        cookiesFile: cookiesFile);
+
+                    OnRawOutputReceived(this, $"[Complete] Image saved: {savedPath}");
+                    GlobalStatusText.Text = $"Image saved: {Path.GetFileName(savedPath)}";
+
+                    if (File.Exists(savedPath))
+                    {
+                        try
+                        {
+                            var bytes = await File.ReadAllBytesAsync(savedPath);
+                            using var ms = new MemoryStream(bytes);
+                            ThumbnailImage.Source = new Bitmap(ms);
+                            PlatformBadge.Text = format.ResolutionFormatted;
+                            VideoTitleLabel.Text = Path.GetFileName(savedPath);
+                            UploaderLabel.Text = savedPath;
+                            ViewsLabel.Text = PlatformUtils.FormatBytes(bytes.Length);
+                            DurationBadge.IsVisible = false;
+                            MetadataLoadingText.IsVisible = false;
+                            MetadataCard.IsVisible = true;
+                        }
+                        catch { }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    OnRawOutputReceived(this, $"[Error] Image download failed: {ex.Message}");
+                    GlobalStatusText.Text = $"Image download failed: {ex.Message}";
+                }
+                finally
+                {
+                    EndGlobalActivity();
+                }
+                return;
+            }
+
             var options = BuildOptionsFromUi();
             options.Quality = format.FormatId; // Direct stream target
             await StartDownloadWithUrl(url, options);

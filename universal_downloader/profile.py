@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 import html
 import http.cookiejar
+import io
 import json
 import logging
 import re
@@ -295,15 +298,49 @@ def extract_meta_image(html_text: str) -> Optional[str]:
     return None
 
 
-def extract_public_profile_images(html_text: str, base_url: str = "") -> list[str]:
-    """
-    Extract publicly exposed profile avatar URLs already present in the returned page HTML
-    (embedded public SSR metadata, SVG avatar elements, JSON-LD, and OpenGraph/Twitter tags),
-    ranked highest-resolution first.
-    """
-    candidates: list[str] = []
+@dataclass
+class ProfileImageCandidate:
+    url: str
+    label: str = "Profile Picture"
+    is_cover: bool = False
+    width: Optional[int] = None
+    height: Optional[int] = None
+    filesize: Optional[int] = None
+    ext: str = "jpg"
+    verified: bool = False
 
-    def add_url(raw_val: Optional[str]) -> None:
+    @property
+    def pixel_area(self) -> int:
+        if self.width and self.height:
+            return self.width * self.height
+        return 0
+
+    def to_format_dict(self, index: int) -> dict[str, Any]:
+        resolution = f"{self.width}x{self.height}" if (self.width and self.height) else "Image"
+        return {
+            "format_id": f"img_{index}",
+            "ext": self.ext.lstrip(".") or "jpg",
+            "resolution": resolution,
+            "width": self.width,
+            "height": self.height,
+            "fps": None,
+            "filesize": self.filesize,
+            "vcodec": "image",
+            "acodec": "none",
+            "format_note": self.label,
+            "url": self.url,
+        }
+
+
+def extract_public_profile_candidates(html_text: str, base_url: str = "") -> list[ProfileImageCandidate]:
+    """
+    Extract owner-scoped publicly exposed profile picture and cover photo URLs
+    present in the returned page HTML (OpenGraph, JSON-LD, owner SSR fields, and header SVG).
+    Avoids scraping unrelated avatars from comments or suggested profiles.
+    """
+    by_url: dict[str, ProfileImageCandidate] = {}
+
+    def add_candidate(raw_val: Optional[str], label: str, is_cover: bool = False) -> None:
         if not raw_val or not isinstance(raw_val, str):
             return
         url = _unescape_embedded_url(raw_val)
@@ -311,35 +348,43 @@ def extract_public_profile_images(html_text: str, base_url: str = "") -> list[st
             url = urllib.parse.urljoin(base_url, url)
         if not url.startswith(("http://", "https://")) or is_generic_site_logo(url):
             return
-        for variant in upgrade_public_avatar_url(url):
-            if variant not in candidates:
-                candidates.append(variant)
+        for idx, variant in enumerate(upgrade_public_avatar_url(url)):
+            if variant not in by_url:
+                variant_label = f"{label} (HD)" if (idx == 0 and variant != url and "HD" not in label) else label
+                by_url[variant] = ProfileImageCandidate(
+                    url=variant,
+                    label=variant_label,
+                    is_cover=is_cover,
+                    ext=image_extension_from_url(variant).lstrip("."),
+                )
 
-    # 1. Publicly embedded SSR profile picture fields
-    embedded_patterns = [
-        # Instagram / Threads public SSR
-        re.compile(r'"profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"', re.I),
-        re.compile(r'"profile_pic_url"\s*:\s*"(https?:[^"]+)"', re.I),
-        # Facebook public SSR avatar fields
-        re.compile(r'"profilePicLarge"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
-        re.compile(r'"profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
-        re.compile(r'"profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
-        re.compile(r'"profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
-        re.compile(r'"profile_photo"\s*:\s*\{[^{}]{0,400}?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
-        re.compile(r'"image"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"', re.I),
-        # Facebook public profile-picture CDN bucket URLs anywhere in public SSR payload
-        re.compile(r'"(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"', re.I),
-        # SVG <image xlink:href="..."> used by Facebook's public profile header
-        re.compile(r'<image[^>]+(?:xlink:)?href=["\'](https?://scontent[^"\']+)["\']', re.I),
-        # TikTok public SSR
-        re.compile(r'"avatarLarger"\s*:\s*"(https?:[^"]+)"', re.I),
-        re.compile(r'"avatarMedium"\s*:\s*"(https?:[^"]+)"', re.I),
-        # X / Twitter public SSR
-        re.compile(r'"profile_image_url_https"\s*:\s*"(https?:[^"]+)"', re.I),
+    # 1. Explicit owner-scoped SSR profile avatar fields
+    owner_avatar_patterns: list[tuple[re.Pattern[str], str, bool]] = [
+        # Instagram / Threads
+        (re.compile(r'"profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (HD)", False),
+        (re.compile(r'"profile_pic_url"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        # Facebook owner profile avatar fields
+        (re.compile(r'"profilePicLarge"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Large)", False),
+        (re.compile(r'"profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        (re.compile(r'"profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Medium)", False),
+        (re.compile(r'"profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (160px)", False),
+        (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,500}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        (re.compile(r'"profilePhoto"\s*:\s*\{[^\r\n]{0,500}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        # Facebook profile header SVG avatar (scoped to aria-label profile photo SVG)
+        (re.compile(r'<svg[^>]+aria-label=[^>]*>[^<]{0,600}<image[^>]+(?:xlink:)?href=["\'](https?://scontent[^"\']+)["\']', re.I | re.S), "Profile Picture (Header)", False),
+        # TikTok
+        (re.compile(r'"avatarLarger"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Large)", False),
+        (re.compile(r'"avatarMedium"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Medium)", False),
+        # X / Twitter
+        (re.compile(r'"profile_image_url_https"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        # Cover / Banner photos (explicitly marked as cover so avatars always sort first)
+        (re.compile(r'"cover_photo"\s*:\s*\{[^\r\n]{0,600}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Cover Photo", True),
+        (re.compile(r'"coverPhoto"\s*:\s*\{[^\r\n]{0,600}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Cover Photo", True),
+        (re.compile(r'"profile_banner_url"\s*:\s*"(https?:[^"]+)"', re.I), "Cover Banner", True),
     ]
-    for pattern in embedded_patterns:
+    for pattern, label, is_cover in owner_avatar_patterns:
         for match in pattern.finditer(html_text):
-            add_url(match.group(1))
+            add_candidate(match.group(1), label, is_cover=is_cover)
 
     # 2. JSON-LD structured public metadata (<script type="application/ld+json">)
     ld_pattern = re.compile(
@@ -361,31 +406,281 @@ def extract_public_profile_images(html_text: str, base_url: str = "") -> list[st
             for key in ("image", "thumbnailUrl"):
                 val = obj.get(key)
                 if isinstance(val, str):
-                    add_url(val)
+                    add_candidate(val, "Profile Picture (Structured)")
                 elif isinstance(val, dict):
-                    add_url(val.get("url") or val.get("contentUrl"))
+                    add_candidate(val.get("url") or val.get("contentUrl"), "Profile Picture (Structured)")
                 elif isinstance(val, list):
                     for elem in val:
                         if isinstance(elem, str):
-                            add_url(elem)
+                            add_candidate(elem, "Profile Picture (Structured)")
                         elif isinstance(elem, dict):
-                            add_url(elem.get("url") or elem.get("contentUrl"))
+                            add_candidate(elem.get("url") or elem.get("contentUrl"), "Profile Picture (Structured)")
 
-    # 3. Standard OpenGraph / Twitter meta tags
-    meta_patterns = [
-        re.compile(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', re.I),
-        re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', re.I),
-        re.compile(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)', re.I),
-        re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image', re.I),
-        re.compile(r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)', re.I),
+    # 3. Standard OpenGraph / Twitter meta tags (authoritative public profile preview)
+    meta_patterns: list[tuple[re.Pattern[str], str]] = [
+        (re.compile(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', re.I), "Profile Picture (OpenGraph)"),
+        (re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', re.I), "Profile Picture (OpenGraph)"),
+        (re.compile(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)', re.I), "Profile Picture (Meta)"),
+        (re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image', re.I), "Profile Picture (Meta)"),
+        (re.compile(r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)', re.I), "Profile Picture (Link)"),
     ]
-    for pattern in meta_patterns:
+    for pattern, label in meta_patterns:
         for match in pattern.finditer(html_text):
-            add_url(match.group(1))
+            add_candidate(match.group(1), label)
 
-    # Sort all discovered public renditions highest-resolution first
-    candidates.sort(key=estimate_image_resolution_score, reverse=True)
-    return candidates
+    result = list(by_url.values())
+    result.sort(
+        key=lambda c: (0 if c.is_cover else 1, estimate_image_resolution_score(c.url)),
+        reverse=True,
+    )
+    return result
+
+
+def extract_public_profile_images(html_text: str, base_url: str = "") -> list[str]:
+    """Return owner-scoped publicly exposed profile image URLs ranked highest-resolution first."""
+    return [c.url for c in extract_public_profile_candidates(html_text, base_url=base_url)]
+
+
+def _read_image_bytes(
+    image_url: str,
+    timeout: int,
+    cookie_jar: Optional[http.cookiejar.CookieJar] = None,
+) -> tuple[bytes, str]:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+
+    try:
+        from curl_cffi import requests as curl_requests
+
+        cookie_dict = None
+        if cookie_jar is not None:
+            host = (urllib.parse.urlparse(image_url).hostname or "").lower()
+            cookie_dict = {
+                c.name: c.value
+                for c in cookie_jar
+                if c.value is not None
+                and (not c.domain or host == c.domain.lstrip(".").lower() or host.endswith("." + c.domain.lstrip(".").lower()))
+            } or None
+
+        resp = curl_requests.get(
+            image_url,
+            headers=headers,
+            cookies=cookie_dict,
+            impersonate="chrome",
+            timeout=timeout,
+            allow_redirects=True,
+        )
+        if 200 <= resp.status_code < 300:
+            ct = (resp.headers.get("Content-Type") or "").lower()
+            return resp.content, ct
+    except Exception:
+        pass
+
+    request = urllib.request.Request(image_url, headers=headers, method="GET")
+    opener = _build_url_opener(cookie_jar)
+    with opener.open(request, timeout=timeout) as response:
+        ct = (response.headers.get("Content-Type") or "").lower()
+        return response.read(), ct
+
+
+def probe_profile_image(
+    candidate: ProfileImageCandidate,
+    timeout: int,
+    cookie_jar: Optional[http.cookiejar.CookieJar] = None,
+) -> Optional[ProfileImageCandidate]:
+    """
+    Download and verify a candidate image, measuring real pixel dimensions (width x height),
+    format extension, and exact byte size. Rejects non-images and tiny broken icons (< 64px).
+    """
+    try:
+        data, content_type = _read_image_bytes(candidate.url, timeout=min(timeout, 12), cookie_jar=cookie_jar)
+    except Exception:
+        return None
+
+    if len(data) < 512:
+        return None
+    if content_type and not (content_type.startswith("image/") or "octet-stream" in content_type):
+        return None
+
+    width: Optional[int] = None
+    height: Optional[int] = None
+    ext = candidate.ext or image_extension_from_url(candidate.url).lstrip(".")
+
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(data)) as img:
+            width, height = img.size
+            fmt = (img.format or "").lower()
+            if fmt == "jpeg":
+                ext = "jpg"
+            elif fmt in {"png", "webp", "gif", "avif"}:
+                ext = fmt
+    except Exception:
+        # Reject data that Pillow cannot parse when Content-Type wasn't clearly an image
+        if not content_type.startswith("image/"):
+            return None
+
+    # Filter out tiny UI icons / 1x1 tracking pixels / 48px thumbnails if broken
+    if width is not None and height is not None and max(width, height) < 64:
+        return None
+
+    return ProfileImageCandidate(
+        url=candidate.url,
+        label=candidate.label,
+        is_cover=candidate.is_cover,
+        width=width,
+        height=height,
+        filesize=len(data),
+        ext=ext or "jpg",
+        verified=True,
+    )
+
+
+def inspect_profile_images(
+    profile_url: str,
+    platform: Platform,
+    config: AppConfig,
+    extractor: Optional[YTDLPExtractor] = None,
+) -> list[ProfileImageCandidate]:
+    """
+    Discover, verify, and measure all publicly exposed (or cookie-authorized) images
+    for a profile URL, sorted by Profile Pictures first and highest real pixel resolution first.
+    """
+    target = detect_target(profile_url, timeout=config.timeout)
+    cookie_jar = load_cookie_jar(config)
+    raw_candidates: list[ProfileImageCandidate] = []
+    seen_urls: set[str] = set()
+
+    def add_raw(item: ProfileImageCandidate) -> None:
+        if item.url not in seen_urls and not is_generic_site_logo(item.url):
+            seen_urls.add(item.url)
+            raw_candidates.append(item)
+
+    html_first_platforms = {
+        Platform.FACEBOOK,
+        Platform.INSTAGRAM,
+        Platform.TWITTER,
+        Platform.THREADS,
+        Platform.BLUESKY,
+        Platform.REDDIT,
+    }
+
+    def collect_from_html() -> None:
+        try:
+            page = fetch_public_html(target.normalized_url, config.timeout, cookie_jar=cookie_jar)
+            for item in extract_public_profile_candidates(page, base_url=target.normalized_url):
+                add_raw(item)
+        except ProfileError as exc:
+            LOGGER.info("Profile HTML lookup failed: %s", exc)
+
+    def collect_from_ytdlp() -> None:
+        if extractor is None:
+            return
+        try:
+            extracted = extractor.extract_info(
+                target.normalized_url,
+                download=False,
+                extra={"skip_download": True, "extract_flat": True},
+            )
+            for url in extract_thumbnail_candidates(extracted):
+                for variant in upgrade_public_avatar_url(url):
+                    add_raw(
+                        ProfileImageCandidate(
+                            url=variant,
+                            label="Profile Picture",
+                            ext=image_extension_from_url(variant).lstrip("."),
+                        )
+                    )
+        except ExtractionError as exc:
+            LOGGER.info("yt-dlp profile metadata unavailable: %s", exc)
+
+    if platform in html_first_platforms:
+        collect_from_html()
+        if not raw_candidates:
+            collect_from_ytdlp()
+    else:
+        collect_from_ytdlp()
+        collect_from_html()
+
+    if not raw_candidates:
+        return []
+
+    to_probe = raw_candidates[:12]
+    verified: list[ProfileImageCandidate] = []
+    with ThreadPoolExecutor(max_workers=min(6, len(to_probe))) as pool:
+        futures = [pool.submit(probe_profile_image, item, config.timeout, cookie_jar) for item in to_probe]
+        for fut in futures:
+            probed = fut.result()
+            if probed is not None:
+                verified.append(probed)
+
+    # Sort verified images: non-cover Profile Pictures first, then highest real pixel area & filesize
+    verified.sort(
+        key=lambda c: (0 if c.is_cover else 1, c.pixel_area, c.filesize or 0),
+        reverse=True,
+    )
+
+    # Deduplicate identical image renditions (same width, height, filesize)
+    deduped: list[ProfileImageCandidate] = []
+    seen_sig: set[tuple[bool, Optional[int], Optional[int], Optional[int]]] = set()
+    for item in verified:
+        sig = (item.is_cover, item.width, item.height, item.filesize)
+        if sig not in seen_sig:
+            seen_sig.add(sig)
+            deduped.append(item)
+
+    return deduped
+
+
+def download_direct_profile_image(
+    image_url: str,
+    config: AppConfig,
+    source_profile_url: Optional[str] = None,
+) -> Path:
+    """Download a specific discovered profile/cover image URL directly into output_dir/<platform>/profile_pictures/."""
+    cookie_jar = load_cookie_jar(config)
+    platform = Platform.UNKNOWN
+    username = "profile_image"
+    if source_profile_url:
+        try:
+            target = detect_target(source_profile_url, timeout=config.timeout)
+            platform = target.platform
+            username = extract_username_from_profile_url(target.normalized_url, platform) or "profile_image"
+        except Exception:
+            pass
+
+    data, content_type = _read_image_bytes(image_url, timeout=config.timeout, cookie_jar=cookie_jar)
+    if len(data) < 512 or (content_type and not (content_type.startswith("image/") or "octet-stream" in content_type)):
+        raise ProfileError("The selected image URL did not return a valid image.")
+
+    ext = image_extension_from_url(image_url)
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(data)) as img:
+            fmt = (img.format or "").lower()
+            if fmt == "jpeg":
+                ext = ".jpg"
+            elif fmt in {"png", "webp", "gif", "avif"}:
+                ext = f".{fmt}"
+    except Exception:
+        pass
+
+    destination_dir = config.output_dir / platform_directory(platform) / "profile_pictures"
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    destination = ensure_inside_directory(
+        config.output_dir,
+        unique_path(destination_dir / (sanitize_filename(username, "profile") + ext)),
+    )
+    destination.write_bytes(data)
+    return destination
 
 
 def fetch_public_html(
@@ -573,70 +868,25 @@ class ProfilePhotoResolver:
 
         info(f"Platform: {platform.value}", self.config)
         if cookie_jar is not None:
-            info("Resolving profile image using your configured session cookies...", self.config)
+            info("Resolving verified profile images using your configured session cookies...", self.config)
         else:
-            info("Resolving publicly exposed profile image...", self.config)
+            info("Resolving verified publicly exposed profile images...", self.config)
 
-        candidates: list[str] = []
-        html_first_platforms = {
-            Platform.FACEBOOK,
-            Platform.INSTAGRAM,
-            Platform.TWITTER,
-            Platform.THREADS,
-            Platform.BLUESKY,
-            Platform.REDDIT,
-        }
+        verified = inspect_profile_images(
+            target.normalized_url,
+            platform=platform,
+            config=self.config,
+            extractor=self.extractor,
+        )
 
-        def try_html_lookup() -> None:
-            try:
-                page = fetch_public_html(target.normalized_url, self.config.timeout, cookie_jar=cookie_jar)
-                candidates.extend(extract_public_profile_images(page, base_url=target.normalized_url))
-            except ProfileError as exc:
-                LOGGER.info("Profile HTML lookup failed: %s", exc)
-
-        def try_ytdlp_lookup() -> None:
-            try:
-                extracted = self.extractor.extract_info(
-                    target.normalized_url,
-                    download=False,
-                    extra={"skip_download": True, "extract_flat": True},
-                )
-                candidates.extend(extract_thumbnail_candidates(extracted))
-            except ExtractionError as exc:
-                LOGGER.info("yt-dlp profile metadata unavailable: %s", exc)
-
-        if platform in html_first_platforms:
-            # Prefer direct public HTML/SSR metadata first to avoid noisy yt-dlp generic fallback on profile pages
-            try_html_lookup()
-            if not candidates:
-                try_ytdlp_lookup()
-        else:
-            try_ytdlp_lookup()
-            if not candidates:
-                try_html_lookup()
-
-        unique_candidates: list[str] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            for variant in upgrade_public_avatar_url(candidate):
-                if (
-                    variant.startswith(("http://", "https://"))
-                    and variant not in seen
-                    and not is_generic_site_logo(variant)
-                ):
-                    seen.add(variant)
-                    unique_candidates.append(variant)
-
-        unique_candidates.sort(key=estimate_image_resolution_score, reverse=True)
-
-        if not unique_candidates:
+        if not verified:
             if cookie_jar is not None:
                 raise ProfileError(
-                    "No profile picture could be resolved with your current session cookies. "
+                    "No valid profile picture could be resolved with your current session cookies. "
                     "The account may be private/locked to accounts without permission, or cookies may need refreshing."
                 )
             raise ProfileError(
-                "No publicly exposed profile image could be resolved. "
+                "No valid publicly exposed profile image could be resolved. "
                 "If your account is authorized to view this profile, select Browser Cookies or import cookies.txt and try again."
             )
 
@@ -646,23 +896,20 @@ class ProfilePhotoResolver:
             or "profile"
         )
 
-        filename = sanitize_filename(username, "profile") + (
-            image_extension_from_url(unique_candidates[0])
-        )
-
+        best = verified[0]
+        filename = sanitize_filename(username, "profile") + "." + (best.ext.lstrip(".") or "jpg")
         destination_dir = (
             self.config.output_dir
             / platform_directory(platform)
             / "profile_pictures"
         )
         destination_dir.mkdir(parents=True, exist_ok=True)
-        destination = destination_dir / filename
-        destination = ensure_inside_directory(self.config.output_dir, destination)
+        destination = ensure_inside_directory(self.config.output_dir, destination_dir / filename)
 
-        for image_url in unique_candidates:
+        for item in verified:
             try:
                 return download_public_image(
-                    image_url,
+                    item.url,
                     destination,
                     self.config.timeout,
                     self.config.output_dir,

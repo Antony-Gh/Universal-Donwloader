@@ -368,6 +368,69 @@ public class DownloaderClient
     }
 
     /// <summary>
+    /// Download a specific discovered profile or cover image URL directly (from Inspect Streams).
+    /// </summary>
+    public async Task<string> DownloadDirectImageAsync(
+        string imageUrl,
+        string? sourceProfileUrl = null,
+        string? outputDirectory = null,
+        string? cookiesFromBrowser = null,
+        string? cookiesFile = null,
+        CancellationToken cancellationToken = default)
+    {
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        if (!string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            arguments.Add("--output");
+            arguments.Add($"\"{outputDirectory}\"");
+        }
+        if (!string.IsNullOrWhiteSpace(cookiesFile))
+        {
+            arguments.Add("--cookies");
+            arguments.Add($"\"{cookiesFile}\"");
+        }
+        else if (!string.IsNullOrWhiteSpace(cookiesFromBrowser))
+        {
+            arguments.Add("--cookies-from-browser");
+            arguments.Add(cookiesFromBrowser);
+        }
+        if (!string.IsNullOrWhiteSpace(sourceProfileUrl))
+        {
+            arguments.Add("--profile-source-url");
+            arguments.Add($"\"{sourceProfileUrl}\"");
+        }
+        arguments.Add("--profile-image-url");
+        arguments.Add($"\"{imageUrl}\"");
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            throw new Exception("Backend returned no output while downloading image.");
+        }
+
+        var jsonStart = output.LastIndexOf('{');
+        var candidateJson = jsonStart >= 0 ? output[jsonStart..] : output;
+        try
+        {
+            using var doc = JsonDocument.Parse(candidateJson);
+            if (doc.RootElement.TryGetProperty("saved_profile", out var saved))
+            {
+                var path = saved.GetString();
+                if (!string.IsNullOrWhiteSpace(path)) return path;
+            }
+            if (doc.RootElement.TryGetProperty("error", out var err))
+            {
+                throw new Exception(err.GetString() ?? "Image download failed.");
+            }
+        }
+        catch (JsonException) { }
+
+        throw new Exception(output.Trim());
+    }
+
+    /// <summary>
     /// Cancel the active download process.
     /// </summary>
     public void Cancel()

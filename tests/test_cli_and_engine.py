@@ -17,6 +17,8 @@ from universal_downloader.exceptions import ConfigurationError, ProfileError
 from universal_downloader.extractor import parse_rate_limit
 from universal_downloader.models import AppConfig, ContentType, DetectedTarget, Platform
 from universal_downloader.profile import (
+    ProfileImageCandidate,
+    extract_public_profile_candidates,
     extract_public_profile_images,
     extract_username_from_profile_url,
     is_generic_site_logo,
@@ -120,16 +122,35 @@ def test_extract_public_profile_images_parses_ssr_jsonld_and_og():
         "https://p16-sign.tiktokcdn.com/av.jpeg",
     ]
 
-    # Verify high-resolution Facebook mx877x858 rendition outranks 160x160 thumbnail
+    # Verify high-resolution owner profilePicLarge outranks 160x160 thumbnail and ignores unrelated random comment avatars
     fb_multi = r'''
     <script>
       {"profilePic160":{"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-1\/1_n.jpg?stp=dst-jpg_p160x160"}}
-      {"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-1\/2_n.jpg?stp=dst-jpg_tt6\u0026cstp=mx877x858\u0026ctp=mx877x858"}
+      {"profilePicLarge":{"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-1\/2_n.jpg?stp=dst-jpg_tt6\u0026cstp=mx877x858\u0026ctp=mx877x858"}}
+      {"unrelated_commenter":{"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-1\/stranger.jpg"}}
+      {"cover_photo":{"image":{"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-6\/cover_n.jpg"}}}
     </script>
     '''
-    ranked = extract_public_profile_images(fb_multi)
-    assert "mx877x858" in ranked[0]
-    assert "p160x160" in ranked[-1]
+    candidates = extract_public_profile_candidates(fb_multi)
+    urls_multi = [c.url for c in candidates]
+    assert "mx877x858" in urls_multi[0]
+    assert all("stranger.jpg" not in u for u in urls_multi)
+    assert any(c.is_cover and "cover_n.jpg" in c.url for c in candidates)
+    assert not candidates[0].is_cover
+
+    fmt_dict = ProfileImageCandidate(
+        url="https://scontent.xx.fbcdn.net/v/t39.30808-1/2_n.jpg",
+        label="Profile Picture (Large)",
+        width=877,
+        height=858,
+        filesize=145000,
+        ext="jpg",
+        verified=True,
+    ).to_format_dict(0)
+    assert fmt_dict["format_id"] == "img_0"
+    assert fmt_dict["resolution"] == "877x858"
+    assert fmt_dict["vcodec"] == "image"
+    assert fmt_dict["filesize"] == 145000
 
     # Verify X/Twitter _normal and YouTube =s88 upgrade to high-resolution renditions first
     social_small = r'''

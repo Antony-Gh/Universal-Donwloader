@@ -34,18 +34,26 @@ public record FormatInfoModel
     [JsonPropertyName("format_note")]
     public string FormatNote { get; init; } = string.Empty;
 
-    public bool HasVideo => !string.IsNullOrWhiteSpace(VCodec) && VCodec != "none";
+    [JsonPropertyName("url")]
+    public string? DirectUrl { get; init; }
+
+    public bool IsImage => string.Equals(VCodec, "image", StringComparison.OrdinalIgnoreCase);
+    public bool HasVideo => !IsImage && !string.IsNullOrWhiteSpace(VCodec) && VCodec != "none";
     public bool HasAudio => !string.IsNullOrWhiteSpace(ACodec) && ACodec != "none";
 
     public string FilesizeFormatted => Filesize.HasValue ? PlatformUtils.FormatBytes(Filesize.Value) : "Unknown size";
 
-    public string CodecSummary => (HasVideo && HasAudio) ? $"Video: {VCodec} • Audio: {ACodec}" :
-                                  HasVideo ? $"Video: {VCodec}" :
-                                  HasAudio ? $"Audio: {ACodec}" : "Direct Stream";
+    public string CodecSummary => IsImage
+        ? $"Image • {(string.IsNullOrWhiteSpace(FormatNote) ? "Profile Picture" : FormatNote)}"
+        : (HasVideo && HasAudio) ? $"Video: {VCodec} • Audio: {ACodec}" :
+          HasVideo ? $"Video: {VCodec}" :
+          HasAudio ? $"Audio: {ACodec}" : "Direct Stream";
 
-    public string ResolutionFormatted => !string.IsNullOrWhiteSpace(Resolution) && Resolution != "audio only"
-        ? (Fps.HasValue ? $"{Resolution} @ {Fps:0}fps" : Resolution)
-        : (HasAudio ? "Audio Only" : "Stream");
+    public string ResolutionFormatted => IsImage
+        ? (!string.IsNullOrWhiteSpace(Resolution) ? Resolution : "Image")
+        : (!string.IsNullOrWhiteSpace(Resolution) && Resolution != "audio only"
+            ? (Fps.HasValue ? $"{Resolution} @ {Fps:0}fps" : Resolution)
+            : (HasAudio ? "Audio Only" : "Stream"));
 
     public string DisplayText => $"{Resolution} ({Extension}) {(Fps.HasValue ? Fps + "fps" : "")} - {FormatNote}".Trim();
 
