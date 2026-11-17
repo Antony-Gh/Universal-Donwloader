@@ -99,7 +99,7 @@ def get_default_version() -> str:
         match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', text)
         if match:
             return match.group(1).lstrip("v")
-    return "1.4.0"
+    return "1.5.0"
 
 
 def compute_sha256(filepath: Path) -> str:
@@ -180,6 +180,7 @@ def publish_dotnet_target(project_path: Path, rid: str, output_dir: Path) -> boo
         "--self-contained", "true",
         "-p:PublishSingleFile=true",
         "-p:IncludeNativeLibrariesForSelfExtract=true",
+        "-p:EnableCompressionInSingleFile=true",
         "-o", str(output_dir),
     ]
 
