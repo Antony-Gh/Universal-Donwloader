@@ -282,10 +282,51 @@ public partial class MainWindow : Window
         }
     }
 
-    private void DownloadUpdateButton_Click(object? sender, RoutedEventArgs e)
+    private async void DownloadUpdateButton_Click(object? sender, RoutedEventArgs e)
     {
-        var url = _latestUpdateInfo?.DownloadUrl ?? UpdateChecker.LatestReleaseWebUrl;
-        PlatformUtils.OpenUrl(url);
+        var info = _latestUpdateInfo;
+        if (info == null || string.IsNullOrWhiteSpace(info.AssetName))
+        {
+            PlatformUtils.OpenUrl(info?.DownloadUrl ?? UpdateChecker.LatestReleaseWebUrl);
+            return;
+        }
+
+        DownloadUpdateButton.IsEnabled = false;
+        BeginGlobalActivity($"Downloading update v{info.LatestVersion}...");
+        try
+        {
+            var progress = new Progress<double>(pct =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    UpdateBannerMessage.Text = $"Downloading v{info.LatestVersion}... {pct:F1}%";
+                    GlobalStatusText.Text = $"Downloading update v{info.LatestVersion}: {pct:F1}%";
+                });
+            });
+
+            var downloadedPath = await UpdateChecker.DownloadAndVerifyUpdateAsync(info, progress);
+            UpdateBannerMessage.Text = $"Verified v{info.LatestVersion} (SHA-256 OK). Installing...";
+
+            if (UpdateChecker.TryLaunchWindowsSelfReplace(downloadedPath))
+            {
+                Close();
+                return;
+            }
+
+            PlatformUtils.OpenFolder(downloadedPath);
+            UpdateBannerMessage.Text = $"Update v{info.LatestVersion} downloaded and verified!";
+            GlobalStatusText.Text = $"Update ready at: {downloadedPath}";
+        }
+        catch (Exception ex)
+        {
+            UpdateBannerMessage.Text = $"Auto-download failed ({ex.Message}) — opening browser...";
+            PlatformUtils.OpenUrl(info.DownloadUrl);
+        }
+        finally
+        {
+            DownloadUpdateButton.IsEnabled = true;
+            EndGlobalActivity();
+        }
     }
 
     private void ViewReleaseNotesButton_Click(object? sender, RoutedEventArgs e)

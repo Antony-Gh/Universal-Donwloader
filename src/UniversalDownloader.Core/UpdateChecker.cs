@@ -15,6 +15,7 @@ public record AppUpdateInfo
     public string DownloadUrl { get; init; } = "https://github.com/Antony-Gh/Universal-Donwloader/releases/latest";
     public string? AssetName { get; init; }
     public long AssetSizeBytes { get; init; }
+    public string? ChecksumsAssetUrl { get; init; }
     public string ReleaseNotes { get; init; } = string.Empty;
 }
 
@@ -76,6 +77,7 @@ public static class UpdateChecker
         string downloadUrl = releaseUrl;
         string? matchedAssetName = null;
         long matchedAssetSize = 0;
+        string? checksumsUrl = null;
 
         if (root.TryGetProperty("assets", out var assetsEl) && assetsEl.ValueKind == JsonValueKind.Array)
         {
@@ -88,6 +90,10 @@ public static class UpdateChecker
                 if (!string.IsNullOrWhiteSpace(aName) && !string.IsNullOrWhiteSpace(aUrl))
                 {
                     assets.Add((aName, aUrl, aSize));
+                    if (aName.Equals("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase))
+                    {
+                        checksumsUrl = aUrl;
+                    }
                 }
             }
 
@@ -112,8 +118,117 @@ public static class UpdateChecker
             DownloadUrl = downloadUrl,
             AssetName = matchedAssetName,
             AssetSizeBytes = matchedAssetSize,
+            ChecksumsAssetUrl = checksumsUrl,
             ReleaseNotes = releaseNotes,
         };
+    }
+
+    /// <summary>
+    /// Download the update asset to a temporary staging folder and verify its SHA-256 against SHA256SUMS.txt if published.
+    /// </summary>
+    public static async Task<string> DownloadAndVerifyUpdateAsync(
+        AppUpdateInfo info,
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var stagingDir = Path.Combine(Path.GetTempPath(), "UniversalDownloader_Update");
+        Directory.CreateDirectory(stagingDir);
+        var fileName = !string.IsNullOrWhiteSpace(info.AssetName) ? info.AssetName : "UniversalDownloader-update";
+        var destPath = Path.Combine(stagingDir, fileName);
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, info.DownloadUrl);
+        req.Headers.Add("User-Agent", $"UniversalDownloader/{GetCurrentVersion()}");
+        using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        resp.EnsureSuccessStatusCode();
+
+        var totalBytes = resp.Content.Headers.ContentLength ?? info.AssetSizeBytes;
+        await using (var remoteStream = await resp.Content.ReadAsStreamAsync(cancellationToken))
+        await using (var localStream = File.Create(destPath))
+        {
+            var buffer = new byte[81920];
+            long totalRead = 0;
+            int read;
+            while ((read = await remoteStream.ReadAsync(buffer, cancellationToken)) > 0)
+            {
+                await localStream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                totalRead += read;
+                if (totalBytes > 0)
+                {
+                    progress?.Report(Math.Clamp(totalRead * 100.0 / totalBytes, 0, 100));
+                }
+            }
+        }
+
+        // Verify SHA-256 checksum if SHA256SUMS.txt was published alongside the release
+        if (!string.IsNullOrWhiteSpace(info.ChecksumsAssetUrl) && !string.IsNullOrWhiteSpace(info.AssetName))
+        {
+            using var sumReq = new HttpRequestMessage(HttpMethod.Get, info.ChecksumsAssetUrl);
+            sumReq.Headers.Add("User-Agent", $"UniversalDownloader/{GetCurrentVersion()}");
+            using var sumResp = await Http.SendAsync(sumReq, cancellationToken);
+            if (sumResp.IsSuccessStatusCode)
+            {
+                var sumsText = await sumResp.Content.ReadAsStringAsync(cancellationToken);
+                var expectedHash = sumsText
+                    .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                    .Select(line => line.Trim().Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+                    .Where(parts => parts.Length >= 2 && parts[^1].TrimStart('*').Equals(info.AssetName, StringComparison.OrdinalIgnoreCase))
+                    .Select(parts => parts[0])
+                    .FirstOrDefault();
+
+                if (!string.IsNullOrWhiteSpace(expectedHash))
+                {
+                    await using var verifyStream = File.OpenRead(destPath);
+                    var actualHash = Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(verifyStream, cancellationToken));
+                    if (!actualHash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        File.Delete(destPath);
+                        throw new InvalidOperationException($"SHA-256 verification failed for {info.AssetName}.");
+                    }
+                }
+            }
+        }
+
+        progress?.Report(100);
+        return destPath;
+    }
+
+    /// <summary>
+    /// On Windows standalone executables, swaps the running binary with the verified update and relaunches automatically.
+    /// </summary>
+    public static bool TryLaunchWindowsSelfReplace(string downloadedExePath)
+    {
+        if (!PlatformUtils.IsWindows || !downloadedExePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var currentExe = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(currentExe) || !currentExe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (Path.GetFileName(currentExe).Equals("dotnet.exe", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var pid = Environment.ProcessId;
+        var scriptPath = Path.Combine(Path.GetTempPath(), $"ud_updater_{pid}.cmd");
+        var script = $"""
+@echo off
+:wait
+tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
+if "%ERRORLEVEL%"=="0" (
+    timeout /t 1 /nobreak >NUL
+    goto wait
+)
+move /Y "{downloadedExePath}" "{currentExe}" >NUL
+start "" "{currentExe}"
+del "%~f0"
+""";
+        File.WriteAllText(scriptPath, script);
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = $"/C \"{scriptPath}\"",
+            CreateNoWindow = true,
+            UseShellExecute = false,
+        });
+        return true;
     }
 
     private static (string Name, string Url, long Size)? PickPlatformAsset(

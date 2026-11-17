@@ -137,6 +137,15 @@ fun MainScreen(viewModel: MainViewModel) {
     var showUpdateMenu by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
 
+    // Automatically launch native Android APK installer when in-app APK download completes
+    LaunchedEffect(state.readyToInstallApkPath) {
+        val apkPath = state.readyToInstallApkPath
+        if (!apkPath.isNullOrBlank()) {
+            viewModel.consumeReadyApkPath()
+            installDownloadedApk(context, apkPath)
+        }
+    }
+
     Scaffold(
         containerColor = BgDark,
         topBar = {
@@ -390,12 +399,25 @@ fun MainScreen(viewModel: MainViewModel) {
             confirmButton = {
                 Button(
                     onClick = {
-                        showUpdateDialog = false
-                        openExternalUrl(context, updateInfo.downloadUrl)
+                        if (!updateInfo.assetName.isNullOrBlank() && updateInfo.downloadUrl.endsWith(".apk", ignoreCase = true)) {
+                            viewModel.downloadUpdateApk()
+                        } else {
+                            showUpdateDialog = false
+                            openExternalUrl(context, updateInfo.downloadUrl)
+                        }
                     },
+                    enabled = !state.isDownloadingAppUpdate,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
                 ) {
-                    Text("Download APK", color = Color.White, fontWeight = FontWeight.Bold)
+                    if (state.isDownloadingAppUpdate) {
+                        Text(
+                            String.format(Locale.US, "Downloading %.0f%%", state.appUpdateDownloadProgress),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    } else {
+                        Text("Download & Install APK", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             },
             dismissButton = {
@@ -1693,5 +1715,19 @@ private fun openExternalUrl(context: Context, url: String) {
         context.startActivity(intent)
     } catch (_: Exception) {
         Toast.makeText(context, "Unable to open browser", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun installDownloadedApk(context: Context, apkPath: String) {
+    try {
+        val file = File(apkPath)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        Toast.makeText(context, "Unable to launch APK installer", Toast.LENGTH_SHORT).show()
     }
 }

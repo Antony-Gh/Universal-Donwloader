@@ -51,6 +51,9 @@ data class MainUiState(
     val historySearch: String = "",
     val isLoadingHistory: Boolean = false,
     val isCheckingAppUpdate: Boolean = false,
+    val isDownloadingAppUpdate: Boolean = false,
+    val appUpdateDownloadProgress: Float = 0f,
+    val readyToInstallApkPath: String? = null,
     val appUpdateInfo: AppUpdateInfo? = null,
     val isUpdateBannerDismissed: Boolean = false,
     val detectedClipboardUrl: String? = null,
@@ -146,6 +149,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissUpdateBanner() {
         _uiState.update { it.copy(isUpdateBannerDismissed = true) }
+    }
+
+    fun downloadUpdateApk() {
+        val info = _uiState.value.appUpdateInfo ?: return
+        if (_uiState.value.isDownloadingAppUpdate) return
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isDownloadingAppUpdate = true,
+                    appUpdateDownloadProgress = 0f,
+                    readyToInstallApkPath = null,
+                    globalStatus = "Downloading app update v${info.latestVersion}...",
+                )
+            }
+            val dest = java.io.File(app.cacheDir, info.assetName ?: "UniversalDownloader-update.apk")
+            val result = updateChecker.downloadApk(
+                downloadUrl = info.downloadUrl,
+                destFile = dest,
+                expectedBytes = info.assetSizeBytes,
+                onProgress = { pct ->
+                    _uiState.update {
+                        it.copy(
+                            appUpdateDownloadProgress = pct,
+                            globalStatus = String.format(Locale.US, "Downloading update v%s: %.0f%%", info.latestVersion, pct),
+                        )
+                    }
+                },
+            )
+            result.fold(
+                onSuccess = { apkFile ->
+                    appendLog("[Success] Downloaded update APK: ${apkFile.name}")
+                    _uiState.update {
+                        it.copy(
+                            isDownloadingAppUpdate = false,
+                            appUpdateDownloadProgress = 100f,
+                            readyToInstallApkPath = apkFile.absolutePath,
+                            globalStatus = "Update v${info.latestVersion} ready to install!",
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    appendLog("[Error] APK download failed: ${err.message}")
+                    _uiState.update {
+                        it.copy(
+                            isDownloadingAppUpdate = false,
+                            globalStatus = "Update download failed",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun consumeReadyApkPath() {
+        _uiState.update { it.copy(readyToInstallApkPath = null) }
     }
 
     fun onClipboardTextDetected(rawText: String) {

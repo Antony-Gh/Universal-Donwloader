@@ -232,8 +232,20 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
+      - name: Decode Android Release Keystore (if configured)
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/release-keystore.jks
+          echo "ANDROID_KEYSTORE_PATH=$GITHUB_WORKSPACE/android/release-keystore.jks" >> $GITHUB_ENV
+
       - name: Build Android Release APKs
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle assembleRelease --no-daemon
 
       - name: Stage Android APKs

@@ -5,6 +5,7 @@ import com.universaldownloader.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -122,5 +123,48 @@ class AppUpdateChecker {
             if (va != vb) return va.compareTo(vb)
         }
         return 0
+    }
+
+    suspend fun downloadApk(
+        downloadUrl: String,
+        destFile: File,
+        expectedBytes: Long = 0L,
+        onProgress: (Float) -> Unit,
+    ): Result<File> = withContext(Dispatchers.IO) {
+        runCatching {
+            val conn = (URL(downloadUrl).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = true
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("User-Agent", "UniversalDownloader-Android/${BuildConfig.VERSION_NAME}")
+            }
+            try {
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    throw RuntimeException("APK download failed with HTTP $code")
+                }
+                val total = conn.contentLengthLong.takeIf { it > 0L } ?: expectedBytes
+                destFile.parentFile?.mkdirs()
+                conn.inputStream.use { input ->
+                    destFile.outputStream().use { output ->
+                        val buffer = ByteArray(65_536)
+                        var copied = 0L
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read <= 0) break
+                            output.write(buffer, 0, read)
+                            copied += read
+                            if (total > 0L) {
+                                onProgress(((copied * 100f) / total).coerceIn(0f, 100f))
+                            }
+                        }
+                    }
+                }
+                onProgress(100f)
+                destFile
+            } finally {
+                conn.disconnect()
+            }
+        }
     }
 }
