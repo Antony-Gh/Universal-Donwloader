@@ -362,6 +362,7 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         verbose=getattr(args, "verbose", False),
         debug=getattr(args, "debug", False),
         no_color=getattr(args, "no_color", False),
+        no_check_certificate=getattr(args, "no_check_certificate", False) or parse_config_bool(json_config.get("no_check_certificate")),
         cookies_file=Path(cookies_file_value).expanduser() if cookies_file_value else None,
         cookies_from_browser=cookies_browser_value.strip() if cookies_browser_value else None,
     )

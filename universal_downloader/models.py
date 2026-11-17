@@ -91,6 +91,7 @@ class AppConfig:
     verbose: bool = False
     debug: bool = False
     no_color: bool = False
+    no_check_certificate: bool = False
     cookies_file: Optional[Path] = None
     cookies_from_browser: Optional[str] = None
 

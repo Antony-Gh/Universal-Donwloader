@@ -329,6 +329,18 @@ class DownloadEngine:
             ) as exc:
                 last_error = exc
                 message = clean_error_message(str(exc))
+                lowered_err = message.lower()
+
+                if (
+                    "certificate verify failed" in lowered_err
+                    or "certificateverifyerror" in lowered_err
+                    or "unable to get local issuer certificate" in lowered_err
+                ):
+                    LOGGER.info(
+                        "SSL certificate verification issue encountered. Retrying with certificate verification disabled..."
+                    )
+                    self.config.no_check_certificate = True
+                    self.extractor.config.no_check_certificate = True
 
                 if is_non_retryable_error(message):
                     break

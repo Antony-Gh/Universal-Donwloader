@@ -74,6 +74,41 @@ def test_emit_json_event(capsys):
     assert data["files"] == ["a.mp4"]
 
 
+def test_emit_json_event_pipe_resilience(monkeypatch):
+    import sys
+    def broken_write(_):
+        raise OSError(22, "Invalid argument")
+    monkeypatch.setattr(sys.stdout, "write", broken_write)
+    # Must not raise exception
+    emit_json_event("progress", {"percent": 50.0})
+
+
+def test_progress_renderer_rate_limiting():
+    from universal_downloader.models import AppConfig
+    cfg = AppConfig(json_stream=True)
+    renderer = ProgressRenderer(cfg)
+
+    events = []
+    import universal_downloader.progress as prog
+    old_emit = prog.emit_json_event
+    try:
+        prog.emit_json_event = lambda event_type, payload: events.append((event_type, payload))
+
+        # First call should emit
+        renderer({"status": "downloading", "downloaded_bytes": 100, "total_bytes": 1000})
+        assert len(events) == 1
+
+        # Immediate second call within 80ms should be throttled
+        renderer({"status": "downloading", "downloaded_bytes": 200, "total_bytes": 1000})
+        assert len(events) == 1
+
+        # 100% call should emit immediately
+        renderer({"status": "downloading", "downloaded_bytes": 1000, "total_bytes": 1000})
+        assert len(events) == 2
+    finally:
+        prog.emit_json_event = old_emit
+
+
 def test_installed_ytdlp_version():
     ver = get_installed_ytdlp_version()
     assert ver != "not installed"

@@ -46,6 +46,28 @@ def test_error_retryability_classification():
     assert is_non_retryable_error("HTTP Error 429: Too Many Requests") is False
     assert is_non_retryable_error("Rate limit reached. Try again later.") is False
     assert is_non_retryable_error("Connection timed out") is False
+    assert is_non_retryable_error("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed") is False
+
+
+def test_ytdlp_logger_warning_filter(monkeypatch):
+    from universal_downloader.extractor import YTDLPLogger
+    from universal_downloader.models import AppConfig
+
+    logger = YTDLPLogger(AppConfig())
+    logged_warnings = []
+    logged_debugs = []
+
+    monkeypatch.setattr("universal_downloader.extractor.LOGGER.warning", lambda msg: logged_warnings.append(msg))
+    monkeypatch.setattr("universal_downloader.extractor.LOGGER.debug", lambda msg: logged_debugs.append(msg))
+
+    # Noise warnings should be downgraded to debug
+    logger.warning("Some web client https formats have been skipped as they are missing a url. The current session may have the SSAP (server-side ads) experiment")
+    assert len(logged_warnings) == 0
+    assert len(logged_debugs) == 1
+
+    # Real warnings should be kept as warning
+    logger.warning("Actual problem occurred during format selection")
+    assert len(logged_warnings) == 1
 
 
 def test_tiktok_rehydration_predicate():

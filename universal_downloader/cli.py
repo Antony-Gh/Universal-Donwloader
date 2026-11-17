@@ -277,6 +277,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Attempt to bypass geographic restrictions via header spoofing.",
     )
+    net_group.add_argument(
+        "--no-check-certificate",
+        action="store_true",
+        help="Suppress HTTPS certificate validation (useful behind proxies or missing Windows certs).",
+    )
 
     # Authentication & Cookies
     auth_group = parser.add_argument_group("Authentication & Cookies")

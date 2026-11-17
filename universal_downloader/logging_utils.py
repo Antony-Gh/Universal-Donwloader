@@ -133,6 +133,9 @@ def is_non_retryable_error(message: str) -> bool:
     """
     message = clean_error_message(message).lower()
 
+    if "certificate verify failed" in message or "certificateverifyerror" in message or "ssl: " in message:
+        return False
+
     permanent_markers = (
         "unable to extract webpage video data",
         "unable to extract webpage",

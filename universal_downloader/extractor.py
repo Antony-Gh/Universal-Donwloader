@@ -94,6 +94,14 @@ def parse_rate_limit(rate_str: Optional[str]) -> Optional[int]:
 class YTDLPLogger:
     """Route yt-dlp log output through the application logger."""
 
+    IGNORED_WARNING_PATTERNS = (
+        "SSAP (server-side ads) experiment",
+        "Missing required Visitor Data",
+        "android client https formats require a GVS PO Token",
+        "Some web client https formats have been skipped",
+        "formats have been skipped as they are missing a url",
+    )
+
     def __init__(self, config: AppConfig) -> None:
         self.config = config
 
@@ -106,7 +114,11 @@ class YTDLPLogger:
             LOGGER.info(clean_error_message(message))
 
     def warning(self, message: str) -> None:
-        LOGGER.warning(clean_error_message(message))
+        cleaned = clean_error_message(message)
+        if any(pattern in cleaned for pattern in self.IGNORED_WARNING_PATTERNS):
+            LOGGER.debug(cleaned)
+            return
+        LOGGER.warning(cleaned)
 
     def error(self, message: str) -> None:
         LOGGER.debug(clean_error_message(message))
@@ -134,6 +146,17 @@ class YTDLPExtractor:
             "no_color": self.config.no_color,
         }
 
+        try:
+            import certifi
+            ca_file = certifi.where()
+            if Path(ca_file).is_file():
+                options["ca_certificates_file"] = ca_file
+        except Exception:
+            pass
+
+        if self.config.no_check_certificate:
+            options["nocheckcertificate"] = True
+
         js_runtimes = discover_js_runtimes()
         if js_runtimes:
             options["js_runtimes"] = js_runtimes
@@ -142,11 +165,14 @@ class YTDLPExtractor:
         if ffmpeg_bin:
             options["ffmpeg_location"] = str(ffmpeg_bin.parent)
 
-        # Bypasses YouTube SSAP server-side ads experiment and 'page needs to be reloaded' blocks
+        # Configure YouTube client and format extraction:
+        # 1. Use 'missing_pot' so Android formats are never skipped when GVS PO token is missing.
+        # 2. 'android' client avoids desktop SSAP server-side ads and 'page needs to be reloaded'.
+        # 3. Webpage is NOT skipped so visitor data and JavaScript n-sig decryption are available.
         options["extractor_args"] = {
             "youtube": {
-                "player_client": ["android", "ios", "mweb", "web"],
-                "player_skip": ["webpage", "configs"],
+                "player_client": ["android", "web"],
+                "formats": ["missing_pot"],
             }
         }
 
@@ -206,19 +232,19 @@ class YTDLPExtractor:
         if platform == Platform.YOUTUBE:
             # Rotate client signatures across attempts to bypass bot checks & SSAP reload gates
             if attempt == 2:
-                clients = ["ios", "web"]
+                clients = ["web", "android"]
             elif attempt == 3:
-                clients = ["mweb", "web"]
+                clients = ["tv_embedded", "android", "web"]
             elif attempt >= 4:
-                clients = ["tv_embedded", "web"]
+                clients = ["android", "tv_embedded"]
             else:
-                clients = ["android", "ios", "mweb", "web"]
+                clients = ["android", "web"]
 
             return {
                 "extractor_args": {
                     "youtube": {
                         "player_client": clients,
-                        "player_skip": ["webpage", "configs"],
+                        "formats": ["missing_pot"],
                     }
                 }
             }
