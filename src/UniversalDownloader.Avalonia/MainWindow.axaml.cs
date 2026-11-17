@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     private string? _lastInspectedMetadataUrl;
     private int _activeTaskCount = 0;
     private AppUpdateInfo? _latestUpdateInfo;
+    private UserSettings _settings = new();
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(12) };
 
     public MainWindow()
@@ -40,6 +41,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         AppVersionBadge.Text = $"v{UpdateChecker.GetCurrentVersion()}";
+        LoadUserSettings();
         QuickLogListBox.ItemsSource = _quickLogs;
         MainLogListBox.ItemsSource = _filteredMainLogs;
 
@@ -63,6 +65,33 @@ public partial class MainWindow : Window
             await LoadHistoryAsync();
             _ = CheckForAppUpdatesAsync(silent: true);
         };
+        Closing += (s, e) => SaveUserSettings();
+    }
+
+    private void LoadUserSettings()
+    {
+        _settings = UserSettings.Load();
+        QualityComboBox.SelectedIndex = Math.Clamp(_settings.QualityIndex, 0, Math.Max(0, QualityComboBox.ItemCount - 1));
+        CodecComboBox.SelectedIndex = Math.Clamp(_settings.CodecIndex, 0, Math.Max(0, CodecComboBox.ItemCount - 1));
+        FragmentsNumeric.Value = Math.Clamp(_settings.ConcurrentFragments, 1, 16);
+        OutputDirBox.Text = _settings.OutputDirectory;
+        EmbedMetadataCheck.IsChecked = _settings.EmbedMetadata;
+        EmbedThumbnailCheck.IsChecked = _settings.EmbedThumbnail;
+        EmbedSubsCheck.IsChecked = _settings.EmbedSubs;
+        WriteThumbnailCheck.IsChecked = _settings.WriteThumbnail;
+    }
+
+    private void SaveUserSettings()
+    {
+        _settings.QualityIndex = QualityComboBox.SelectedIndex;
+        _settings.CodecIndex = CodecComboBox.SelectedIndex;
+        _settings.ConcurrentFragments = (int)(FragmentsNumeric.Value ?? 4);
+        _settings.OutputDirectory = OutputDirBox.Text?.Trim() ?? string.Empty;
+        _settings.EmbedMetadata = EmbedMetadataCheck.IsChecked ?? true;
+        _settings.EmbedThumbnail = EmbedThumbnailCheck.IsChecked ?? true;
+        _settings.EmbedSubs = EmbedSubsCheck.IsChecked ?? false;
+        _settings.WriteThumbnail = WriteThumbnailCheck.IsChecked ?? false;
+        _settings.Save();
     }
 
     private async void CheckUpdatesButton_Click(object? sender, RoutedEventArgs e)
@@ -362,6 +391,7 @@ public partial class MainWindow : Window
         var url = UrlTextBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(url)) return;
 
+        SaveUserSettings();
         var options = BuildOptionsFromUi();
         await StartDownloadWithUrl(url, options);
     }
@@ -487,6 +517,7 @@ public partial class MainWindow : Window
         if (folders.Count > 0)
         {
             OutputDirBox.Text = folders[0].Path.LocalPath;
+            SaveUserSettings();
         }
     }
 

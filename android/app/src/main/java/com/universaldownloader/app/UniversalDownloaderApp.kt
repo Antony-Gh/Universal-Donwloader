@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import com.universaldownloader.app.data.HistoryStore
+import com.universaldownloader.app.data.PreferencesStore
 import com.universaldownloader.app.engine.DownloaderRepository
 
 class UniversalDownloaderApp : Application() {
@@ -15,10 +16,14 @@ class UniversalDownloaderApp : Application() {
     lateinit var historyStore: HistoryStore
         private set
 
+    lateinit var preferencesStore: PreferencesStore
+        private set
+
     override fun onCreate() {
         super.onCreate()
         repository = DownloaderRepository(this)
         historyStore = HistoryStore(this)
+        preferencesStore = PreferencesStore(this)
         createNotificationChannels()
     }
 

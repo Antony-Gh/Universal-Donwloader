@@ -69,9 +69,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as UniversalDownloaderApp
     private val repo = app.repository
     private val historyStore = app.historyStore
+    private val prefsStore = app.preferencesStore
     private val updateChecker = AppUpdateChecker()
 
-    private val _uiState = MutableStateFlow(MainUiState())
+    private val _uiState = MutableStateFlow(MainUiState(options = prefsStore.loadOptions()))
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     private var metadataJob: Job? = null
@@ -331,32 +332,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun updateAndPersistOptions(transform: (DownloadOptions) -> DownloadOptions) {
+        _uiState.update { state ->
+            val updated = transform(state.options)
+            prefsStore.saveOptions(updated)
+            state.copy(options = updated)
+        }
+    }
+
     fun updateQuality(quality: QualityOption) {
-        _uiState.update { it.copy(options = it.options.copy(quality = quality, explicitFormatId = null)) }
+        updateAndPersistOptions { it.copy(quality = quality, explicitFormatId = null) }
     }
 
     fun updateCodec(codec: CodecOption) {
-        _uiState.update { it.copy(options = it.options.copy(codec = codec)) }
+        updateAndPersistOptions { it.copy(codec = codec) }
     }
 
     fun updateFragments(count: Int) {
-        _uiState.update { it.copy(options = it.options.copy(concurrentFragments = count.coerceIn(1, 16))) }
+        updateAndPersistOptions { it.copy(concurrentFragments = count.coerceIn(1, 16)) }
     }
 
     fun updateEmbedMetadata(enabled: Boolean) {
-        _uiState.update { it.copy(options = it.options.copy(embedMetadata = enabled)) }
+        updateAndPersistOptions { it.copy(embedMetadata = enabled) }
     }
 
     fun updateEmbedThumbnail(enabled: Boolean) {
-        _uiState.update { it.copy(options = it.options.copy(embedThumbnail = enabled)) }
+        updateAndPersistOptions { it.copy(embedThumbnail = enabled) }
     }
 
     fun updateEmbedSubs(enabled: Boolean) {
-        _uiState.update { it.copy(options = it.options.copy(embedSubs = enabled)) }
+        updateAndPersistOptions { it.copy(embedSubs = enabled) }
     }
 
     fun updateWriteThumbnail(enabled: Boolean) {
-        _uiState.update { it.copy(options = it.options.copy(writeThumbnail = enabled)) }
+        updateAndPersistOptions { it.copy(writeThumbnail = enabled) }
     }
 
     fun startDownload(explicitFormatId: String? = null) {

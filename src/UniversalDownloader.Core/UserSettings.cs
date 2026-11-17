@@ -1,0 +1,69 @@
+using System.Text.Json;
+
+namespace UniversalDownloader.Core;
+
+/// <summary>
+/// Persistent desktop user preferences stored in LocalApplicationData/UniversalDownloader/settings.json.
+/// </summary>
+public class UserSettings
+{
+    public int QualityIndex { get; set; } = 0;
+    public int CodecIndex { get; set; } = 0;
+    public int ConcurrentFragments { get; set; } = 4;
+    public string OutputDirectory { get; set; } = string.Empty;
+    public bool EmbedMetadata { get; set; } = true;
+    public bool EmbedThumbnail { get; set; } = true;
+    public bool EmbedSubs { get; set; } = false;
+    public bool WriteThumbnail { get; set; } = false;
+    public int CookiesBrowserIndex { get; set; } = 0;
+    public string CookiesFilePath { get; set; } = string.Empty;
+    public bool SponsorBlockEnabled { get; set; } = false;
+
+    public static string SettingsFilePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "UniversalDownloader",
+        "settings.json"
+    );
+
+    public static UserSettings Load(string? customPath = null)
+    {
+        var path = customPath ?? SettingsFilePath;
+        try
+        {
+            if (File.Exists(path))
+            {
+                var json = File.ReadAllText(path);
+                var loaded = JsonSerializer.Deserialize<UserSettings>(json);
+                if (loaded != null)
+                {
+                    loaded.ConcurrentFragments = Math.Clamp(loaded.ConcurrentFragments, 1, 16);
+                    return loaded;
+                }
+            }
+        }
+        catch
+        {
+            // Fall back to defaults on corrupt or inaccessible config
+        }
+        return new UserSettings();
+    }
+
+    public void Save(string? customPath = null)
+    {
+        var path = customPath ?? SettingsFilePath;
+        try
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+            var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(path, json);
+        }
+        catch
+        {
+            // Best-effort persistence
+        }
+    }
+}
