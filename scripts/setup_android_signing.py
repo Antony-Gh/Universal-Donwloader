@@ -13,6 +13,7 @@ import argparse
 import base64
 import getpass
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -60,6 +61,14 @@ def prompt_password(label: str, min_len: int = 6) -> str:
         return pw
 
 
+def escape_java_properties_value(val: str) -> str:
+    """Escape backslashes and leading spaces for java.util.Properties.load()."""
+    escaped = val.replace("\\", "\\\\")
+    if escaped.startswith((" ", "\t")):
+        escaped = "\\" + escaped
+    return escaped
+
+
 def generate_keystore(
     keystore_path: Path,
     alias: str,
@@ -67,14 +76,23 @@ def generate_keystore(
     key_password: str,
     dname: str,
     validity_days: int = 10000,
+    force: bool = False,
 ) -> None:
     keytool = find_keytool()
     keystore_path.parent.mkdir(parents=True, exist_ok=True)
     if keystore_path.exists():
-        raise FileExistsError(
-            f"Keystore already exists at {keystore_path}. "
-            "Use --from-existing to reuse it, or pass a different --keystore path."
-        )
+        if not force:
+            raise FileExistsError(
+                f"Keystore already exists at {keystore_path}. "
+                "Use --from-existing to reuse it, or --force to back it up and generate a new one."
+            )
+        backup = keystore_path.with_suffix(keystore_path.suffix + ".bak")
+        shutil.move(str(keystore_path), str(backup))
+        print(f"  [!] Backed up existing keystore to: {backup}")
+
+    env = os.environ.copy()
+    env["UD_KS_STORE_PASS"] = store_password
+    env["UD_KS_KEY_PASS"] = key_password
 
     cmd = [
         keytool,
@@ -86,17 +104,21 @@ def generate_keystore(
         "-keysize", "4096",
         "-validity", str(validity_days),
         "-alias", alias,
-        "-storepass", store_password,
-        "-keypass", key_password,
+        "-storepass:env", "UD_KS_STORE_PASS",
+        "-keypass:env", "UD_KS_KEY_PASS",
         "-dname", dname,
     ]
-    proc = subprocess.run(cmd, text=True)
+    proc = subprocess.run(cmd, env=env, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"keytool failed with exit code {proc.returncode}")
 
 
-def print_certificate_fingerprint(keystore_path: Path, alias: str, store_password: str) -> None:
+def verify_and_print_certificate(keystore_path: Path, alias: str, store_password: str) -> None:
+    """Verify the keystore password and alias with keytool before writing any config or secrets."""
     keytool = find_keytool()
+    env = os.environ.copy()
+    env["UD_KS_STORE_PASS"] = store_password
+
     proc = subprocess.run(
         [
             keytool,
@@ -104,16 +126,20 @@ def print_certificate_fingerprint(keystore_path: Path, alias: str, store_passwor
             "-v",
             "-keystore", str(keystore_path),
             "-alias", alias,
-            "-storepass", store_password,
+            "-storepass:env", "UD_KS_STORE_PASS",
         ],
+        env=env,
         capture_output=True,
         text=True,
     )
-    if proc.returncode == 0:
-        for line in proc.stdout.splitlines():
-            stripped = line.strip()
-            if stripped.startswith(("SHA1:", "SHA256:", "Valid from:", "Owner:")):
-                print(f"  {stripped}")
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout).strip()
+        raise RuntimeError(f"Keystore verification failed (wrong password or alias '{alias}'): {err}")
+
+    for line in proc.stdout.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(("SHA1:", "SHA256:", "Valid from:", "Owner:")):
+            print(f"  {stripped}")
 
 
 def write_keystore_properties(props_path: Path, keystore_path: Path, alias: str, store_password: str, key_password: str) -> None:
@@ -124,10 +150,10 @@ def write_keystore_properties(props_path: Path, keystore_path: Path, alias: str,
 
     content = (
         "# Auto-generated local Android release signing config (GITIGNORED - DO NOT COMMIT)\n"
-        f"storeFile={rel_store}\n"
-        f"storePassword={store_password}\n"
-        f"keyAlias={alias}\n"
-        f"keyPassword={key_password}\n"
+        f"storeFile={escape_java_properties_value(rel_store)}\n"
+        f"storePassword={escape_java_properties_value(store_password)}\n"
+        f"keyAlias={escape_java_properties_value(alias)}\n"
+        f"keyPassword={escape_java_properties_value(key_password)}\n"
     )
     props_path.write_text(content, encoding="utf-8")
 
@@ -170,6 +196,7 @@ def main() -> int:
     parser.add_argument("--org", default="Antony-Gh", help="Certificate Organization (O)")
     parser.add_argument("--country", default="US", help="2-letter Country Code (C)")
     parser.add_argument("--from-existing", action="store_true", help="Configure signing from an existing keystore file")
+    parser.add_argument("--force", action="store_true", help="Back up any existing keystore and generate a fresh one")
     parser.add_argument("--upload-gh-secrets", action="store_true", help="Upload the 4 signing secrets to GitHub via gh CLI")
     parser.add_argument(
         "--export-secrets-file",
@@ -208,14 +235,18 @@ def main() -> int:
         dname = f"CN={args.cn}, O={args.org}, C={args.country}"
         print("\nGenerating 4096-bit RSA Android signing keystore...")
         try:
-            generate_keystore(args.keystore, args.alias, store_password, key_password, dname)
+            generate_keystore(args.keystore, args.alias, store_password, key_password, dname, force=args.force)
         except Exception as exc:
             print(f"[ERROR] {exc}", file=sys.stderr)
             return 1
         print(f"[✓] Created release keystore: {args.keystore}")
 
-    print("\nCertificate Fingerprint:")
-    print_certificate_fingerprint(args.keystore, args.alias, store_password)
+    print("\nVerifying keystore & certificate fingerprint...")
+    try:
+        verify_and_print_certificate(args.keystore, args.alias, store_password)
+    except Exception as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 1
 
     write_keystore_properties(DEFAULT_PROPS, args.keystore, args.alias, store_password, key_password)
     print(f"\n[✓] Wrote local Gradle config: {DEFAULT_PROPS} (gitignored)")

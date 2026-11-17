@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
 plugins {
@@ -73,7 +74,7 @@ android {
                 }
             }
 
-            val rawStorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+            val rawStorePath = System.getenv("ANDROID_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
                 ?: keystoreProps.getProperty("storeFile")
             val resolvedStoreFile = rawStorePath?.takeIf { it.isNotBlank() }?.let { p ->
                 val direct = file(p)
@@ -82,13 +83,13 @@ android {
 
             if (resolvedStoreFile != null && resolvedStoreFile.exists()) {
                 storeFile = resolvedStoreFile
-                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
                     ?: keystoreProps.getProperty("storePassword")
                     ?: ""
-                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")?.takeIf { it.isNotBlank() }
                     ?: keystoreProps.getProperty("keyAlias")
                     ?: ""
-                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
                     ?: keystoreProps.getProperty("keyPassword")
                     ?: ""
                 enableV1Signing = true
@@ -121,10 +122,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -138,6 +135,12 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
