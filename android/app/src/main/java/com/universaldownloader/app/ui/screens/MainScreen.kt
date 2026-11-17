@@ -109,6 +109,7 @@ import com.universaldownloader.app.model.QualityOption
 import com.universaldownloader.app.model.QueueItemStatus
 import com.universaldownloader.app.model.StreamFormat
 import com.universaldownloader.app.ui.components.InfoLabel
+import com.universaldownloader.app.ui.components.WebViewCookieLoginDialog
 import com.universaldownloader.app.ui.theme.AccentBlue
 import com.universaldownloader.app.ui.theme.AccentIndigo
 import com.universaldownloader.app.ui.theme.AccentMint
@@ -871,7 +872,8 @@ private fun DownloadTab(
                     onCheckedChange = viewModel::updateWriteThumbnail,
                 )
 
-                // Cookies.txt Authentication Picker
+                // Cookies.txt Authentication Picker & In-App WebView Login
+                var showWebLoginDialog by remember { mutableStateOf(false) }
                 val cookiesPickerLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.OpenDocument(),
                 ) { uri ->
@@ -880,31 +882,24 @@ private fun DownloadTab(
                     }
                 }
                 val hasCookies = !state.options.cookiesFilePath.isNullOrBlank()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        InfoLabel(
-                            title = "Cookies (cookies.txt)",
-                            explanation = "Optional Netscape cookies.txt exported from your browser to unlock login-gated Instagram Reels and age-restricted YouTube videos.",
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                        )
-                        Text(
-                            text = if (hasCookies) "Active: cookies.txt loaded" else "Not configured (anonymous)",
-                            color = if (hasCookies) SuccessGreen else TextMuted,
-                            fontSize = 11.sp,
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(
-                            onClick = { cookiesPickerLauncher.launch(arrayOf("text/plain", "*/*")) },
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            border = BorderStroke(1.dp, BorderSubtle),
-                        ) {
-                            Text(if (hasCookies) "Replace" else "Import", fontSize = 11.sp, color = AccentSky)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            InfoLabel(
+                                title = "Cookies & Account Login",
+                                explanation = "Sign in directly via the built-in WebView (Instagram, YouTube, TikTok, X, Facebook) or import a Netscape cookies.txt file to unlock login-gated Reels and age-restricted videos.",
+                                color = TextPrimary,
+                                fontSize = 13.sp,
+                            )
+                            Text(
+                                text = if (hasCookies) "Active: session cookies saved" else "Not configured (anonymous)",
+                                color = if (hasCookies) SuccessGreen else TextMuted,
+                                fontSize = 11.sp,
+                            )
                         }
                         if (hasCookies) {
                             IconButton(
@@ -915,6 +910,38 @@ private fun DownloadTab(
                             }
                         }
                     }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = { showWebLoginDialog = true },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                        ) {
+                            Text("Web Login", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        }
+                        OutlinedButton(
+                            onClick = { cookiesPickerLauncher.launch(arrayOf("text/plain", "*/*")) },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            border = BorderStroke(1.dp, BorderSubtle),
+                        ) {
+                            Text(if (hasCookies) "Replace File" else "Import cookies.txt", fontSize = 12.sp, color = AccentSky)
+                        }
+                    }
+                }
+
+                if (showWebLoginDialog) {
+                    WebViewCookieLoginDialog(
+                        onDismiss = { showWebLoginDialog = false },
+                        onCookiesSaved = { lines, siteLabel ->
+                            showWebLoginDialog = false
+                            viewModel.saveWebViewCookies(lines, siteLabel)
+                        },
+                    )
                 }
 
                 // Collapsible Clip Trimmer, Playlist Picker & SponsorBlock Section

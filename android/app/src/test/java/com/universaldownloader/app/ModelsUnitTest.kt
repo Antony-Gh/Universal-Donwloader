@@ -4,7 +4,9 @@ import com.universaldownloader.app.model.LogEntry
 import com.universaldownloader.app.model.LogSeverity
 import com.universaldownloader.app.model.MediaMetadata
 import com.universaldownloader.app.model.StreamFormat
+import com.universaldownloader.app.ui.components.NetscapeCookieFormatter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ModelsUnitTest {
@@ -61,5 +63,16 @@ class ModelsUnitTest {
         assertEquals(LogSeverity.WARNING, LogEntry.classify("[Warning] Retrying..."))
         assertEquals(LogSeverity.SUCCESS, LogEntry.classify("[Complete] Saved file"))
         assertEquals(LogSeverity.INFO, LogEntry.classify("Starting download..."))
+    }
+
+    @Test
+    fun netscapeCookieFormatter_formatsValidNetscapeLines() {
+        val lines = NetscapeCookieFormatter.buildNetscapeLines(
+            mapOf("https://www.instagram.com" to "sessionid=abc123; csrftoken=xyz789")
+        )
+        assertEquals(2, lines.size)
+        assertTrue(lines[0].startsWith(".instagram.com\tTRUE\t/\tTRUE\t"))
+        assertTrue(lines[0].endsWith("\tsessionid\tabc123"))
+        assertTrue(lines[1].endsWith("\tcsrftoken\txyz789"))
     }
 }
