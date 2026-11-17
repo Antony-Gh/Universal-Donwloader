@@ -194,5 +194,15 @@ RunTest("FormatInfoModel.ExtractSupportedQualities sorts descending and appends 
     AssertEqual("1080p,720p,Audio", string.Join(",", qualities));
 });
 
+RunTest("UpdateChecker.IsInstalledInProgramFiles detects MSI install location on Windows", () =>
+{
+    if (PlatformUtils.IsWindows)
+    {
+        var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        AssertTrue(UpdateChecker.IsInstalledInProgramFiles(Path.Combine(pf, "Universal Media Downloader", "UniversalDownloader.exe")), "ProgramFiles detected");
+        AssertTrue(!UpdateChecker.IsInstalledInProgramFiles(@"D:\Portable\UniversalDownloader.exe"), "Portable not treated as ProgramFiles");
+    }
+});
+
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

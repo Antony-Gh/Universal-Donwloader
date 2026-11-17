@@ -193,11 +193,42 @@ public static class UpdateChecker
     }
 
     /// <summary>
-    /// On Windows standalone executables, swaps the running binary with the verified update and relaunches automatically.
+    /// Detects whether the current Windows executable is running from a protected Program Files installation (e.g. MSI setup).
     /// </summary>
-    public static bool TryLaunchWindowsSelfReplace(string downloadedExePath)
+    public static bool IsInstalledInProgramFiles(string? processPath = null)
     {
-        if (!PlatformUtils.IsWindows || !downloadedExePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        if (!PlatformUtils.IsWindows) return false;
+        var path = processPath ?? Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(path)) return false;
+
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+        return (!string.IsNullOrWhiteSpace(programFiles) && path.StartsWith(programFiles, StringComparison.OrdinalIgnoreCase)) ||
+               (!string.IsNullOrWhiteSpace(programFilesX86) && path.StartsWith(programFilesX86, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// On Windows, launches the MSI installer (if an .msi was downloaded) or swaps the running portable .exe and relaunches.
+    /// </summary>
+    public static bool TryLaunchWindowsSelfReplace(string downloadedPath)
+    {
+        if (!PlatformUtils.IsWindows || string.IsNullOrWhiteSpace(downloadedPath))
+            return false;
+
+        // MSI installation upgrade path (handles UAC elevation and Program Files upgrade cleanly)
+        if (downloadedPath.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "msiexec.exe",
+                Arguments = $"/i \"{downloadedPath}\"",
+                UseShellExecute = true,
+            });
+            return true;
+        }
+
+        if (!downloadedPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             return false;
 
         var currentExe = Environment.ProcessPath;
@@ -216,7 +247,7 @@ if "%ERRORLEVEL%"=="0" (
     timeout /t 1 /nobreak >NUL
     goto wait
 )
-move /Y "{downloadedExePath}" "{currentExe}" >NUL
+move /Y "{downloadedPath}" "{currentExe}" >NUL
 start "" "{currentExe}"
 del "%~f0"
 """;
@@ -238,8 +269,17 @@ del "%~f0"
 
         if (PlatformUtils.IsWindows)
         {
+            if (IsInstalledInProgramFiles())
+            {
+                var msi = assets.FirstOrDefault(a => a.Name.EndsWith(".msi", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(msi.Name)) return msi;
+            }
+
             var exe = assets.FirstOrDefault(a => a.Name.Equals("UniversalDownloader.exe", StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrEmpty(exe.Name)) return exe;
+
+            var anyMsi = assets.FirstOrDefault(a => a.Name.EndsWith(".msi", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(anyMsi.Name)) return anyMsi;
 
             var anyExe = assets.FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrEmpty(anyExe.Name)) return anyExe;

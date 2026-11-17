@@ -355,6 +355,21 @@ def package_windows_release(version: str) -> List[Path]:
 
         print_success(f"Created {zip_path.name} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)")
         results.append(zip_path)
+
+        # 3. Build Windows MSI Installer via WiX v5 (if on Windows and WiX is installed)
+        msi_script = ROOT_DIR / "installer" / "windows" / "build_msi.py"
+        if sys.platform.startswith("win") and msi_script.exists():
+            print_step("Building Windows x64 MSI Setup Installer (WiX v5)")
+            msi_out = RELEASES_DIR / "UniversalDownloader-Setup-x64.msi"
+            proc = run_command(
+                [sys.executable, str(msi_script), "--exe", str(candidate_exe), "--out", str(msi_out), "--version", version],
+                check=False,
+            )
+            if proc.returncode == 0 and msi_out.exists():
+                print_success(f"Created Windows MSI Installer: {msi_out.name} ({msi_out.stat().st_size / 1024 / 1024:.1f} MB)")
+                results.append(msi_out)
+            else:
+                print_warning("Windows MSI build skipped or failed (install WiX v5 via 'dotnet tool install -g wix').")
     else:
         print_warning("No compiled Windows executable found to package.")
 
@@ -738,7 +753,7 @@ def main() -> None:
     # Summary
     print_step("Build Summary & Generated Release Files")
     for f in all_release_files:
-        size_str = f"{f.stat().st_size / 1024 / 1024:.2f} MB" if f.name.endswith((".zip", ".tar.gz", ".exe", ".apk")) or f.stat().st_size > 1024 * 1024 else f"{f.stat().st_size} bytes"
+        size_str = f"{f.stat().st_size / 1024 / 1024:.2f} MB" if f.name.endswith((".zip", ".tar.gz", ".exe", ".msi", ".apk")) or f.stat().st_size > 1024 * 1024 else f"{f.stat().st_size} bytes"
         print(f"  • {Colors.BOLD}{f.name:<45}{Colors.RESET} ({size_str})")
 
     # 5. Publish to GitHub
@@ -747,7 +762,9 @@ def main() -> None:
             f"## Universal Media Downloader {tag}\n\n"
             f"Production-grade media downloader with native cross-platform GUIs for Desktop (Windows, Linux, macOS) and Android.\n\n"
             f"### Standalone Downloads (Direct Click-and-Run):\n"
-            f"- **Windows (One Single .exe)**: [`UniversalDownloader.exe`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader.exe)\n"
+            f"- **Windows Setup Installer (.msi — Recommended)**: [`UniversalDownloader-Setup-x64.msi`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-Setup-x64.msi)\n"
+            f"  *Standard Windows Setup Wizard with Start Menu & Desktop shortcuts, clean Add/Remove Programs integration, and automatic upgrades.*\n"
+            f"- **Windows Portable (One Single .exe)**: [`UniversalDownloader.exe`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader.exe)\n"
             f"  *Pure single executable file. No zip, no installer, no Python or .NET runtime installation required.*\n"
             f"- **Android (ARM64 — Recommended)**: [`UniversalDownloader-android-arm64.apk`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-android-arm64.apk)\n"
             f"- **Android (Universal — All Devices)**: [`UniversalDownloader-android-universal.apk`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-android-universal.apk)\n"

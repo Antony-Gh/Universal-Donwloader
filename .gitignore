@@ -31,6 +31,16 @@
 downloader.exe
 releases/
 test_dist/
+*.msi
+*.wixpdb
+
+# Signing keys & secrets (NEVER commit)
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+android-signing-secrets.txt
 
 # Other
 *.bak
