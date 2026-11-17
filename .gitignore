@@ -33,6 +33,7 @@ releases/
 test_dist/
 *.msi
 *.wixpdb
+**/.kotlin/**
 
 # Signing keys & secrets (NEVER commit)
 *.jks
