@@ -986,8 +986,13 @@ public partial class MainWindow : Window
             var formats = await _client.GetFormatsAsync(url, cookiesFromBrowser: cookiesBrowser, cookiesFile: cookiesFile);
             StreamsListBox.ItemsSource = formats;
             var isImageList = formats.Count > 0 && formats.All(f => f.IsImage);
+            var hasCookies = !string.IsNullOrWhiteSpace(cookiesFile) || !string.IsNullOrWhiteSpace(cookiesBrowser);
+            var hasEnhancedOnly = isImageList && formats.Any(f => f.FormatId.StartsWith("img_hd_", StringComparison.OrdinalIgnoreCase));
+
             StreamsStatusHeader.Text = isImageList
-                ? $"Found {formats.Count} verified picture(s) for: {url}"
+                ? (hasEnhancedOnly && !hasCookies
+                    ? $"Found {formats.Count} picture(s) — Tip: set Browser Cookies or cookies.txt for native HD on authorized profiles."
+                    : $"Found {formats.Count} verified picture(s) for: {url}")
                 : $"Found {formats.Count} streams for: {url}";
             GlobalStatusText.Text = isImageList
                 ? $"Found {formats.Count} verified picture(s) available."

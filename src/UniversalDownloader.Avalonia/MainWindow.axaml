@@ -396,7 +396,7 @@
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                             <TextBlock x:Name="BrowserCookiesHeader" Text="Browser Cookies" Foreground="#9CA3AF" FontSize="12"/>
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
-                                                      ToolTip.Tip="Automatically read your signed-in session cookies from an installed browser to unlock age-restricted YouTube videos and login-gated Instagram/Facebook posts."/>
+                                                      ToolTip.Tip="Automatically read your signed-in session cookies from an installed browser to unlock age-restricted videos and load full native HD photos for profiles your account is authorized to view. (Tip: on Windows, Firefox cookies work even while open; for Chrome/Edge, close the browser or import cookies.txt.)"/>
                                         </StackPanel>
                                         <ComboBox x:Name="CookiesBrowserComboBox" SelectedIndex="0" HorizontalAlignment="Stretch">
                                             <ComboBoxItem Content="None (Anonymous)"/>

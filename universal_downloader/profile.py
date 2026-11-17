@@ -510,6 +510,59 @@ def extract_public_profile_candidates(html_text: str, base_url: str = "") -> lis
     return result
 
 
+def extract_facebook_photo_viewer_links(html_text: str) -> list[tuple[str, bool]]:
+    """
+    Extract standard Facebook photo viewer links (facebook.com/photo/?fbid=...) from a profile page
+    for profile_photo and cover_photo so authorized sessions can fetch true native full-res photos.
+    Returns list of (viewer_url, is_cover).
+    """
+    links: list[tuple[str, bool]] = []
+    seen: set[str] = set()
+    patterns = [
+        (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"', re.I), False),
+        (re.compile(r'"profilePhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"', re.I), False),
+        (re.compile(r'"cover_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"', re.I), True),
+        (re.compile(r'"coverPhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"', re.I), True),
+    ]
+    for pattern, is_cover in patterns:
+        for match in pattern.finditer(html_text):
+            url = _unescape_embedded_url(match.group(1))
+            if url.startswith(("http://", "https://")) and url not in seen:
+                seen.add(url)
+                links.append((url, is_cover))
+    return links
+
+
+def extract_photo_viewer_images(html_text: str, is_cover: bool = False) -> list[ProfileImageCandidate]:
+    """
+    Extract full-resolution image URLs from an authorized Facebook photo viewer page
+    (facebook.com/photo/?fbid=...).
+    """
+    label = "Cover Photo (Native HD)" if is_cover else "Profile Picture (Native HD)"
+    found: dict[str, ProfileImageCandidate] = {}
+
+    patterns = [
+        re.compile(r'"viewer_image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
+        re.compile(r'"currMedia"\s*:\s*\{[^\r\n]{0,600}?"image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
+        re.compile(r'"image"\s*:\s*\{[^\r\n]{0,200}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"[^\r\n]{0,120}?"height"\s*:\s*(\d{3,4})', re.I),
+        re.compile(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\'](https?://scontent[^"\']+)["\']', re.I),
+    ]
+    for pattern in patterns:
+        for match in pattern.finditer(html_text):
+            url = _unescape_embedded_url(match.group(1))
+            if url.startswith(("http://", "https://")) and not is_generic_site_logo(url) and url not in found:
+                found[url] = ProfileImageCandidate(
+                    url=url,
+                    label=label,
+                    is_cover=is_cover,
+                    ext=image_extension_from_url(url).lstrip("."),
+                )
+
+    result = list(found.values())
+    result.sort(key=lambda c: estimate_image_resolution_score(c.url), reverse=True)
+    return result
+
+
 def extract_public_profile_images(html_text: str, base_url: str = "") -> list[str]:
     """Return owner-scoped publicly exposed profile image URLs ranked highest-resolution first."""
     return [c.url for c in extract_public_profile_candidates(html_text, base_url=base_url)]
@@ -651,6 +704,18 @@ def inspect_profile_images(
             page = fetch_public_html(target.normalized_url, config.timeout, cookie_jar=cookie_jar)
             for item in extract_public_profile_candidates(page, base_url=target.normalized_url):
                 add_raw(item)
+
+            # For Facebook profiles (especially with user cookies or unlocked profiles),
+            # follow authorized photo viewer pages (facebook.com/photo/?fbid=...) for native full-res images.
+            if platform == Platform.FACEBOOK:
+                viewer_links = extract_facebook_photo_viewer_links(page)
+                for viewer_url, is_cover in viewer_links[:3]:
+                    try:
+                        viewer_html = fetch_public_html(viewer_url, min(config.timeout, 15), cookie_jar=cookie_jar)
+                        for v_item in extract_photo_viewer_images(viewer_html, is_cover=is_cover):
+                            add_raw(v_item)
+                    except Exception as v_exc:
+                        LOGGER.debug("Photo viewer lookup skipped for %s: %s", viewer_url, v_exc)
         except ProfileError as exc:
             LOGGER.info("Profile HTML lookup failed: %s", exc)
 
@@ -804,6 +869,10 @@ def fetch_public_html(
             "image/avif,image/webp,*/*;q=0.8"
         ),
         "Accept-Language": "en-US,en;q=0.9",
+        "DPR": "3",
+        "Sec-CH-DPR": "3",
+        "Viewport-Width": "1920",
+        "Sec-CH-Viewport-Width": "1920",
         "Sec-Fetch-Dest": "document",
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Site": "none",

@@ -695,12 +695,47 @@ class DownloaderRepository(private val appContext: Context) {
         }
     }
 
+    private fun extractFacebookPhotoViewerLinks(htmlText: String): List<Pair<String, Boolean>> {
+        val links = LinkedHashMap<String, Boolean>()
+        val patterns = listOf(
+            Regex(""""profile_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to false,
+            Regex(""""profilePhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to false,
+            Regex(""""cover_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to true,
+            Regex(""""coverPhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to true,
+        )
+        for ((regex, isCover) in patterns) {
+            regex.findAll(htmlText).forEach { m ->
+                val url = unescapeEmbeddedUrl(m.groupValues[1])
+                if (url.startsWith("http")) links.putIfAbsent(url, isCover)
+            }
+        }
+        return links.entries.map { it.key to it.value }
+    }
+
+    private fun extractPhotoViewerImages(htmlText: String, isCover: Boolean): List<Triple<String, String, Boolean>> {
+        val label = if (isCover) "Cover Photo (Native HD)" else "Profile Picture (Native HD)"
+        val found = LinkedHashSet<String>()
+        val patterns = listOf(
+            Regex(""""viewer_image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""currMedia"\s*:\s*\{[^\r\n]{0,600}?"image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex("""<meta[^>]+property=["']og:image["'][^>]+content=["'](https?://scontent[^"']+)["']""", RegexOption.IGNORE_CASE),
+        )
+        for (regex in patterns) {
+            regex.findAll(htmlText).forEach { m ->
+                val url = unescapeEmbeddedUrl(m.groupValues[1])
+                if (url.startsWith("http") && !isGenericSiteLogo(url)) found.add(url)
+            }
+        }
+        return found.sortedByDescending { estimateImageResolutionScore(it) }.map { Triple(it, label, isCover) }
+    }
+
     private fun inspectProfilePictures(profileUrl: String, cookiesFilePath: String?): List<ProbedProfileImage> {
         val host = runCatching { URI(profileUrl).host.orEmpty() }.getOrDefault("")
         val rawCandidates = LinkedHashMap<String, Triple<String, String, Boolean>>()
 
-        runCatching {
-            val conn = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
+        fun fetchPageHtml(targetUrl: String): String? {
+            val targetHost = runCatching { URI(targetUrl).host.orEmpty() }.getOrDefault("")
+            val conn = (URL(targetUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 instanceFollowRedirects = true
                 connectTimeout = 15_000
@@ -709,17 +744,38 @@ class DownloaderRepository(private val appContext: Context) {
                     "User-Agent",
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                 )
-                buildCookieHeaderForHost(cookiesFilePath, host)?.let { setRequestProperty("Cookie", it) }
+                setRequestProperty("DPR", "3")
+                setRequestProperty("Sec-CH-DPR", "3")
+                setRequestProperty("Viewport-Width", "1920")
+                buildCookieHeaderForHost(cookiesFilePath, targetHost)?.let { setRequestProperty("Cookie", it) }
             }
-            try {
+            return try {
                 if (conn.responseCode in 200..299) {
-                    val html = conn.inputStream.bufferedReader().use { it.readText() }
-                    extractOwnerProfileCandidates(html, profileUrl).forEach { cand ->
-                        rawCandidates.putIfAbsent(cand.first, cand)
-                    }
-                }
+                    conn.inputStream.bufferedReader().use { it.readText() }
+                } else null
             } finally {
                 conn.disconnect()
+            }
+        }
+
+        runCatching {
+            val html = fetchPageHtml(profileUrl)
+            if (html != null) {
+                extractOwnerProfileCandidates(html, profileUrl).forEach { cand ->
+                    rawCandidates.putIfAbsent(cand.first, cand)
+                }
+                if (host.contains("facebook.com", ignoreCase = true)) {
+                    extractFacebookPhotoViewerLinks(html).take(3).forEach { (viewerUrl, isCover) ->
+                        runCatching {
+                            val viewerHtml = fetchPageHtml(viewerUrl)
+                            if (viewerHtml != null) {
+                                extractPhotoViewerImages(viewerHtml, isCover).forEach { cand ->
+                                    rawCandidates.putIfAbsent(cand.first, cand)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

@@ -20,6 +20,8 @@ from universal_downloader.profile import (
     ProfileImageCandidate,
     compute_hd_target_dimensions,
     enhance_image_bytes_to_hd,
+    extract_facebook_photo_viewer_links,
+    extract_photo_viewer_images,
     extract_public_profile_candidates,
     extract_public_profile_images,
     extract_username_from_profile_url,
@@ -175,6 +177,29 @@ def test_enhance_image_bytes_to_hd_upscales_low_res_cleanly():
     assert (new_w, new_h) == (960, 940)
     with Image.open(io.BytesIO(enhanced_bytes)) as out_img:
         assert out_img.size == (960, 940)
+
+
+def test_extract_facebook_photo_viewer_links_and_images():
+    prof_html = r'''
+    <script>
+      {"profile_photo":{"id":"123","url":"https:\/\/www.facebook.com\/photo\/?fbid=123456\u0026set=a.1"}}
+      {"cover_photo":{"photo":{"url":"https:\/\/www.facebook.com\/photo\/?fbid=987654\u0026set=a.2"}}}
+    </script>
+    '''
+    links = extract_facebook_photo_viewer_links(prof_html)
+    assert links == [
+        ("https://www.facebook.com/photo/?fbid=123456&set=a.1", False),
+        ("https://www.facebook.com/photo/?fbid=987654&set=a.2", True),
+    ]
+
+    viewer_html = r'''
+    <script>{"viewer_image":{"height":1440,"width":1440,"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-6\/full_hd.jpg?a=1\u0026b=2"}}</script>
+    '''
+    imgs = extract_photo_viewer_images(viewer_html, is_cover=False)
+    assert len(imgs) == 1
+    assert imgs[0].url == "https://scontent.xx.fbcdn.net/v/t39.30808-6/full_hd.jpg?a=1&b=2"
+    assert imgs[0].label == "Profile Picture (Native HD)"
+    assert imgs[0].is_cover is False
 
     # Verify X/Twitter _normal and YouTube =s88 upgrade to high-resolution renditions first
     social_small = r'''
