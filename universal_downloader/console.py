@@ -42,6 +42,6 @@ def print_banner(config: AppConfig) -> None:
     print()
     print("╔══════════════════════════════════════╗")
     print("║     Universal Media Downloader       ║")
-    print(f"║              v{__version__:<14}     ║")
+    print(f"║              v{__version__:<14}         ║")
     print("╚══════════════════════════════════════╝")
     print()

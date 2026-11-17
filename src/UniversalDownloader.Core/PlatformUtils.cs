@@ -138,4 +138,32 @@ public static class PlatformUtils
         digitGroups = Math.Clamp(digitGroups, 0, units.Length - 1);
         return $"{bytes / Math.Pow(1024, digitGroups):F1} {units[digitGroups]}";
     }
+
+    /// <summary>
+    /// Open an HTTP/HTTPS URL in the default system browser across Windows, macOS, and Linux.
+    /// </summary>
+    public static bool OpenUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        try
+        {
+            if (IsWindows)
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                return true;
+            }
+            if (IsMacOS)
+            {
+                Process.Start("open", $"\"{url}\"");
+                return true;
+            }
+            if (IsLinux)
+            {
+                Process.Start("xdg-open", $"\"{url}\"");
+                return true;
+            }
+        }
+        catch { }
+        return false;
+    }
 }

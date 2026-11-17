@@ -27,6 +27,7 @@
         <StreamGeometry x:Key="ClockIcon">M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z</StreamGeometry>
         <StreamGeometry x:Key="InfoCircleIcon">M11,7H13V9H11V7M11,11H13V17H11V11M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z</StreamGeometry>
         <StreamGeometry x:Key="SpinnerIcon">M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z</StreamGeometry>
+        <StreamGeometry x:Key="UpdateIcon">M21,10.12H14.22L16.96,7.3C14.23,4.6 9.81,4.5 7.08,7.2C4.35,9.91 4.35,14.28 7.08,17C9.81,19.7 14.23,19.7 16.96,17C18.32,15.65 19,14.08 19,12.1H21C21,14.08 20.12,16.65 18.36,18.39C14.85,21.87 9.15,21.87 5.64,18.39C2.14,14.92 2.11,9.28 5.62,5.81C9.13,2.34 14.76,2.34 18.27,5.81L21,3V10.12M12.5,8V12.25L16,14.33L15.28,15.54L11,13V8H12.5Z</StreamGeometry>
     </Window.Resources>
 
     <Window.Styles>
@@ -65,17 +66,48 @@
         </Style>
     </Window.Styles>
 
-    <Grid Margin="20" RowDefinitions="Auto,*,Auto">
+    <Grid Margin="20" RowDefinitions="Auto,Auto,*,Auto">
         <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,16" ColumnDefinitions="Auto,*">
+        <Grid Grid.Row="0" Margin="0,0,0,12" ColumnDefinitions="Auto,*">
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Image Source="/Assets/app-icon.png" Width="36" Height="36"/>
                 <TextBlock Text="Universal Media Downloader" FontSize="20" FontWeight="Bold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
+                <Border Background="#27272A" CornerRadius="6" Padding="8,3" VerticalAlignment="Center">
+                    <TextBlock x:Name="AppVersionBadge" Text="v1.5.0" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8"/>
+                </Border>
             </StackPanel>
+
+            <Button x:Name="CheckUpdatesButton" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="10,6" Background="#27272A" Foreground="#E2E8F0" Click="CheckUpdatesButton_Click" ToolTip.Tip="Check GitHub Releases for a newer version of Universal Media Downloader">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon x:Name="CheckUpdatesIcon" Data="{StaticResource UpdateIcon}" Width="14" Height="14" Foreground="#38BDF8"/>
+                    <PathIcon x:Name="CheckUpdatesSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="14" Height="14" Foreground="#38BDF8" IsVisible="False"/>
+                    <TextBlock x:Name="CheckUpdatesText" Text="Check Updates" FontSize="12" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
         </Grid>
 
+        <!-- App Update Available Banner -->
+        <Border x:Name="UpdateBanner" Grid.Row="1" IsVisible="False" Background="#1E1B4B" BorderBrush="#6366F1" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Border Background="#6366F1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                        <TextBlock Text="UPDATE" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                    </Border>
+                    <TextBlock x:Name="UpdateBannerMessage" Text="A newer version is available!" Foreground="#F4F4F8" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <Button x:Name="DownloadUpdateButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,5" Background="#6366F1" Foreground="White" FontWeight="SemiBold" FontSize="11" Click="DownloadUpdateButton_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <PathIcon Data="{StaticResource DownloadArrowIcon}" Width="12" Height="12" Foreground="White"/>
+                        <TextBlock Text="Download Update" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="ViewReleaseNotesButton" Grid.Column="2" Margin="6,0,0,0" Padding="10,5" Background="#312E81" Foreground="#E2E8F0" FontSize="11" Content="Release Notes" Click="ViewReleaseNotesButton_Click"/>
+                <Button x:Name="DismissUpdateButton" Grid.Column="3" Margin="6,0,0,0" Padding="8,4" Background="Transparent" Foreground="#94A3B8" FontSize="12" Content="✕" Click="DismissUpdateButton_Click"/>
+            </Grid>
+        </Border>
+
         <!-- Main Tab Control -->
-        <TabControl x:Name="MainTabControl" Grid.Row="1">
+        <TabControl x:Name="MainTabControl" Grid.Row="2">
             <!-- DOWNLOAD TAB -->
             <TabItem Header="Download">
                 <ScrollViewer Margin="0,15,0,0">
@@ -508,7 +540,7 @@
         </TabControl>
 
         <!-- Status Footer -->
-        <Border Grid.Row="2" Background="#18181B" CornerRadius="6" Padding="10" Margin="0,12,0,0">
+        <Border Grid.Row="3" Background="#18181B" CornerRadius="6" Padding="10" Margin="0,12,0,0">
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <PathIcon x:Name="GlobalSpinner" Grid.Column="0" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="14" Height="14" Foreground="#38BDF8" Margin="0,0,8,0" VerticalAlignment="Center" IsVisible="False"/>
                 <TextBlock x:Name="GlobalStatusText" Grid.Column="1" Text="Ready" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>

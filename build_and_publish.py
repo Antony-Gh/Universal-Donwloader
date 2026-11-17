@@ -392,6 +392,123 @@ def package_tar_release(platform_name: str, rid: str, version: str) -> List[Path
     return results
 
 
+def sync_android_version(version: str) -> None:
+    """Keep android/app/build.gradle.kts versionName and versionCode aligned with the release version."""
+    gradle_file = ROOT_DIR / "android" / "app" / "build.gradle.kts"
+    if not gradle_file.exists():
+        return
+
+    parts = [int(p) if p.isdigit() else 0 for p in version.lstrip("v").split(".")]
+    major = parts[0] if len(parts) > 0 else 1
+    minor = parts[1] if len(parts) > 1 else 0
+    patch = parts[2] if len(parts) > 2 else 0
+    version_code = major * 100 + minor * 10 + patch
+
+    content = gradle_file.read_text(encoding="utf-8")
+    updated = re.sub(r'versionName\s*=\s*"[^"]+"', f'versionName = "{version}"', content)
+    updated = re.sub(r'versionCode\s*=\s*\d+', f'versionCode = {version_code}', updated)
+    if updated != content:
+        gradle_file.write_text(updated, encoding="utf-8")
+        print_success(f"Synced Android version -> versionName={version}, versionCode={version_code}")
+
+
+def detect_android_sdk() -> Optional[Path]:
+    """Locate an installed Android SDK directory across Windows, Linux, and macOS."""
+    for env_key in ("ANDROID_HOME", "ANDROID_SDK_ROOT"):
+        val = os.environ.get(env_key)
+        if val and Path(val).exists():
+            return Path(val)
+
+    local_props = ROOT_DIR / "android" / "local.properties"
+    if local_props.exists():
+        for line in local_props.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.strip().startswith("sdk.dir="):
+                raw_path = line.split("=", 1)[1].strip().replace("\\:", ":").replace("\\\\", "\\")
+                if Path(raw_path).exists():
+                    return Path(raw_path)
+
+    candidates = [
+        Path.home() / "AppData" / "Local" / "Android" / "Sdk",
+        Path.home() / "Android" / "Sdk",
+        Path.home() / "Library" / "Android" / "sdk",
+    ]
+    for cand in candidates:
+        try:
+            if cand.exists():
+                return cand
+        except OSError:
+            continue
+    return None
+
+
+def build_and_package_android_release(version: str) -> List[Path]:
+    """Compile Android APKs (ARM64 & Universal) via Gradle if SDK is available and stage them into releases/."""
+    print_step("Building & Packaging Android APKs (ARM64 & Universal)")
+    RELEASES_DIR.mkdir(parents=True, exist_ok=True)
+    android_dir = ROOT_DIR / "android"
+    if not android_dir.exists():
+        print_warning("Android project directory (android/) not found; skipping Android build.")
+        return []
+
+    sync_android_version(version)
+
+    # Locate Gradle executable (wrapper preferred, then PATH)
+    gradle_cmd: Optional[List[str]] = None
+    wrapper_name = "gradlew.bat" if sys.platform.startswith("win") else "gradlew"
+    wrapper_path = android_dir / wrapper_name
+    wrapper_jar = android_dir / "gradle" / "wrapper" / "gradle-wrapper.jar"
+    if wrapper_path.exists() and wrapper_jar.exists():
+        gradle_cmd = [str(wrapper_path)]
+    elif shutil.which("gradle"):
+        gradle_cmd = [shutil.which("gradle") or "gradle"]
+
+    sdk_dir = detect_android_sdk()
+
+    if gradle_cmd and sdk_dir:
+        print(f"  Using Android SDK: {sdk_dir}")
+        env = os.environ.copy()
+        env["ANDROID_HOME"] = str(sdk_dir)
+        env["ANDROID_SDK_ROOT"] = str(sdk_dir)
+        cmd = gradle_cmd + ["assembleRelease", "--no-daemon"]
+        print(f"  {Colors.BOLD}$ {' '.join(cmd)}{Colors.RESET}")
+        proc = subprocess.run(cmd, cwd=str(android_dir), env=env, text=True)
+        if proc.returncode == 0:
+            print_success("Android Gradle assembleRelease succeeded!")
+        else:
+            print_warning(f"Android Gradle build exited with code {proc.returncode}.")
+    else:
+        missing = []
+        if not sdk_dir:
+            missing.append("Android SDK (ANDROID_HOME)")
+        if not gradle_cmd:
+            missing.append("Gradle CLI")
+        print_warning(
+            f"Local Android build skipped (missing {', '.join(missing)}). "
+            "GitHub Actions 'build-android' workflow will automatically compile & attach both APKs when the tag is pushed."
+        )
+
+    # Collect any built APKs (freshly compiled or pre-built via Android Studio)
+    apk_dir = android_dir / "app" / "build" / "outputs" / "apk" / "release"
+    results: List[Path] = []
+    if apk_dir.exists():
+        arm64_candidates = sorted(apk_dir.glob("*arm64-v8a*.apk"))
+        univ_candidates = sorted(apk_dir.glob("*universal*.apk"))
+
+        if arm64_candidates:
+            dest_arm64 = RELEASES_DIR / "UniversalDownloader-android-arm64.apk"
+            shutil.copy2(arm64_candidates[0], dest_arm64)
+            print_success(f"Staged {dest_arm64.name} ({dest_arm64.stat().st_size / 1024 / 1024:.1f} MB)")
+            results.append(dest_arm64)
+
+        if univ_candidates:
+            dest_univ = RELEASES_DIR / "UniversalDownloader-android-universal.apk"
+            shutil.copy2(univ_candidates[0], dest_univ)
+            print_success(f"Staged {dest_univ.name} ({dest_univ.stat().st_size / 1024 / 1024:.1f} MB)")
+            results.append(dest_univ)
+
+    return results
+
+
 def generate_checksums(archives: List[Path]) -> Path:
     """Generate SHA256SUMS.txt file."""
     print_step("Generating SHA-256 Checksums")
@@ -449,7 +566,15 @@ def publish_github_release(
                 print(f"  View online: https://github.com/{owner}/{repo}/releases/tag/{tag}")
                 return True
             except Exception as exc:
-                print_warning(f"gh CLI release creation encountered an issue: {exc}")
+                print_warning(f"gh release create returned an error ({exc}); trying upload --clobber to existing release...")
+                try:
+                    upload_cmd = ["gh", "release", "upload", tag] + [str(f) for f in files] + ["--clobber"]
+                    run_command(upload_cmd)
+                    print_success(f"Uploaded updated assets to existing release {tag} via GitHub CLI!")
+                    print(f"  View online: https://github.com/{owner}/{repo}/releases/tag/{tag}")
+                    return True
+                except Exception as upload_exc:
+                    print_warning(f"gh CLI release upload encountered an issue: {upload_exc}")
 
     # 3. Fallback to GitHub REST API with Token
     auth_token = token or os.environ.get("GITHUB_TOKEN")
@@ -527,6 +652,7 @@ def main() -> None:
     parser.add_argument("--token", default=None, help="GitHub Personal Access Token for API publishing")
     parser.add_argument("--draft", action="store_true", help="Publish release as a draft")
     parser.add_argument("--prerelease", action="store_true", help="Mark release as a pre-release")
+    parser.add_argument("--skip-android", action="store_true", help="Skip Android APK build and packaging")
     args = parser.parse_args()
 
     version = (args.version or get_default_version()).lstrip("v")
@@ -568,6 +694,8 @@ def main() -> None:
     archives.extend(package_tar_release("linux-x64", "linux-x64", version))
     archives.extend(package_tar_release("macos-arm64", "osx-arm64", version))
     archives.extend(package_tar_release("macos-x64", "osx-x64", version))
+    if not args.skip_android:
+        archives.extend(build_and_package_android_release(version))
 
     # 4. Generate SHA256 Checksums
     checksum_file = generate_checksums(archives)
@@ -576,26 +704,29 @@ def main() -> None:
     # Summary
     print_step("Build Summary & Generated Release Files")
     for f in all_release_files:
-        size_str = f"{f.stat().st_size / 1024 / 1024:.2f} MB" if f.name.endswith((".zip", ".tar.gz", ".exe")) or f.stat().st_size > 1024 * 1024 else f"{f.stat().st_size} bytes"
+        size_str = f"{f.stat().st_size / 1024 / 1024:.2f} MB" if f.name.endswith((".zip", ".tar.gz", ".exe", ".apk")) or f.stat().st_size > 1024 * 1024 else f"{f.stat().st_size} bytes"
         print(f"  • {Colors.BOLD}{f.name:<45}{Colors.RESET} ({size_str})")
 
     # 5. Publish to GitHub
     if not args.no_publish:
         release_notes = (
             f"## Universal Media Downloader {tag}\n\n"
-            f"Production-grade media downloader with native high-speed C# GUI frontends and a Python media engine.\n\n"
+            f"Production-grade media downloader with native cross-platform GUIs for Desktop (Windows, Linux, macOS) and Android.\n\n"
             f"### Standalone Downloads (Direct Click-and-Run):\n"
             f"- **Windows (One Single .exe)**: [`UniversalDownloader.exe`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader.exe)\n"
             f"  *Pure single executable file. No zip, no installer, no Python or .NET runtime installation required.*\n"
+            f"- **Android (ARM64 — Recommended)**: [`UniversalDownloader-android-arm64.apk`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-android-arm64.apk)\n"
+            f"- **Android (Universal — All Devices)**: [`UniversalDownloader-android-universal.apk`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-android-universal.apk)\n"
+            f"  *Native Kotlin + Jetpack Compose app with embedded yt-dlp + FFmpeg, Share Sheet support, and background notifications.*\n"
             f"- **Linux (Full GUI Executable)**: [`UniversalDownloader-v{version}-linux-x64.tar.gz`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-v{version}-linux-x64.tar.gz) or standalone binary `UniversalDownloader-linux-x64`\n"
             f"  *Full Avalonia GUI running on Wayland and X11.*\n"
             f"- **macOS (Apple Silicon M-series)**: [`UniversalDownloader-v{version}-macos-arm64.tar.gz`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-v{version}-macos-arm64.tar.gz)\n"
             f"- **macOS (Intel x64)**: [`UniversalDownloader-v{version}-macos-x64.tar.gz`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-v{version}-macos-x64.tar.gz)\n\n"
             f"### Features:\n"
-            f"- **Cross-Platform C# GUI**: Avalonia 11 UI running smoothly on Windows, Linux, and macOS\n"
-            f"- **Embedded Media Engine**: Multi-fragment concurrent streaming, time-range slicing, codec selection\n"
-            f"- **SQLite Download History**: Search, play downloaded media, and reveal files in Explorer/Finder/Nautilus\n"
-            f"- **Desktop Notifications & Watcher**: System clipboard polling and completion alerts across all platforms\n"
+            f"- **Built-in Update Checker**: Automatically checks GitHub Releases for newer Desktop & Android versions\n"
+            f"- **Cross-Platform GUIs**: Avalonia 11 (Windows/Linux/macOS) + Native Jetpack Compose (Android)\n"
+            f"- **Embedded Media Engine**: Multi-fragment concurrent streaming, auto metadata & thumbnail preview, stream explorer, codec selection\n"
+            f"- **SQLite Download History & Live Logs**: Search, play downloaded media, and view copyable color-coded real-time logs\n"
         )
         publish_github_release(
             owner=owner,

@@ -4,8 +4,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import com.universaldownloader.app.BuildConfig
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,11 +47,13 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -71,6 +75,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -126,60 +131,141 @@ import java.util.Locale
 fun MainScreen(viewModel: MainViewModel) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    var showUpdateMenu by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = BgDark,
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = BgDark,
-                    titleContentColor = TextPrimary,
-                ),
-                title = {
-                    Column {
-                        Text(
-                            text = "Universal Downloader",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                        )
-                        Text(
-                            text = when (state.engineStatus) {
-                                EngineStatus.INITIALIZING -> "Bootstrapping engine..."
-                                EngineStatus.UPDATING -> "Updating yt-dlp..."
-                                EngineStatus.READY -> "v1.5.0 • yt-dlp + FFmpeg Ready"
-                                EngineStatus.ERROR -> "Engine error"
-                            },
-                            fontSize = 11.sp,
-                            color = when (state.engineStatus) {
-                                EngineStatus.READY -> SuccessGreen
-                                EngineStatus.ERROR -> ErrorRed
-                                else -> AccentSky
-                            },
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.updateYtDlpEngine() },
-                        enabled = state.engineStatus == EngineStatus.READY && !state.isDownloading,
-                    ) {
-                        if (state.engineStatus == EngineStatus.UPDATING || state.engineStatus == EngineStatus.INITIALIZING) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = AccentSky,
+            Column {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = BgDark,
+                        titleContentColor = TextPrimary,
+                    ),
+                    title = {
+                        Column {
+                            Text(
+                                text = "Universal Downloader",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
                             )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.SystemUpdate,
-                                contentDescription = "Update yt-dlp Engine",
-                                tint = AccentSky,
+                            Text(
+                                text = when (state.engineStatus) {
+                                    EngineStatus.INITIALIZING -> "Bootstrapping engine..."
+                                    EngineStatus.UPDATING -> "Updating yt-dlp..."
+                                    EngineStatus.READY -> "v${BuildConfig.VERSION_NAME} • yt-dlp + FFmpeg Ready"
+                                    EngineStatus.ERROR -> "Engine error"
+                                },
+                                fontSize = 11.sp,
+                                color = when (state.engineStatus) {
+                                    EngineStatus.READY -> SuccessGreen
+                                    EngineStatus.ERROR -> ErrorRed
+                                    else -> AccentSky
+                                },
                             )
                         }
+                    },
+                    actions = {
+                        Box {
+                            IconButton(
+                                onClick = { showUpdateMenu = true },
+                                enabled = !state.isDownloading,
+                            ) {
+                                if (state.engineStatus == EngineStatus.UPDATING ||
+                                    state.engineStatus == EngineStatus.INITIALIZING ||
+                                    state.isCheckingAppUpdate
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = AccentSky,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.SystemUpdate,
+                                        contentDescription = "Updates",
+                                        tint = if (state.appUpdateInfo?.isUpdateAvailable == true) AccentIndigo else AccentSky,
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showUpdateMenu,
+                                onDismissRequest = { showUpdateMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Check App Update (APK)") },
+                                    onClick = {
+                                        showUpdateMenu = false
+                                        viewModel.checkForAppUpdate(silent = false)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Update yt-dlp Engine") },
+                                    enabled = state.engineStatus == EngineStatus.READY,
+                                    onClick = {
+                                        showUpdateMenu = false
+                                        viewModel.updateYtDlpEngine()
+                                    },
+                                )
+                            }
+                        }
+                    },
+                )
+
+                // App Update Available Banner
+                val update = state.appUpdateInfo
+                if (update != null && update.isUpdateAvailable && !state.isUpdateBannerDismissed) {
+                    Surface(
+                        color = Color(0xFF1E1B4B),
+                        border = BorderStroke(1.dp, AccentIndigo),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(10.dp)),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(AccentIndigo)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Text("UPDATE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Text(
+                                text = "v${update.latestVersion} available (current v${update.currentVersion})",
+                                color = TextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                onClick = { showUpdateDialog = true },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            ) {
+                                Text("Update", color = AccentSky, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                            IconButton(
+                                onClick = { viewModel.dismissUpdateBanner() },
+                                modifier = Modifier.size(24.dp),
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = TextSecondary, modifier = Modifier.size(15.dp))
+                            }
+                        }
                     }
-                },
-            )
+                }
+            }
         },
         bottomBar = {
             Column {
@@ -252,6 +338,74 @@ fun MainScreen(viewModel: MainViewModel) {
                 3 -> LogsTab(state = state, viewModel = viewModel, context = context)
             }
         }
+    }
+
+    val updateInfo = state.appUpdateInfo
+    if (showUpdateDialog && updateInfo != null) {
+        AlertDialog(
+            onDismissRequest = { showUpdateDialog = false },
+            containerColor = SurfaceCard,
+            shape = RoundedCornerShape(14.dp),
+            title = {
+                Text(
+                    text = "Update Available — v${updateInfo.latestVersion}",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Installed: v${updateInfo.currentVersion}  →  Latest: v${updateInfo.latestVersion}",
+                        color = AccentSky,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                    )
+                    if (!updateInfo.assetName.isNullOrBlank()) {
+                        val sizeMb = if (updateInfo.assetSizeBytes > 0L) {
+                            String.format(Locale.US, " (%.1f MB)", updateInfo.assetSizeBytes / (1024.0 * 1024.0))
+                        } else {
+                            ""
+                        }
+                        Text(
+                            text = "Package: ${updateInfo.assetName}$sizeMb",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                        )
+                    }
+                    if (updateInfo.releaseNotes.isNotBlank()) {
+                        Text(
+                            text = updateInfo.releaseNotes.take(600),
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showUpdateDialog = false
+                        openExternalUrl(context, updateInfo.downloadUrl)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                ) {
+                    Text("Download APK", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showUpdateDialog = false
+                        openExternalUrl(context, updateInfo.releaseUrl)
+                    },
+                ) {
+                    Text("Release Page", color = AccentSky)
+                }
+            },
+        )
     }
 }
 
@@ -1252,5 +1406,14 @@ private fun shareMediaFile(context: Context, path: String) {
         context.startActivity(Intent.createChooser(intent, "Share media"))
     } catch (_: Exception) {
         Toast.makeText(context, "Unable to share file", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun openExternalUrl(context: Context, url: String) {
+    try {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        Toast.makeText(context, "Unable to open browser", Toast.LENGTH_SHORT).show()
     }
 }

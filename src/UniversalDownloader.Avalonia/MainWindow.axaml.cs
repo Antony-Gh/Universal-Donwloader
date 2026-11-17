@@ -32,12 +32,14 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _metadataCts;
     private string? _lastInspectedMetadataUrl;
     private int _activeTaskCount = 0;
+    private AppUpdateInfo? _latestUpdateInfo;
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(12) };
 
     public MainWindow()
     {
         InitializeComponent();
 
+        AppVersionBadge.Text = $"v{UpdateChecker.GetCurrentVersion()}";
         QuickLogListBox.ItemsSource = _quickLogs;
         MainLogListBox.ItemsSource = _filteredMainLogs;
 
@@ -56,7 +58,95 @@ public partial class MainWindow : Window
         _client.StatusChanged += OnStatusChanged;
         _client.RawOutputReceived += OnRawOutputReceived;
 
-        Opened += async (s, e) => await LoadHistoryAsync();
+        Opened += async (s, e) =>
+        {
+            await LoadHistoryAsync();
+            _ = CheckForAppUpdatesAsync(silent: true);
+        };
+    }
+
+    private async void CheckUpdatesButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await CheckForAppUpdatesAsync(silent: false);
+    }
+
+    private async Task CheckForAppUpdatesAsync(bool silent)
+    {
+        CheckUpdatesButton.IsEnabled = false;
+        CheckUpdatesIcon.IsVisible = false;
+        CheckUpdatesSpinner.IsVisible = true;
+        CheckUpdatesText.Text = "Checking...";
+        if (!silent)
+        {
+            BeginGlobalActivity("Checking GitHub Releases for updates...");
+        }
+
+        try
+        {
+            var info = await UpdateChecker.CheckForUpdatesAsync();
+            _latestUpdateInfo = info;
+
+            if (info.IsUpdateAvailable)
+            {
+                var sizeSuffix = info.AssetSizeBytes > 0 ? $" ({PlatformUtils.FormatBytes(info.AssetSizeBytes)})" : "";
+                UpdateBannerMessage.Text = $"New version v{info.LatestVersion} is available! (Current: v{info.CurrentVersion}){sizeSuffix}";
+                UpdateBanner.IsVisible = true;
+                CheckUpdatesText.Text = $"Update v{info.LatestVersion}";
+                if (!silent)
+                {
+                    GlobalStatusText.Text = $"Update available: v{info.LatestVersion}";
+                }
+            }
+            else
+            {
+                UpdateBanner.IsVisible = false;
+                if (!silent)
+                {
+                    CheckUpdatesText.Text = "Up to date!";
+                    GlobalStatusText.Text = $"You are running the latest version (v{info.CurrentVersion}).";
+                    DispatcherTimer.RunOnce(() => CheckUpdatesText.Text = "Check Updates", TimeSpan.FromSeconds(3));
+                }
+                else
+                {
+                    CheckUpdatesText.Text = "Check Updates";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            CheckUpdatesText.Text = "Check Updates";
+            if (!silent)
+            {
+                GlobalStatusText.Text = $"Update check failed: {ex.Message}";
+            }
+        }
+        finally
+        {
+            CheckUpdatesButton.IsEnabled = true;
+            CheckUpdatesIcon.IsVisible = true;
+            CheckUpdatesSpinner.IsVisible = false;
+            if (!silent)
+            {
+                EndGlobalActivity();
+            }
+        }
+    }
+
+    private void DownloadUpdateButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var url = _latestUpdateInfo?.DownloadUrl ?? UpdateChecker.LatestReleaseWebUrl;
+        PlatformUtils.OpenUrl(url);
+    }
+
+    private void ViewReleaseNotesButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var url = _latestUpdateInfo?.ReleaseUrl ?? UpdateChecker.LatestReleaseWebUrl;
+        PlatformUtils.OpenUrl(url);
+    }
+
+    private void DismissUpdateButton_Click(object? sender, RoutedEventArgs e)
+    {
+        UpdateBanner.IsVisible = false;
     }
 
     private void OnRawOutputReceived(object? sender, string line)

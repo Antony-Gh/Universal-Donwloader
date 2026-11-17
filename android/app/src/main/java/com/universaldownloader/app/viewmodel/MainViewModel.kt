@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.universaldownloader.app.UniversalDownloaderApp
+import com.universaldownloader.app.engine.AppUpdateChecker
+import com.universaldownloader.app.engine.AppUpdateInfo
 import com.universaldownloader.app.model.CodecOption
 import com.universaldownloader.app.model.DownloadOptions
 import com.universaldownloader.app.model.EngineStatus
@@ -46,6 +48,9 @@ data class MainUiState(
     val history: List<HistoryEntry> = emptyList(),
     val historySearch: String = "",
     val isLoadingHistory: Boolean = false,
+    val isCheckingAppUpdate: Boolean = false,
+    val appUpdateInfo: AppUpdateInfo? = null,
+    val isUpdateBannerDismissed: Boolean = false,
     val globalStatus: String = "Initializing engine...",
     val selectedTab: Int = 0,
 ) {
@@ -55,7 +60,8 @@ data class MainUiState(
             isFetchingMetadata ||
             isInspectingStreams ||
             isDownloading ||
-            isLoadingHistory
+            isLoadingHistory ||
+            isCheckingAppUpdate
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -63,6 +69,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as UniversalDownloaderApp
     private val repo = app.repository
     private val historyStore = app.historyStore
+    private val updateChecker = AppUpdateChecker()
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -75,6 +82,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         initializeEngine()
         loadHistory()
+        checkForAppUpdate(silent = true)
+    }
+
+    fun checkForAppUpdate(silent: Boolean = false) {
+        if (_uiState.value.isCheckingAppUpdate) return
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isCheckingAppUpdate = true,
+                    globalStatus = if (silent) it.globalStatus else "Checking GitHub Releases for app updates...",
+                )
+            }
+            val result = updateChecker.checkForUpdates()
+            result.fold(
+                onSuccess = { info ->
+                    if (info.isUpdateAvailable) {
+                        appendLog("[Info] App update available: v${info.latestVersion} (current: v${info.currentVersion})")
+                    } else if (!silent) {
+                        appendLog("[Success] App is up to date (v${info.currentVersion}).")
+                    }
+                    _uiState.update {
+                        it.copy(
+                            isCheckingAppUpdate = false,
+                            appUpdateInfo = info,
+                            isUpdateBannerDismissed = if (info.isUpdateAvailable) false else it.isUpdateBannerDismissed,
+                            globalStatus = when {
+                                info.isUpdateAvailable -> "App update available: v${info.latestVersion}"
+                                !silent -> "App is up to date (v${info.currentVersion})"
+                                else -> it.globalStatus
+                            },
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    if (!silent) {
+                        appendLog("[Warning] App update check failed: ${err.message}")
+                    }
+                    _uiState.update {
+                        it.copy(
+                            isCheckingAppUpdate = false,
+                            globalStatus = if (silent) it.globalStatus else "Update check failed",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun dismissUpdateBanner() {
+        _uiState.update { it.copy(isUpdateBannerDismissed = true) }
     }
 
     private fun initializeEngine() {
