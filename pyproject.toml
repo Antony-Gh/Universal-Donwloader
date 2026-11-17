@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "universal-downloader"
+version = "1.1.0"
+description = "Universal Media Downloader for publicly accessible media"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Universal Downloader"}
+]
+keywords = ["downloader", "media", "video", "audio", "yt-dlp", "cli"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+dependencies = [
+    "yt-dlp>=2026.8.19",
+]
+
+[project.optional-dependencies]
+audio = [
+    "mutagen>=1.48.1",
+]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+universal-downloader = "universal_downloader.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["."]
