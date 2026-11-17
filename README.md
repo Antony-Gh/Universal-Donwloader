@@ -15,9 +15,9 @@ A production-grade, highly resilient command-line and backend media downloader f
 - **Subtitles & Captions**: Download separate subtitle files (`--write-subs`) or embed them into the video (`--embed-subs`), supporting language codes (`--sub-langs "en,es"`) and auto-generated captions (`--auto-subs`).
 - **SQLite Download History**: Automatically records all completed and failed downloads with titles, uploaders, file paths, and dates in an indexed SQLite database (`downloads.db`). Queryable via `--history` and `--history-search`.
 - **Real-Time JSON Streaming for External GUIs**: The `--json-stream` flag emits line-delimited JSON events to stdout for real-time progress, speed, ETA, and status, making integration with C# (WPF/WinUI 3/Avalonia) or Rust/Go frontends straightforward.
-- **Clipboard Watcher Daemon**: Run `--watch-clipboard` to monitor the Windows clipboard and automatically enqueue or download media links as soon as they are copied.
-- **Desktop Toast Notifications**: Send native Windows desktop alerts (`--notify`) when downloads complete.
-- **Windows URL Scheme Integration**: Register `downloader://` with `--register-protocol` so browser bookmarklets or desktop hyperlinks launch downloads directly.
+- **Clipboard Watcher Daemon**: Run `--watch-clipboard` to monitor the system clipboard (Win32 API on Windows, `wl-paste`/`xclip`/`xsel` on Linux, `pbpaste` on macOS) and automatically enqueue or download media links as soon as they are copied.
+- **Desktop Notifications & Audio Alerts**: Send native desktop alerts and audio cues (`--notify`) when downloads complete across Windows (Windows Runtime Toast), Linux (`notify-send`), and macOS (`osascript`).
+- **Cross-Platform URL Scheme**: Register `downloader://` with `--register-protocol` across Windows Registry and Linux FreeDesktop XDG handlers so browser bookmarklets or desktop hyperlinks launch downloads directly.
 - **Self-Updater**: Run `--update` to check and upgrade `yt-dlp` to the latest PyPI release in one command.
 - **Resilient Batch Processing**:
   - Multi-threaded concurrent batch downloads (`--concurrency 4`).
@@ -238,21 +238,29 @@ The resulting `dist/downloader.exe` is a single standalone executable that suppo
 The project includes a complete .NET 9 solution (`UniversalDownloader.sln`) with:
 
 1. **`UniversalDownloader.Core`**:
-   - Reusable class library with strongly-typed models (`DownloadProgressEvent`, `DownloadCompleteEvent`, `FormatInfoModel`, `HistoryRecordModel`, `DownloadOptions`).
-   - `DownloaderClient`: Asynchronous IPC client that automatically locates either `dist/downloader.exe` or `downloader.py`, spawns the process in background, and streams real-time events to your UI.
-2. **`UniversalDownloader.App`**:
-   - Full native modern Dark-themed desktop app built with WPF on .NET 9.
-   - Features real-time progress bars, speed and ETA indicators, format inspection tables, paste shortcuts, and a full SQLite download history browser with "Open File" and "Show in Folder".
-3. **`UniversalDownloader.Avalonia`**:
-   - Cross-platform Avalonia UI project targeting Windows, macOS, and Linux.
+   - Cross-platform class library (.NET 9) with strongly-typed models (`DownloadProgressEvent`, `DownloadCompleteEvent`, `FormatInfoModel`, `HistoryRecordModel`, `DownloadOptions`).
+   - `DownloaderClient`: Asynchronous IPC client that automatically locates either compiled binaries (`downloader.exe` or `downloader`) or `downloader.py` (via `python` or `python3`), spawns the process in background, and streams real-time events.
+   - `PlatformUtils`: Unified cross-platform helpers for launching system file viewers (`xdg-open`, `open`, `explorer.exe`), opening containing folders, and resolving binaries.
+2. **`UniversalDownloader.Avalonia`**:
+   - Cross-platform modern desktop application built on **Avalonia 11** (.NET 9).
+   - Runs seamlessly on **Windows, Linux (Wayland & X11), and macOS**.
+   - Features real-time animated progress bars, speed and ETA indicators, format inspection, paste shortcuts, and a full SQLite download history browser with "▶ Play" and "📁 Folder" buttons.
+3. **`UniversalDownloader.App`**:
+   - Native Windows desktop app built with **WPF** (.NET 9).
 
-### Building & Running the C# Desktop App
+### Building & Running the C# Desktop Apps
 
+#### Cross-Platform (Windows, Linux, macOS) — Avalonia UI:
 ```bash
-# Build the core library and WPF application
-dotnet build src/UniversalDownloader.App/UniversalDownloader.App.csproj
+# Build and run the cross-platform Avalonia desktop app
+dotnet build src/UniversalDownloader.Avalonia/UniversalDownloader.Avalonia.csproj
+dotnet run --project src/UniversalDownloader.Avalonia/UniversalDownloader.Avalonia.csproj
+```
 
-# Run the native desktop application
+#### Windows Only — WPF App:
+```bash
+# Build and run the Windows-native WPF application
+dotnet build src/UniversalDownloader.App/UniversalDownloader.App.csproj
 dotnet run --project src/UniversalDownloader.App/UniversalDownloader.App.csproj
 ```
 
@@ -276,7 +284,7 @@ Run the test suite using `pytest`:
 pytest -v
 ```
 
-All 40 unit and integration tests run in ~1.3 seconds.
+All 43 unit and integration tests run in ~1.2 seconds across platforms.
 
 ---
 

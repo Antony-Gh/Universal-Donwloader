@@ -98,18 +98,20 @@
             <TabItem Header="History">
                 <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
                     <StackPanel Spacing="12">
-                        <Grid ColumnDefinitions="*,Auto,Auto">
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                             <TextBox x:Name="HistorySearchBox" Grid.Column="0" Watermark="Search history..."/>
                             <Button x:Name="HistorySearchButton" Grid.Column="1" Content="Search" Margin="8,0,0,0" Click="HistorySearchButton_Click"/>
                             <Button x:Name="HistoryRefreshButton" Grid.Column="2" Content="Refresh" Margin="8,0,0,0" Click="HistoryRefreshButton_Click"/>
+                            <Button x:Name="HistoryClearButton" Grid.Column="3" Content="Clear All" Margin="8,0,0,0" Background="#374151" Click="HistoryClearButton_Click"/>
                         </Grid>
-                        <ListBox x:Name="HistoryListBox" MaxHeight="400" Background="#18181B">
+                        <ListBox x:Name="HistoryListBox" MaxHeight="420" Background="#18181B">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="4">
-                                        <TextBlock Grid.Column="0" Text="{Binding DateFormatted}" Width="150" Foreground="#9CA3AF"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="Medium" Foreground="#F4F4F8" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding Status}" Width="90" Foreground="#10B981" HorizontalAlignment="Right"/>
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="4">
+                                        <TextBlock Grid.Column="0" Text="{Binding DateFormatted}" Width="140" VerticalAlignment="Center" Foreground="#9CA3AF"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" FontWeight="Medium" Foreground="#F4F4F8" TextTrimming="CharacterEllipsis"/>
+                                        <Button Grid.Column="2" Content="▶ Play" Margin="8,0,4,0" Padding="8,4" Background="#3B82F6" Foreground="White" FontSize="11" Click="OpenMediaFile_Click"/>
+                                        <Button Grid.Column="3" Content="📁 Folder" Margin="4,0,0,0" Padding="8,4" Background="#374151" Foreground="White" FontSize="11" Click="ShowFolder_Click"/>
                                     </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>

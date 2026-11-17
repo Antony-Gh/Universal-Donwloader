@@ -189,6 +189,34 @@ public partial class MainWindow : Window
         await LoadHistoryAsync();
     }
 
+    private async void HistoryClearButton_Click(object? sender, RoutedEventArgs e)
+    {
+        await _client.ClearHistoryAsync();
+        await LoadHistoryAsync();
+    }
+
+    private void OpenMediaFile_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is HistoryRecordModel record)
+        {
+            if (!string.IsNullOrWhiteSpace(record.PrimaryFilepath))
+            {
+                PlatformUtils.OpenFile(record.PrimaryFilepath);
+            }
+        }
+    }
+
+    private void ShowFolder_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is HistoryRecordModel record)
+        {
+            if (!string.IsNullOrWhiteSpace(record.PrimaryFilepath))
+            {
+                PlatformUtils.OpenFolder(record.PrimaryFilepath);
+            }
+        }
+    }
+
     private void SetDownloading(bool active)
     {
         DownloadButton.IsEnabled = !active;

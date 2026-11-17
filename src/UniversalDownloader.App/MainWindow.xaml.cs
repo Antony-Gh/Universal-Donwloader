@@ -280,7 +280,7 @@ public partial class MainWindow : Window
         {
             if (File.Exists(record.PrimaryFilepath))
             {
-                Process.Start(new ProcessStartInfo(record.PrimaryFilepath) { UseShellExecute = true });
+                PlatformUtils.OpenFile(record.PrimaryFilepath);
             }
             else
             {
@@ -293,17 +293,9 @@ public partial class MainWindow : Window
     {
         if (sender is Button btn && btn.DataContext is HistoryRecordModel record)
         {
-            if (File.Exists(record.PrimaryFilepath))
+            if (!string.IsNullOrWhiteSpace(record.PrimaryFilepath))
             {
-                Process.Start("explorer.exe", $"/select,\"{record.PrimaryFilepath}\"");
-            }
-            else if (!string.IsNullOrWhiteSpace(record.PrimaryFilepath))
-            {
-                var dir = Path.GetDirectoryName(record.PrimaryFilepath);
-                if (Directory.Exists(dir))
-                {
-                    Process.Start("explorer.exe", $"\"{dir}\"");
-                }
+                PlatformUtils.OpenFolder(record.PrimaryFilepath);
             }
         }
     }

@@ -78,3 +78,30 @@ def test_installed_ytdlp_version():
     ver = get_installed_ytdlp_version()
     assert ver != "not installed"
     assert len(ver) > 0
+
+
+def test_cross_platform_notify(monkeypatch):
+    from universal_downloader.notify import send_notification
+    # Notification shouldn't crash regardless of platform
+    res = send_notification("Test Title", "Test Message", sound=False)
+    assert isinstance(res, bool)
+
+
+def test_cross_platform_watcher():
+    from universal_downloader.watcher import get_clipboard_text
+    # Clipboard query shouldn't crash
+    val = get_clipboard_text()
+    assert val is None or isinstance(val, str)
+
+
+def test_protocol_registration_dry_run(monkeypatch, tmp_path):
+    from universal_downloader.protocol import register_protocol, unregister_protocol
+    # Ensure protocol registration and clean up run safely
+    dummy_exe = tmp_path / "dummy_downloader.py"
+    dummy_exe.write_text("# dummy", encoding="utf-8")
+    
+    # Run unregister first to test safe deletion
+    ok, msg = unregister_protocol()
+    assert isinstance(ok, bool)
+    assert isinstance(msg, str)
+

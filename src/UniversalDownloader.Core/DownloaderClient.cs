@@ -31,10 +31,11 @@ public class DownloaderClient
             return;
         }
 
-        // 2. Check for packaged dist/downloader.exe
+        // 2. Check for packaged dist/downloader (.exe on Windows, executable on Linux/macOS)
+        var binaryName = PlatformUtils.GetBinaryName("downloader");
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        var relativeDistExe = Path.Combine(baseDir, "downloader.exe");
-        var projectDistExe = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "dist", "downloader.exe"));
+        var relativeDistExe = Path.Combine(baseDir, binaryName);
+        var projectDistExe = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "dist", binaryName));
 
         if (File.Exists(relativeDistExe))
         {
@@ -50,8 +51,8 @@ public class DownloaderClient
             return;
         }
 
-        // 3. Fallback to python + downloader.py
-        _executableOrPython = "python";
+        // 3. Fallback to python/python3 + downloader.py
+        _executableOrPython = PlatformUtils.ResolvePythonExecutable();
         var candidateScript = customScriptPath ?? Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "downloader.py"));
         _scriptPath = File.Exists(candidateScript) ? candidateScript : "downloader.py";
     }

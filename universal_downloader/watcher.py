@@ -1,12 +1,14 @@
-"""System clipboard monitor daemon for automated link detection."""
+"""System clipboard monitor daemon for automated link detection across platforms."""
 
 from __future__ import annotations
 
 import ctypes
 import logging
+import os
+import shutil
+import subprocess
 import sys
 import time
-from ctypes import wintypes
 from typing import Callable, Optional
 
 from universal_downloader.console import info, success, warning
@@ -22,37 +24,102 @@ def get_windows_clipboard_text() -> Optional[str]:
     if not sys.platform.startswith("win"):
         return None
 
-    user32 = ctypes.windll.user32
-    kernel32 = ctypes.windll.kernel32
+    try:
+        from ctypes import wintypes
 
-    user32.OpenClipboard.argtypes = [wintypes.HWND]
-    user32.OpenClipboard.restype = wintypes.BOOL
-    user32.CloseClipboard.argtypes = []
-    user32.CloseClipboard.restype = wintypes.BOOL
-    user32.GetClipboardData.argtypes = [wintypes.UINT]
-    user32.GetClipboardData.restype = wintypes.HANDLE
-    kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
-    kernel32.GlobalLock.restype = wintypes.LPVOID
-    kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
-    kernel32.GlobalUnlock.restype = wintypes.BOOL
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
 
-    if not user32.OpenClipboard(None):
+        user32.OpenClipboard.argtypes = [wintypes.HWND]
+        user32.OpenClipboard.restype = wintypes.BOOL
+        user32.CloseClipboard.argtypes = []
+        user32.CloseClipboard.restype = wintypes.BOOL
+        user32.GetClipboardData.argtypes = [wintypes.UINT]
+        user32.GetClipboardData.restype = wintypes.HANDLE
+        kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+        kernel32.GlobalLock.restype = wintypes.LPVOID
+        kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+        kernel32.GlobalUnlock.restype = wintypes.BOOL
+
+        if not user32.OpenClipboard(None):
+            return None
+
+        try:
+            CF_UNICODETEXT = 13
+            handle = user32.GetClipboardData(CF_UNICODETEXT)
+            if not handle:
+                return None
+            ptr = kernel32.GlobalLock(handle)
+            if not ptr:
+                return None
+            try:
+                return ctypes.c_wchar_p(ptr).value
+            finally:
+                kernel32.GlobalUnlock(handle)
+        finally:
+            user32.CloseClipboard()
+    except Exception as exc:
+        LOGGER.debug("Win32 clipboard read failed: %s", exc)
         return None
 
-    try:
-        CF_UNICODETEXT = 13
-        handle = user32.GetClipboardData(CF_UNICODETEXT)
-        if not handle:
-            return None
-        ptr = kernel32.GlobalLock(handle)
-        if not ptr:
-            return None
+
+def get_posix_clipboard_text() -> Optional[str]:
+    """Retrieve clipboard text on Linux (Wayland/X11) or macOS."""
+    # macOS
+    if sys.platform == "darwin" and shutil.which("pbpaste"):
         try:
-            return ctypes.c_wchar_p(ptr).value
-        finally:
-            kernel32.GlobalUnlock(handle)
-    finally:
-        user32.CloseClipboard()
+            proc = subprocess.run(["pbpaste"], capture_output=True, text=True, timeout=1.0)
+            if proc.returncode == 0:
+                return proc.stdout
+        except Exception:
+            pass
+
+    # Linux - Wayland
+    if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste"):
+        try:
+            proc = subprocess.run(["wl-paste", "--no-newline"], capture_output=True, text=True, timeout=1.0)
+            if proc.returncode == 0:
+                return proc.stdout
+        except Exception:
+            pass
+
+    # Linux - X11 xclip
+    if sys.platform.startswith("linux") and shutil.which("xclip"):
+        try:
+            proc = subprocess.run(["xclip", "-selection", "clipboard", "-o"], capture_output=True, text=True, timeout=1.0)
+            if proc.returncode == 0:
+                return proc.stdout
+        except Exception:
+            pass
+
+    # Linux - X11 xsel
+    if sys.platform.startswith("linux") and shutil.which("xsel"):
+        try:
+            proc = subprocess.run(["xsel", "--clipboard", "--output"], capture_output=True, text=True, timeout=1.0)
+            if proc.returncode == 0:
+                return proc.stdout
+        except Exception:
+            pass
+
+    # Fallback via tkinter if present in environment
+    try:
+        import tkinter
+        r = tkinter.Tk()
+        r.withdraw()
+        val = r.clipboard_get()
+        r.destroy()
+        return val
+    except Exception:
+        pass
+
+    return None
+
+
+def get_clipboard_text() -> Optional[str]:
+    """Cross-platform clipboard text getter."""
+    if sys.platform.startswith("win"):
+        return get_windows_clipboard_text()
+    return get_posix_clipboard_text()
 
 
 def watch_clipboard(
@@ -70,7 +137,7 @@ def watch_clipboard(
 
     try:
         while True:
-            text = get_windows_clipboard_text()
+            text = get_clipboard_text()
             if text and text != last_seen:
                 last_seen = text
                 candidate = text.strip()
