@@ -51,6 +51,15 @@ public class DownloaderClient
             return;
         }
 
+        // 2.5. Check embedded resource (for single-file all-in-one executable distribution)
+        var extractedPath = TryExtractEmbeddedBackend(binaryName);
+        if (extractedPath != null && File.Exists(extractedPath))
+        {
+            _executableOrPython = extractedPath;
+            _scriptPath = null;
+            return;
+        }
+
         // 3. Fallback to python/python3 + downloader.py
         _executableOrPython = PlatformUtils.ResolvePythonExecutable();
         var candidateScript = customScriptPath ?? Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "downloader.py"));
@@ -317,6 +326,61 @@ public class DownloaderClient
         }
 
         return process.ExitCode;
+    }
+
+    private static string? TryExtractEmbeddedBackend(string binaryName)
+    {
+        try
+        {
+            var asm = typeof(DownloaderClient).Assembly;
+            var entryAsm = System.Reflection.Assembly.GetEntryAssembly();
+
+            // Locate embedded binary resource
+            var names = asm.GetManifestResourceNames();
+            var resourceName = names.FirstOrDefault(n => n.EndsWith("downloader.exe", StringComparison.OrdinalIgnoreCase) || n.EndsWith("downloader", StringComparison.OrdinalIgnoreCase))
+                ?? entryAsm?.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith("downloader.exe", StringComparison.OrdinalIgnoreCase) || n.EndsWith("downloader", StringComparison.OrdinalIgnoreCase));
+
+            if (resourceName == null) return null;
+
+            using var resourceStream = asm.GetManifestResourceStream(resourceName)
+                ?? entryAsm?.GetManifestResourceStream(resourceName);
+
+            if (resourceStream == null) return null;
+
+            var cacheDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "UniversalDownloader",
+                "bin"
+            );
+            Directory.CreateDirectory(cacheDir);
+            var targetFile = Path.Combine(cacheDir, binaryName);
+
+            if (File.Exists(targetFile) && new FileInfo(targetFile).Length == resourceStream.Length)
+            {
+                return targetFile;
+            }
+
+            using (var fileStream = File.Create(targetFile))
+            {
+                resourceStream.CopyTo(fileStream);
+            }
+
+            if (!PlatformUtils.IsWindows)
+            {
+                try
+                {
+                    var chmod = Process.Start("chmod", $"+x \"{targetFile}\"");
+                    chmod?.WaitForExit();
+                }
+                catch { }
+            }
+
+            return targetFile;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private async Task<string> RunProcessAndCaptureOutputAsync(

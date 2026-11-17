@@ -7,6 +7,8 @@
 *.user
 .vs/
 **/build_temp/**
+**/dist_single*/**
+
 
 # IDEs
 .vscode/**

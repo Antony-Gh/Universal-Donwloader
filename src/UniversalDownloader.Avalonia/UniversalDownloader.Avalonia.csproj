@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationTitle>Universal Media Downloader (Avalonia)</ApplicationTitle>
+    <AssemblyName>UniversalDownloader</AssemblyName>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
     <Version>1.1.0</Version>
   </PropertyGroup>
@@ -24,6 +25,18 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UniversalDownloader.Core\UniversalDownloader.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Embed compiled standalone backend for all-in-one distribution -->
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\dist\downloader.exe')">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\dist\downloader.exe">
+      <LogicalName>downloader.exe</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\dist\downloader')">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\dist\downloader">
+      <LogicalName>downloader</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

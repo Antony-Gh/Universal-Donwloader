@@ -206,80 +206,97 @@ exec "$DIR/UniversalDownloader.Avalonia" "$@"
     dest_path.write_text(script_content, encoding="utf-8")
 
 
-def package_windows_release(version: str, python_bin: Optional[Path]) -> Path:
-    """Create Windows x64 zip bundle."""
-    print_step("Packaging Windows x64 Distribution")
-    pkg_name = f"UniversalDownloader-v{version}-windows-x64"
-    staging = BUILD_TMP_DIR / pkg_name
-    staging.mkdir(parents=True, exist_ok=True)
-
-    # Avalonia GUI
+def package_windows_release(version: str) -> List[Path]:
+    """Create single-file Windows executable and clean distribution zip."""
+    print_step("Packaging Windows x64 Standalone Executable")
     avalonia_dir = BUILD_TMP_DIR / "win-x64-avalonia"
-    if (avalonia_dir / "UniversalDownloader.Avalonia.exe").exists():
-        shutil.copy2(avalonia_dir / "UniversalDownloader.Avalonia.exe", staging / "UniversalDownloader.Avalonia.exe")
-    elif avalonia_dir.exists():
-        for item in avalonia_dir.glob("*"):
-            if item.is_file(): shutil.copy2(item, staging / item.name)
+    
+    # Locate built Windows single-file executable
+    candidate_exe = None
+    for name in ["UniversalDownloader.exe", "UniversalDownloader.Avalonia.exe"]:
+        if (avalonia_dir / name).exists():
+            candidate_exe = avalonia_dir / name
+            break
 
-    # WPF GUI
-    wpf_dir = BUILD_TMP_DIR / "win-x64-wpf"
-    if (wpf_dir / "UniversalDownloader.App.exe").exists():
-        shutil.copy2(wpf_dir / "UniversalDownloader.App.exe", staging / "UniversalDownloader.WPF.exe")
-    elif wpf_dir.exists():
-        for item in wpf_dir.glob("*"):
-            if item.is_file(): shutil.copy2(item, staging / item.name)
+    if not candidate_exe and avalonia_dir.exists():
+        for item in avalonia_dir.glob("*.exe"):
+            candidate_exe = item
+            break
 
-    # Standalone Python backend
-    if python_bin and python_bin.exists():
-        shutil.copy2(python_bin, staging / "downloader.exe")
+    results: List[Path] = []
+    if candidate_exe and candidate_exe.exists():
+        # 1. Output the single standalone .exe directly for one-click downloading!
+        direct_exe = RELEASES_DIR / "UniversalDownloader.exe"
+        shutil.copy2(candidate_exe, direct_exe)
+        print_success(f"Generated Standalone Windows Executable: {direct_exe.name} ({direct_exe.stat().st_size / 1024 / 1024:.1f} MB)")
+        results.append(direct_exe)
 
-    # Documentation and assets
-    if (ROOT_DIR / "README.md").exists():
-        shutil.copy2(ROOT_DIR / "README.md", staging / "README.md")
-    if (ROOT_DIR / "assets").exists():
-        shutil.copytree(ROOT_DIR / "assets", staging / "assets", dirs_exist_ok=True)
+        # 2. Also package clean zip containing only UniversalDownloader.exe and documentation
+        pkg_name = f"UniversalDownloader-v{version}-windows-x64"
+        staging = BUILD_TMP_DIR / pkg_name
+        staging.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(candidate_exe, staging / "UniversalDownloader.exe")
+        if (ROOT_DIR / "README.md").exists():
+            shutil.copy2(ROOT_DIR / "README.md", staging / "README.md")
 
-    # Create Zip
-    zip_path = RELEASES_DIR / f"{pkg_name}.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root, _, files in os.walk(staging):
-            for file in files:
-                full_path = Path(root) / file
-                arcname = full_path.relative_to(staging)
-                zf.write(full_path, arcname)
+        zip_path = RELEASES_DIR / f"{pkg_name}.zip"
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for root, _, files in os.walk(staging):
+                for file in files:
+                    full_path = Path(root) / file
+                    arcname = full_path.relative_to(staging)
+                    zf.write(full_path, arcname)
 
-    print_success(f"Created {zip_path.name} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)")
-    return zip_path
+        print_success(f"Created {zip_path.name} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)")
+        results.append(zip_path)
+
+    return results
 
 
-def package_tar_release(platform_name: str, rid: str, version: str) -> Path:
-    """Create tar.gz bundle for Linux or macOS."""
-    print_step(f"Packaging {platform_name} ({rid}) Distribution")
+def package_tar_release(platform_name: str, rid: str, version: str) -> List[Path]:
+    """Create Linux or macOS GUI distribution package and standalone binary."""
+    print_step(f"Packaging {platform_name} ({rid}) GUI Distribution")
     pkg_name = f"UniversalDownloader-v{version}-{platform_name}"
     staging = BUILD_TMP_DIR / pkg_name
     staging.mkdir(parents=True, exist_ok=True)
 
-    # Avalonia binary
-    bin_name = "UniversalDownloader.Avalonia"
-    bin_src = BUILD_TMP_DIR / rid / bin_name
-    if bin_src.exists():
-        shutil.copy2(bin_src, staging / bin_name)
-    else:
-        rid_dir = BUILD_TMP_DIR / rid
-        if rid_dir.exists():
-            for item in rid_dir.glob("*"):
-                if item.is_file():
-                    shutil.copy2(item, staging / item.name)
+    rid_dir = BUILD_TMP_DIR / rid
+    candidate_bin = None
+    for name in ["UniversalDownloader", "UniversalDownloader.Avalonia"]:
+        if (rid_dir / name).exists():
+            candidate_bin = rid_dir / name
+            break
+
+    results: List[Path] = []
+    if candidate_bin and candidate_bin.exists():
+        # Copy GUI binary into staging
+        dest_bin = staging / "UniversalDownloader"
+        shutil.copy2(candidate_bin, dest_bin)
+        try:
+            dest_bin.chmod(0o755)
+        except Exception:
+            pass
+
+        # Also copy runtime dependencies / dylibs if present
+        for item in rid_dir.glob("*.dylib"):
+            shutil.copy2(item, staging / item.name)
+
+        # Standalone binary for Linux
+        if "linux" in rid:
+            direct_bin = RELEASES_DIR / "UniversalDownloader-linux-x64"
+            shutil.copy2(candidate_bin, direct_bin)
+            try:
+                direct_bin.chmod(0o755)
+            except Exception:
+                pass
+            print_success(f"Generated Standalone Linux Executable: {direct_bin.name} ({direct_bin.stat().st_size / 1024 / 1024:.1f} MB)")
+            results.append(direct_bin)
 
     # Launcher script on Linux
     if "linux" in rid:
         create_linux_launcher_script(staging / "run.sh")
 
-    # Bundle Python engine
-    shutil.copytree(ROOT_DIR / "universal_downloader", staging / "universal_downloader", dirs_exist_ok=True)
-    shutil.copy2(ROOT_DIR / "downloader.py", staging / "downloader.py")
-    if (ROOT_DIR / "requirements.txt").exists():
-        shutil.copy2(ROOT_DIR / "requirements.txt", staging / "requirements.txt")
+    # Documentation and assets
     if (ROOT_DIR / "README.md").exists():
         shutil.copy2(ROOT_DIR / "README.md", staging / "README.md")
     if (ROOT_DIR / "assets").exists():
@@ -291,7 +308,8 @@ def package_tar_release(platform_name: str, rid: str, version: str) -> Path:
         tar.add(staging, arcname=pkg_name)
 
     print_success(f"Created {tar_path.name} ({tar_path.stat().st_size / 1024 / 1024:.1f} MB)")
-    return tar_path
+    results.append(tar_path)
+    return results
 
 
 def generate_checksums(archives: List[Path]) -> Path:
@@ -461,12 +479,12 @@ def main() -> None:
     publish_dotnet_target(avalonia_proj, "osx-x64", BUILD_TMP_DIR / "osx-x64")
     publish_dotnet_target(avalonia_proj, "osx-arm64", BUILD_TMP_DIR / "osx-arm64")
 
-    # 3. Create Distribution Archives
+    # 3. Create Distribution Archives & Standalone Executables
     archives: List[Path] = []
-    archives.append(package_windows_release(version, python_bin))
-    archives.append(package_tar_release("linux-x64", "linux-x64", version))
-    archives.append(package_tar_release("macos-x64", "osx-x64", version))
-    archives.append(package_tar_release("macos-arm64", "osx-arm64", version))
+    archives.extend(package_windows_release(version))
+    archives.extend(package_tar_release("linux-x64", "linux-x64", version))
+    archives.extend(package_tar_release("macos-arm64", "osx-arm64", version))
+    archives.extend(package_tar_release("macos-x64", "osx-x64", version))
 
     # 4. Generate SHA256 Checksums
     checksum_file = generate_checksums(archives)
@@ -475,22 +493,26 @@ def main() -> None:
     # Summary
     print_step("Build Summary & Generated Release Files")
     for f in all_release_files:
-        size_str = f"{f.stat().st_size / 1024 / 1024:.2f} MB" if f.name.endswith((".zip", ".tar.gz")) else f"{f.stat().st_size} bytes"
+        size_str = f"{f.stat().st_size / 1024 / 1024:.2f} MB" if f.name.endswith((".zip", ".tar.gz", ".exe")) or f.stat().st_size > 1024 * 1024 else f"{f.stat().st_size} bytes"
         print(f"  • {Colors.BOLD}{f.name:<45}{Colors.RESET} ({size_str})")
 
     # 5. Publish to GitHub
     if not args.no_publish:
         release_notes = (
             f"## Universal Media Downloader {tag}\n\n"
-            f"Production-grade media downloader with native high-speed C# GUI frontends and a Python backend.\n\n"
-            f"### What's New:\n"
-            f"- **Cross-Platform C# GUI**: Avalonia 11 UI running smoothly on Windows, Linux (Wayland/X11), and macOS\n"
-            f"- **Native Windows WPF App**: Modern dark-themed native Windows UI\n"
-            f"- **High-Speed Engine**: Multi-fragment concurrent streaming, time-range slicing, codec selection\n"
-            f"- **SQLite Download History**: Local tracking with search, play, and directory opening\n"
-            f"- **Desktop Notifications & Watcher**: System clipboard polling and completion alerts across all platforms\n\n"
-            f"### Downloads & Checksums:\n"
-            f"Download the pre-compiled standalone package for your operating system below.\n"
+            f"Production-grade media downloader with native high-speed C# GUI frontends and a Python media engine.\n\n"
+            f"### Standalone Downloads (Direct Click-and-Run):\n"
+            f"- **Windows (One Single .exe)**: [`UniversalDownloader.exe`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader.exe)\n"
+            f"  *Pure single executable file. No zip, no installer, no Python or .NET runtime installation required.*\n"
+            f"- **Linux (Full GUI Executable)**: [`UniversalDownloader-v{version}-linux-x64.tar.gz`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-v{version}-linux-x64.tar.gz) or standalone binary `UniversalDownloader-linux-x64`\n"
+            f"  *Full Avalonia GUI running on Wayland and X11.*\n"
+            f"- **macOS (Apple Silicon M-series)**: [`UniversalDownloader-v{version}-macos-arm64.tar.gz`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-v{version}-macos-arm64.tar.gz)\n"
+            f"- **macOS (Intel x64)**: [`UniversalDownloader-v{version}-macos-x64.tar.gz`](https://github.com/{owner}/{repo}/releases/download/{tag}/UniversalDownloader-v{version}-macos-x64.tar.gz)\n\n"
+            f"### Features:\n"
+            f"- **Cross-Platform C# GUI**: Avalonia 11 UI running smoothly on Windows, Linux, and macOS\n"
+            f"- **Embedded Media Engine**: Multi-fragment concurrent streaming, time-range slicing, codec selection\n"
+            f"- **SQLite Download History**: Search, play downloaded media, and reveal files in Explorer/Finder/Nautilus\n"
+            f"- **Desktop Notifications & Watcher**: System clipboard polling and completion alerts across all platforms\n"
         )
         publish_github_release(
             owner=owner,
