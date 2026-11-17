@@ -214,9 +214,49 @@ jobs:
           name: UniversalDownloader-macos-x64
           path: UniversalDownloader-macos-x64.tar.gz
 
+  build-android:
+    name: Build Android APK (ARM64 & Universal)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Build Android Release APKs
+        working-directory: android
+        run: gradle assembleRelease --no-daemon
+
+      - name: Stage Android APKs
+        run: |
+          mkdir -p android_out
+          cp android/app/build/outputs/apk/release/*arm64-v8a*.apk android_out/UniversalDownloader-android-arm64.apk
+          cp android/app/build/outputs/apk/release/*universal*.apk android_out/UniversalDownloader-android-universal.apk
+
+      - name: Upload Android ARM64 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniversalDownloader-android-arm64
+          path: android_out/UniversalDownloader-android-arm64.apk
+
+      - name: Upload Android Universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniversalDownloader-android-universal
+          path: android_out/UniversalDownloader-android-universal.apk
+
   publish-release:
     name: Publish GitHub Release
-    needs: [build-windows, build-linux, build-macos]
+    needs: [build-windows, build-linux, build-macos, build-android]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -256,6 +296,8 @@ jobs:
             release_assets/UniversalDownloader-linux-x64.tar.gz
             release_assets/UniversalDownloader-macos-arm64.tar.gz
             release_assets/UniversalDownloader-macos-x64.tar.gz
+            release_assets/UniversalDownloader-android-arm64.apk
+            release_assets/UniversalDownloader-android-universal.apk
             release_assets/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Universal Downloader</string>
+    <string name="notification_channel_downloads">Media Downloads</string>
+    <string name="notification_channel_downloads_desc">Real-time progress and completion notifications for media downloads.</string>
+</resources>
