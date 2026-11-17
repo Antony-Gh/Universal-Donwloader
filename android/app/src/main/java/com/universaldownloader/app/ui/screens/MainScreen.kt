@@ -106,6 +106,7 @@ import com.universaldownloader.app.model.HistoryEntry
 import com.universaldownloader.app.model.LogEntry
 import com.universaldownloader.app.model.LogSeverity
 import com.universaldownloader.app.model.QualityOption
+import com.universaldownloader.app.model.QueueItemStatus
 import com.universaldownloader.app.model.StreamFormat
 import com.universaldownloader.app.ui.components.InfoLabel
 import com.universaldownloader.app.ui.theme.AccentBlue
@@ -976,14 +977,14 @@ private fun DownloadTab(
             }
         }
 
-        // 4. Action Buttons (Download / Cancel)
+        // 4. Action Buttons (Download / Queue / Cancel)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Button(
                 onClick = { viewModel.startDownload() },
-                enabled = state.urlInput.isNotBlank() && state.engineStatus == EngineStatus.READY && !state.isDownloading,
+                enabled = state.urlInput.isNotBlank() && state.engineStatus == EngineStatus.READY && !state.isDownloading && !state.isQueueRunning,
                 modifier = Modifier
                     .weight(1f)
                     .height(50.dp),
@@ -991,18 +992,127 @@ private fun DownloadTab(
                 colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
             ) {
                 Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
-                Spacer(Modifier.width(8.dp))
-                Text("Start Download", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
+                Spacer(Modifier.width(6.dp))
+                Text("Download", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
             }
 
-            if (state.isDownloading) {
+            OutlinedButton(
+                onClick = { viewModel.addToQueue() },
+                enabled = state.urlInput.isNotBlank(),
+                modifier = Modifier.height(50.dp),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, BorderSubtle),
+            ) {
+                Text("+ Queue", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = AccentSky)
+            }
+
+            if (state.isDownloading || state.isQueueRunning) {
                 Button(
                     onClick = { viewModel.cancelDownload() },
                     modifier = Modifier.height(50.dp),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
                 ) {
-                    Text("Cancel", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Stop", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+        }
+
+        // 4.5 Download Queue Card (visible when items are queued)
+        if (state.queue.isNotEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Download Queue (${state.queue.size})",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(
+                                onClick = { viewModel.runQueue() },
+                                enabled = !state.isQueueRunning && !state.isDownloading && state.engineStatus == EngineStatus.READY,
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                            ) {
+                                Text("Run Queue", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = { viewModel.clearCompletedQueue() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                border = BorderStroke(1.dp, BorderSubtle),
+                            ) {
+                                Text("Clear", fontSize = 11.sp, color = TextSecondary)
+                            }
+                        }
+                    }
+
+                    state.queue.forEach { qItem ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(SurfaceCardAlt)
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = qItem.title,
+                                    color = TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = qItem.status.name,
+                                    color = when (qItem.status) {
+                                        QueueItemStatus.COMPLETED -> SuccessGreen
+                                        QueueItemStatus.FAILED -> ErrorRed
+                                        QueueItemStatus.DOWNLOADING -> AccentSky
+                                        else -> TextMuted
+                                    },
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                if (qItem.status != QueueItemStatus.DOWNLOADING) {
+                                    IconButton(
+                                        onClick = { viewModel.removeQueueItem(qItem.id) },
+                                        modifier = Modifier.size(20.dp),
+                                    ) {
+                                        Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextMuted, modifier = Modifier.size(13.dp))
+                                    }
+                                }
+                            }
+                            LinearProgressIndicator(
+                                progress = { (qItem.progress / 100f).coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = AccentIndigo,
+                                trackColor = BorderSubtle,
+                            )
+                            Text(qItem.detail, color = TextSecondary, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
             }
         }

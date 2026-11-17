@@ -25,6 +25,9 @@ public partial class MainWindow : Window
     private readonly System.Collections.Concurrent.ConcurrentQueue<LogMessage> _incomingLogs = new();
     private readonly ObservableCollection<LogMessage> _quickLogs = new();
     private readonly ObservableCollection<LogMessage> _filteredMainLogs = new();
+    private readonly ObservableCollection<QueueItemModel> _queueItems = new();
+    private CancellationTokenSource? _queueCts;
+    private bool _isQueueRunning;
     private readonly DispatcherTimer _logBatchTimer;
     private long _lastProgressUpdateMs = 0;
     private LogWindow? _logWindow;
@@ -52,6 +55,7 @@ public partial class MainWindow : Window
         LoadUserSettings();
         QuickLogListBox.ItemsSource = _quickLogs;
         MainLogListBox.ItemsSource = _filteredMainLogs;
+        QueueListBox.ItemsSource = _queueItems;
 
         // Background batch timer prevents UI thread saturation and keeps window 100% responsive
         _logBatchTimer = new DispatcherTimer(
@@ -571,6 +575,196 @@ public partial class MainWindow : Window
         _cts?.Cancel();
         _client.Cancel();
         CancelButton.IsEnabled = false;
+    }
+
+    private void AddToQueueButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var url = UrlTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        SaveUserSettings();
+        var title = MetadataCard.IsVisible && !string.IsNullOrWhiteSpace(VideoTitleLabel.Text) &&
+                    !VideoTitleLabel.Text.StartsWith("Fetching", StringComparison.OrdinalIgnoreCase)
+            ? VideoTitleLabel.Text
+            : url;
+
+        _queueItems.Add(new QueueItemModel
+        {
+            Url = url,
+            Title = title,
+            Options = BuildOptionsFromUi(),
+            StatusDetail = "Waiting in queue",
+        });
+        UpdateQueueSummary();
+        GlobalStatusText.Text = $"Added to queue ({_queueItems.Count} total).";
+    }
+
+    private void QueueAddBatchButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var raw = QueueBatchUrlsBox.Text;
+        if (string.IsNullOrWhiteSpace(raw)) return;
+
+        SaveUserSettings();
+        var lines = raw.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .Where(l => Uri.TryCreate(l, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps))
+            .ToList();
+
+        foreach (var line in lines)
+        {
+            _queueItems.Add(new QueueItemModel
+            {
+                Url = line,
+                Title = line,
+                Options = BuildOptionsFromUi(),
+                StatusDetail = "Waiting in queue",
+            });
+        }
+
+        QueueBatchUrlsBox.Text = string.Empty;
+        UpdateQueueSummary();
+        GlobalStatusText.Text = $"Added {lines.Count} URL(s) to queue.";
+    }
+
+    private async void StartQueueButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_isQueueRunning) return;
+        var pending = _queueItems.Where(q => q.Status == QueueItemStatus.Queued || q.Status == QueueItemStatus.Failed || q.Status == QueueItemStatus.Canceled).ToList();
+        if (pending.Count == 0) return;
+
+        foreach (var item in pending)
+        {
+            item.Status = QueueItemStatus.Queued;
+            item.Progress = 0;
+            item.StatusDetail = "Waiting in queue";
+        }
+
+        _isQueueRunning = true;
+        _queueCts = new CancellationTokenSource();
+        var token = _queueCts.Token;
+        StartQueueButton.IsEnabled = false;
+        StopQueueButton.IsEnabled = true;
+
+        var maxParallel = Math.Clamp((int)(QueueConcurrencyNumeric.Value ?? 2), 1, 3);
+        using var semaphore = new SemaphoreSlim(maxParallel, maxParallel);
+        BeginGlobalActivity($"Running download queue ({pending.Count} items, {maxParallel} parallel)...");
+
+        try
+        {
+            var tasks = pending.Select(async item =>
+            {
+                await semaphore.WaitAsync(token);
+                try
+                {
+                    if (token.IsCancellationRequested) return;
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        item.Status = QueueItemStatus.Downloading;
+                        item.StatusDetail = "Starting download...";
+                    });
+
+                    var worker = new DownloaderClient();
+                    worker.RawOutputReceived += OnRawOutputReceived;
+                    worker.ProgressChanged += (_, prog) =>
+                    {
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            item.Progress = prog.Percent;
+                            item.StatusDetail = $"{prog.Percent:F1}% • {prog.SpeedFormatted} • ETA {prog.EtaFormatted}";
+                        });
+                    };
+                    worker.StatusChanged += (_, st) =>
+                    {
+                        Dispatcher.UIThread.Post(() => item.StatusDetail = st);
+                    };
+
+                    var result = await worker.DownloadAsync(item.Url, item.Options, token);
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(result.Title)) item.Title = result.Title;
+                        item.Progress = 100;
+                        item.Status = QueueItemStatus.Completed;
+                        item.StatusDetail = "Completed";
+                        UpdateQueueSummary();
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        item.Status = QueueItemStatus.Canceled;
+                        item.StatusDetail = "Canceled";
+                        UpdateQueueSummary();
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        item.Status = QueueItemStatus.Failed;
+                        item.StatusDetail = ex.Message;
+                        UpdateQueueSummary();
+                    });
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            }).ToList();
+
+            await Task.WhenAll(tasks);
+            await LoadHistoryAsync();
+            GlobalStatusText.Text = "Download queue finished.";
+        }
+        catch (OperationCanceledException)
+        {
+            GlobalStatusText.Text = "Download queue stopped.";
+        }
+        finally
+        {
+            _isQueueRunning = false;
+            StartQueueButton.IsEnabled = true;
+            StopQueueButton.IsEnabled = false;
+            UpdateQueueSummary();
+            EndGlobalActivity();
+        }
+    }
+
+    private void StopQueueButton_Click(object? sender, RoutedEventArgs e)
+    {
+        _queueCts?.Cancel();
+        StopQueueButton.IsEnabled = false;
+    }
+
+    private void ClearQueueButton_Click(object? sender, RoutedEventArgs e)
+    {
+        for (int i = _queueItems.Count - 1; i >= 0; i--)
+        {
+            if (_queueItems[i].Status != QueueItemStatus.Downloading)
+            {
+                _queueItems.RemoveAt(i);
+            }
+        }
+        UpdateQueueSummary();
+    }
+
+    private void RemoveQueueItem_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is QueueItemModel item && item.Status != QueueItemStatus.Downloading)
+        {
+            _queueItems.Remove(item);
+            UpdateQueueSummary();
+        }
+    }
+
+    private void UpdateQueueSummary()
+    {
+        var total = _queueItems.Count;
+        var done = _queueItems.Count(q => q.Status == QueueItemStatus.Completed);
+        var active = _queueItems.Count(q => q.Status == QueueItemStatus.Downloading);
+        QueueSummaryLabel.Text = active > 0
+            ? $"{active} downloading • {done}/{total} completed"
+            : $"{total} items in queue ({done} completed)";
     }
 
     private async void InspectButton_Click(object? sender, RoutedEventArgs e)

@@ -13,6 +13,8 @@ import com.universaldownloader.app.model.HistoryEntry
 import com.universaldownloader.app.model.LogEntry
 import com.universaldownloader.app.model.MediaMetadata
 import com.universaldownloader.app.model.QualityOption
+import com.universaldownloader.app.model.QueueItem
+import com.universaldownloader.app.model.QueueItemStatus
 import com.universaldownloader.app.model.StreamFormat
 import com.universaldownloader.app.service.DownloadForegroundService
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +54,8 @@ data class MainUiState(
     val appUpdateInfo: AppUpdateInfo? = null,
     val isUpdateBannerDismissed: Boolean = false,
     val detectedClipboardUrl: String? = null,
+    val queue: List<QueueItem> = emptyList(),
+    val isQueueRunning: Boolean = false,
     val globalStatus: String = "Initializing engine...",
     val selectedTab: Int = 0,
 ) {
@@ -61,6 +65,7 @@ data class MainUiState(
             isFetchingMetadata ||
             isInspectingStreams ||
             isDownloading ||
+            isQueueRunning ||
             isLoadingHistory ||
             isCheckingAppUpdate
 }
@@ -566,10 +571,117 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update {
             it.copy(
                 isDownloading = false,
+                isQueueRunning = false,
                 isIndeterminateProgress = false,
                 downloadStatusText = "Download canceled.",
                 globalStatus = "Download canceled",
             )
+        }
+    }
+
+    fun addToQueue() {
+        val state = _uiState.value
+        val cleaned = repo.normalizeUrl(state.urlInput)
+        if (cleaned.isBlank()) return
+        val item = QueueItem(
+            id = UUID.randomUUID().toString().take(8),
+            url = cleaned,
+            title = state.metadata?.title ?: cleaned,
+            options = state.options.copy(explicitFormatId = null),
+        )
+        _uiState.update {
+            it.copy(
+                queue = it.queue + item,
+                globalStatus = "Added to download queue (${it.queue.size + 1} items)",
+            )
+        }
+        appendLog("Added to queue: ${item.title}")
+    }
+
+    fun removeQueueItem(id: String) {
+        _uiState.update { state ->
+            state.copy(queue = state.queue.filterNot { it.id == id && it.status != QueueItemStatus.DOWNLOADING })
+        }
+    }
+
+    fun clearCompletedQueue() {
+        _uiState.update { state ->
+            state.copy(queue = state.queue.filter { it.status == QueueItemStatus.QUEUED || it.status == QueueItemStatus.DOWNLOADING })
+        }
+    }
+
+    fun runQueue() {
+        val state = _uiState.value
+        if (state.isQueueRunning || state.isDownloading || state.engineStatus != EngineStatus.READY) return
+        val pendingIds = state.queue
+            .filter { it.status == QueueItemStatus.QUEUED || it.status == QueueItemStatus.FAILED || it.status == QueueItemStatus.CANCELED }
+            .map { it.id }
+        if (pendingIds.isEmpty()) return
+
+        _uiState.update { it.copy(isQueueRunning = true, globalStatus = "Running queue (${pendingIds.size} items)...") }
+        DownloadForegroundService.start(app, "Running download queue (${pendingIds.size} items)...")
+
+        downloadJob = viewModelScope.launch {
+            for (itemId in pendingIds) {
+                val item = _uiState.value.queue.firstOrNull { it.id == itemId } ?: continue
+                val procId = "q_${item.id}"
+                activeProcessId = procId
+
+                updateQueueItem(itemId) {
+                    it.copy(status = QueueItemStatus.DOWNLOADING, progress = 0f, detail = "Starting...")
+                }
+
+                val res = repo.download(
+                    rawUrl = item.url,
+                    options = item.options,
+                    processId = procId,
+                    onProgress = { pct, eta, _ ->
+                        updateQueueItem(itemId) {
+                            it.copy(
+                                progress = pct,
+                                detail = if (eta > 0) String.format(Locale.US, "%.1f%% • ETA %d:%02d", pct, eta / 60, eta % 60)
+                                else String.format(Locale.US, "%.1f%%", pct),
+                            )
+                        }
+                        DownloadForegroundService.updateProgress(
+                            app,
+                            "${item.title} (${pct.toInt()}%)",
+                            pct.toInt(),
+                            pct <= 0f,
+                        )
+                    },
+                    onLog = { appendLog(it) },
+                )
+
+                res.fold(
+                    onSuccess = { savedFile ->
+                        if (savedFile != null) {
+                            withContext(Dispatchers.IO) {
+                                historyStore.record(item.url, item.title, repo.detectPlatformLabel(item.url), savedFile.absolutePath)
+                            }
+                            loadHistory()
+                        }
+                        updateQueueItem(itemId) {
+                            it.copy(status = QueueItemStatus.COMPLETED, progress = 100f, detail = "Completed")
+                        }
+                    },
+                    onFailure = { err ->
+                        updateQueueItem(itemId) {
+                            it.copy(status = QueueItemStatus.FAILED, detail = err.message ?: "Failed")
+                        }
+                    },
+                )
+            }
+
+            activeProcessId = null
+            DownloadForegroundService.stop(app, "Download queue finished")
+            _uiState.update { it.copy(isQueueRunning = false, globalStatus = "Download queue finished.") }
+        }
+    }
+
+    private fun updateQueueItem(id: String, transform: (QueueItem) -> QueueItem) {
+        _uiState.update { state ->
+            state.copy(queue = state.queue.map { if (it.id == id) transform(it) else it })
         }
     }
 

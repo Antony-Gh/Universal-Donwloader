@@ -368,14 +368,15 @@
                         </Border>
 
                         <!-- Action Bar -->
-                        <Grid ColumnDefinitions="*,Auto">
+                        <Grid ColumnDefinitions="*,Auto,Auto">
                             <Button x:Name="DownloadButton" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="#6366F1" Foreground="White" Padding="14" FontWeight="Bold" Click="DownloadButton_Click">
                                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
                                     <PathIcon Data="{StaticResource DownloadArrowIcon}" Width="16" Height="16" Foreground="White"/>
                                     <TextBlock Text="Start Download" VerticalAlignment="Center" FontSize="14"/>
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="CancelButton" Grid.Column="1" Content="Cancel" Margin="10,0,0,0" Background="#EF4444" Foreground="White" Padding="14" IsEnabled="False" Click="CancelButton_Click"/>
+                            <Button x:Name="AddToQueueButton" Grid.Column="1" Margin="10,0,0,0" Background="#374151" Foreground="White" Padding="14" FontWeight="SemiBold" Content="+ Add to Queue" Click="AddToQueueButton_Click" ToolTip.Tip="Add this URL with your current options to the batch Download Queue"/>
+                            <Button x:Name="CancelButton" Grid.Column="2" Content="Cancel" Margin="10,0,0,0" Background="#EF4444" Foreground="White" Padding="14" IsEnabled="False" Click="CancelButton_Click"/>
                         </Grid>
 
                         <!-- Real-time Progress Card -->
@@ -432,6 +433,64 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
+            </TabItem>
+
+            <!-- DOWNLOAD QUEUE TAB -->
+            <TabItem x:Name="QueueTab" Header="Queue">
+                <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <!-- Batch URL Input -->
+                        <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,12">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Text="Batch Download Queue" FontWeight="Bold" FontSize="15" Foreground="#F4F4F8"/>
+                                <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                          ToolTip.Tip="Paste one or more media URLs (one per line) to enqueue them with your current Download Options and run them automatically in parallel."/>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBox x:Name="QueueBatchUrlsBox" Grid.Column="0" AcceptsReturn="True" Height="62" Watermark="Paste multiple URLs here (one per line) to add to the queue..."/>
+                                <Button x:Name="QueueAddBatchButton" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Stretch" Padding="14,6" Background="#374151" Foreground="White" FontWeight="SemiBold" Content="+ Add URLs" Click="QueueAddBatchButton_Click"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Queue Controls -->
+                        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="0,0,0,12">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Text="Parallel Downloads:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                                <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                          ToolTip.Tip="Number of queued downloads executed simultaneously (1 to 3)."/>
+                            </StackPanel>
+                            <NumericUpDown x:Name="QueueConcurrencyNumeric" Grid.Column="1" Value="2" Minimum="1" Maximum="3" Width="90" Margin="8,0,0,0"/>
+                            <TextBlock x:Name="QueueSummaryLabel" Grid.Column="2" Text="0 items in queue" Foreground="#94A3B8" FontSize="12" VerticalAlignment="Center" Margin="14,0"/>
+                            <Button x:Name="StartQueueButton" Grid.Column="3" Margin="0,0,8,0" Padding="12,6" Background="#6366F1" Foreground="White" FontWeight="Bold" Content="Start Queue" Click="StartQueueButton_Click"/>
+                            <Button x:Name="StopQueueButton" Grid.Column="4" Margin="0,0,8,0" Padding="12,6" Background="#EF4444" Foreground="White" IsEnabled="False" Content="Stop" Click="StopQueueButton_Click"/>
+                            <Button x:Name="ClearQueueButton" Grid.Column="5" Padding="10,6" Background="#374151" Foreground="White" Content="Clear Completed" Click="ClearQueueButton_Click"/>
+                        </Grid>
+
+                        <!-- Queue Items -->
+                        <ListBox x:Name="QueueListBox" Grid.Row="2" MaxHeight="360" Background="#18181B">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:QueueItemModel">
+                                    <Grid ColumnDefinitions="*,140,Auto" Margin="6,6">
+                                        <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,12,0">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Border Background="#27272A" CornerRadius="4" Padding="6,2">
+                                                    <TextBlock Text="{Binding StatusBadgeText}" Foreground="{Binding StatusColorHex}" FontSize="10" FontWeight="Bold"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding Title}" Foreground="#F4F4F8" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding StatusDetail}" Foreground="#94A3B8" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3" Margin="0,0,10,0">
+                                            <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}" Height="6" Foreground="#6366F1"/>
+                                            <TextBlock Text="{Binding ProgressText}" Foreground="#9CA3AF" FontSize="10" HorizontalAlignment="Right"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Padding="8,4" Background="#27272A" Foreground="#EF4444" FontSize="11" Content="✕" Click="RemoveQueueItem_Click"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
             </TabItem>
 
             <!-- STREAMS EXPLORER TAB -->

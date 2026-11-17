@@ -177,3 +177,21 @@ enum class EngineStatus {
     UPDATING,
     ERROR,
 }
+
+enum class QueueItemStatus {
+    QUEUED,
+    DOWNLOADING,
+    COMPLETED,
+    FAILED,
+    CANCELED,
+}
+
+data class QueueItem(
+    val id: String,
+    val url: String,
+    val title: String,
+    val options: DownloadOptions,
+    val status: QueueItemStatus = QueueItemStatus.QUEUED,
+    val progress: Float = 0f,
+    val detail: String = "Waiting in queue",
+)
