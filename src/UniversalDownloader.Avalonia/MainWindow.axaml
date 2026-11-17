@@ -262,6 +262,40 @@
                                     </Grid>
                                 </StackPanel>
 
+                                <!-- Authentication / Cookies -->
+                                <Grid ColumnDefinitions="220,*" Margin="0,4,0,0">
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0" Spacing="6">
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="Browser Cookies" Foreground="#9CA3AF" FontSize="12"/>
+                                            <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                      ToolTip.Tip="Automatically read your signed-in session cookies from an installed browser to unlock age-restricted YouTube videos and login-gated Instagram/Facebook posts."/>
+                                        </StackPanel>
+                                        <ComboBox x:Name="CookiesBrowserComboBox" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                            <ComboBoxItem Content="None (Anonymous)"/>
+                                            <ComboBoxItem Content="Chrome"/>
+                                            <ComboBoxItem Content="Edge"/>
+                                            <ComboBoxItem Content="Firefox"/>
+                                            <ComboBoxItem Content="Brave"/>
+                                            <ComboBoxItem Content="Opera"/>
+                                            <ComboBoxItem Content="Vivaldi"/>
+                                            <ComboBoxItem Content="Safari"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Spacing="6">
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="Cookies File (cookies.txt)" Foreground="#9CA3AF" FontSize="12"/>
+                                            <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                      ToolTip.Tip="Optional Netscape-format cookies.txt file exported from your browser. Overrides Browser Cookies when set."/>
+                                        </StackPanel>
+                                        <Grid ColumnDefinitions="*,Auto,Auto">
+                                            <TextBox x:Name="CookiesFileBox" Grid.Column="0" Watermark="Optional path to cookies.txt..."/>
+                                            <Button x:Name="BrowseCookiesButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,6" Content="Browse..." Click="BrowseCookiesButton_Click"/>
+                                            <Button x:Name="ClearCookiesButton" Grid.Column="2" Margin="6,0,0,0" Padding="8,6" Background="#374151" Content="✕" Click="ClearCookiesButton_Click"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+
                                 <WrapPanel Margin="0,6,0,0">
                                     <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,0,16,0" VerticalAlignment="Center">
                                         <CheckBox x:Name="EmbedMetadataCheck" Content="Embed Metadata" IsChecked="True"/>

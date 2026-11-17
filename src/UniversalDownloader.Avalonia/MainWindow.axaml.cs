@@ -139,6 +139,8 @@ public partial class MainWindow : Window
         CodecComboBox.SelectedIndex = Math.Clamp(_settings.CodecIndex, 0, Math.Max(0, CodecComboBox.ItemCount - 1));
         FragmentsNumeric.Value = Math.Clamp(_settings.ConcurrentFragments, 1, 16);
         OutputDirBox.Text = _settings.OutputDirectory;
+        CookiesBrowserComboBox.SelectedIndex = Math.Clamp(_settings.CookiesBrowserIndex, 0, Math.Max(0, CookiesBrowserComboBox.ItemCount - 1));
+        CookiesFileBox.Text = _settings.CookiesFilePath;
         EmbedMetadataCheck.IsChecked = _settings.EmbedMetadata;
         EmbedThumbnailCheck.IsChecked = _settings.EmbedThumbnail;
         EmbedSubsCheck.IsChecked = _settings.EmbedSubs;
@@ -151,11 +153,60 @@ public partial class MainWindow : Window
         _settings.CodecIndex = CodecComboBox.SelectedIndex;
         _settings.ConcurrentFragments = (int)(FragmentsNumeric.Value ?? 4);
         _settings.OutputDirectory = OutputDirBox.Text?.Trim() ?? string.Empty;
+        _settings.CookiesBrowserIndex = CookiesBrowserComboBox.SelectedIndex;
+        _settings.CookiesFilePath = CookiesFileBox.Text?.Trim() ?? string.Empty;
         _settings.EmbedMetadata = EmbedMetadataCheck.IsChecked ?? true;
         _settings.EmbedThumbnail = EmbedThumbnailCheck.IsChecked ?? true;
         _settings.EmbedSubs = EmbedSubsCheck.IsChecked ?? false;
         _settings.WriteThumbnail = WriteThumbnailCheck.IsChecked ?? false;
         _settings.Save();
+    }
+
+    private string? GetSelectedCookiesBrowser() => CookiesBrowserComboBox.SelectedIndex switch
+    {
+        1 => "chrome",
+        2 => "edge",
+        3 => "firefox",
+        4 => "brave",
+        5 => "opera",
+        6 => "vivaldi",
+        7 => "safari",
+        _ => null,
+    };
+
+    private string? GetSelectedCookiesFile()
+    {
+        var path = CookiesFileBox.Text?.Trim();
+        return string.IsNullOrWhiteSpace(path) ? null : path;
+    }
+
+    private async void BrowseCookiesButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel == null) return;
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select Netscape cookies.txt File",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Text Files") { Patterns = ["*.txt"] },
+                FilePickerFileTypes.All
+            ]
+        });
+
+        if (files.Count > 0)
+        {
+            CookiesFileBox.Text = files[0].Path.LocalPath;
+            SaveUserSettings();
+        }
+    }
+
+    private void ClearCookiesButton_Click(object? sender, RoutedEventArgs e)
+    {
+        CookiesFileBox.Text = string.Empty;
+        SaveUserSettings();
     }
 
     private async void CheckUpdatesButton_Click(object? sender, RoutedEventArgs e)
@@ -440,6 +491,9 @@ public partial class MainWindow : Window
             options.OutputDirectory = customDir;
         }
 
+        options.CookiesFile = GetSelectedCookiesFile();
+        options.CookiesFromBrowser = string.IsNullOrWhiteSpace(options.CookiesFile) ? GetSelectedCookiesBrowser() : null;
+
         if (QualityComboBox.SelectedIndex == 4)
         {
             options.AudioOnly = true;
@@ -527,7 +581,9 @@ public partial class MainWindow : Window
 
         try
         {
-            var formats = await _client.GetFormatsAsync(url);
+            var cookiesFile = GetSelectedCookiesFile();
+            var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
+            var formats = await _client.GetFormatsAsync(url, cookiesFromBrowser: cookiesBrowser, cookiesFile: cookiesFile);
             StreamsListBox.ItemsSource = formats;
             StreamsStatusHeader.Text = $"Found {formats.Count} streams for: {url}";
             GlobalStatusText.Text = $"Found {formats.Count} streams available.";
@@ -694,7 +750,9 @@ public partial class MainWindow : Window
 
         try
         {
-            var meta = await _client.GetMetadataAsync(rawUrl, token);
+            var cookiesFile = GetSelectedCookiesFile();
+            var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
+            var meta = await _client.GetMetadataAsync(rawUrl, token, cookiesFromBrowser: cookiesBrowser, cookiesFile: cookiesFile);
             if (token.IsCancellationRequested) return;
 
             if (meta != null && !string.IsNullOrWhiteSpace(meta.Title))

@@ -7,6 +7,8 @@ import android.content.Intent
 import android.net.Uri
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.universaldownloader.app.BuildConfig
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -845,6 +847,52 @@ private fun DownloadTab(
                     checked = state.options.writeThumbnail,
                     onCheckedChange = viewModel::updateWriteThumbnail,
                 )
+
+                // Cookies.txt Authentication Picker
+                val cookiesPickerLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocument(),
+                ) { uri ->
+                    if (uri != null) {
+                        viewModel.importCookiesFromUri(uri)
+                    }
+                }
+                val hasCookies = !state.options.cookiesFilePath.isNullOrBlank()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        InfoLabel(
+                            title = "Cookies (cookies.txt)",
+                            explanation = "Optional Netscape cookies.txt exported from your browser to unlock login-gated Instagram Reels and age-restricted YouTube videos.",
+                            color = TextPrimary,
+                            fontSize = 13.sp,
+                        )
+                        Text(
+                            text = if (hasCookies) "Active: cookies.txt loaded" else "Not configured (anonymous)",
+                            color = if (hasCookies) SuccessGreen else TextMuted,
+                            fontSize = 11.sp,
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(
+                            onClick = { cookiesPickerLauncher.launch(arrayOf("text/plain", "*/*")) },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            border = BorderStroke(1.dp, BorderSubtle),
+                        ) {
+                            Text(if (hasCookies) "Replace" else "Import", fontSize = 11.sp, color = AccentSky)
+                        }
+                        if (hasCookies) {
+                            IconButton(
+                                onClick = { viewModel.clearCookiesFile() },
+                                modifier = Modifier.size(30.dp),
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear Cookies", tint = ErrorRed, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
             }
         }
 

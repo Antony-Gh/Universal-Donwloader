@@ -294,7 +294,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
 
-            val result = repo.fetchMetadataAndFormats(cleaned)
+            val result = repo.fetchMetadataAndFormats(cleaned, _uiState.value.options.cookiesFilePath)
             result.fold(
                 onSuccess = { meta ->
                     _uiState.update {
@@ -334,7 +334,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
 
-            val result = repo.fetchMetadataAndFormats(cleaned)
+            val result = repo.fetchMetadataAndFormats(cleaned, _uiState.value.options.cookiesFilePath)
             result.fold(
                 onSuccess = { meta ->
                     lastFetchedUrl = cleaned
@@ -397,6 +397,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateWriteThumbnail(enabled: Boolean) {
         updateAndPersistOptions { it.copy(writeThumbnail = enabled) }
+    }
+
+    fun importCookiesFromUri(uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val dest = java.io.File(app.filesDir, "cookies.txt")
+                app.contentResolver.openInputStream(uri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                updateAndPersistOptions { it.copy(cookiesFilePath = dest.absolutePath) }
+                appendLog("[Success] Imported cookies.txt for authenticated downloads.")
+            } catch (e: Exception) {
+                appendLog("[Error] Failed to import cookies file: ${e.message}")
+            }
+        }
+    }
+
+    fun clearCookiesFile() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                java.io.File(app.filesDir, "cookies.txt").delete()
+            } catch (_: Exception) {
+            }
+            updateAndPersistOptions { it.copy(cookiesFilePath = null) }
+            appendLog("Cleared cookies.txt authentication file.")
+        }
     }
 
     fun startDownload(explicitFormatId: String? = null) {

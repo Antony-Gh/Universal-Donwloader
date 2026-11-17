@@ -27,6 +27,7 @@ data class DownloadOptions(
     val embedThumbnail: Boolean = true,
     val embedSubs: Boolean = false,
     val writeThumbnail: Boolean = false,
+    val cookiesFilePath: String? = null,
     val explicitFormatId: String? = null,
 )
 

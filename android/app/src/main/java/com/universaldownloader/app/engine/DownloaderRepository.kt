@@ -103,7 +103,10 @@ class DownloaderRepository(private val appContext: Context) {
         }
     }
 
-    suspend fun fetchMetadataAndFormats(rawUrl: String): Result<MediaMetadata> = withContext(Dispatchers.IO) {
+    suspend fun fetchMetadataAndFormats(
+        rawUrl: String,
+        cookiesFilePath: String? = null,
+    ): Result<MediaMetadata> = withContext(Dispatchers.IO) {
         runCatching {
             val url = normalizeUrl(rawUrl)
             val request = YoutubeDLRequest(url).apply {
@@ -112,6 +115,9 @@ class DownloaderRepository(private val appContext: Context) {
                 addOption("--no-warnings")
                 addOption("--extractor-args", "youtube:player_client=ios,android_vr,web;formats=missing_pot")
                 addOption("--socket-timeout", "25")
+                if (!cookiesFilePath.isNullOrBlank() && File(cookiesFilePath).exists()) {
+                    addOption("--cookies", cookiesFilePath)
+                }
             }
 
             val response = YoutubeDL.getInstance().execute(request)
@@ -249,6 +255,10 @@ class DownloaderRepository(private val appContext: Context) {
                 }
                 if (options.writeThumbnail) {
                     addOption("--write-thumbnail")
+                }
+                val cookiesPath = options.cookiesFilePath
+                if (!cookiesPath.isNullOrBlank() && File(cookiesPath).exists()) {
+                    addOption("--cookies", cookiesPath)
                 }
             }
 

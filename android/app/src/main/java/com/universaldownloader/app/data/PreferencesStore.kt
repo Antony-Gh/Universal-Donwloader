@@ -24,6 +24,7 @@ class PreferencesStore(context: Context) {
             embedThumbnail = prefs.getBoolean(KEY_EMBED_THUMBNAIL, true),
             embedSubs = prefs.getBoolean(KEY_EMBED_SUBS, false),
             writeThumbnail = prefs.getBoolean(KEY_WRITE_THUMBNAIL, false),
+            cookiesFilePath = prefs.getString(KEY_COOKIES_PATH, null)?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -36,6 +37,7 @@ class PreferencesStore(context: Context) {
             .putBoolean(KEY_EMBED_THUMBNAIL, options.embedThumbnail)
             .putBoolean(KEY_EMBED_SUBS, options.embedSubs)
             .putBoolean(KEY_WRITE_THUMBNAIL, options.writeThumbnail)
+            .putString(KEY_COOKIES_PATH, options.cookiesFilePath ?: "")
             .apply()
     }
 
@@ -48,5 +50,6 @@ class PreferencesStore(context: Context) {
         private const val KEY_EMBED_THUMBNAIL = "embed_thumbnail"
         private const val KEY_EMBED_SUBS = "embed_subs"
         private const val KEY_WRITE_THUMBNAIL = "write_thumbnail"
+        private const val KEY_COOKIES_PATH = "cookies_path"
     }
 }

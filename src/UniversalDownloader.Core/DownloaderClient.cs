@@ -183,10 +183,24 @@ public class DownloaderClient
     /// <summary>
     /// Fetch media metadata, title, uploader, duration, and thumbnail URL for a URL without downloading.
     /// </summary>
-    public async Task<MediaMetadataModel?> GetMetadataAsync(string url, CancellationToken cancellationToken = default)
+    public async Task<MediaMetadataModel?> GetMetadataAsync(
+        string url,
+        CancellationToken cancellationToken = default,
+        string? cookiesFromBrowser = null,
+        string? cookiesFile = null)
     {
         var arguments = new List<string>();
         if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        if (!string.IsNullOrWhiteSpace(cookiesFromBrowser))
+        {
+            arguments.Add("--cookies-from-browser");
+            arguments.Add(cookiesFromBrowser);
+        }
+        if (!string.IsNullOrWhiteSpace(cookiesFile))
+        {
+            arguments.Add("--cookies");
+            arguments.Add($"\"{cookiesFile}\"");
+        }
         arguments.Add("--metadata");
         arguments.Add($"\"{url}\"");
         arguments.Add("--json");
@@ -207,10 +221,24 @@ public class DownloaderClient
     /// <summary>
     /// Inspect available formats for a given URL without downloading.
     /// </summary>
-    public async Task<List<FormatInfoModel>> GetFormatsAsync(string url, CancellationToken cancellationToken = default)
+    public async Task<List<FormatInfoModel>> GetFormatsAsync(
+        string url,
+        CancellationToken cancellationToken = default,
+        string? cookiesFromBrowser = null,
+        string? cookiesFile = null)
     {
         var arguments = new List<string>();
         if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        if (!string.IsNullOrWhiteSpace(cookiesFromBrowser))
+        {
+            arguments.Add("--cookies-from-browser");
+            arguments.Add(cookiesFromBrowser);
+        }
+        if (!string.IsNullOrWhiteSpace(cookiesFile))
+        {
+            arguments.Add("--cookies");
+            arguments.Add($"\"{cookiesFile}\"");
+        }
         arguments.Add("--formats");
         arguments.Add($"\"{url}\"");
         arguments.Add("--json");

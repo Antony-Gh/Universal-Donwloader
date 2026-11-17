@@ -87,7 +87,7 @@ public class DownloadOptions
         if (!string.IsNullOrWhiteSpace(OutputDirectory))
         {
             args.Add("--output");
-            args.Add(OutputDirectory);
+            args.Add(OutputDirectory.Contains(' ') ? $"\"{OutputDirectory}\"" : OutputDirectory);
         }
 
         if (!string.IsNullOrWhiteSpace(OutputTemplate))
@@ -145,7 +145,7 @@ public class DownloadOptions
         if (!string.IsNullOrWhiteSpace(CookiesFile))
         {
             args.Add("--cookies");
-            args.Add(CookiesFile);
+            args.Add(CookiesFile.Contains(' ') ? $"\"{CookiesFile}\"" : CookiesFile);
         }
 
         if (!string.IsNullOrWhiteSpace(CookiesFromBrowser))
