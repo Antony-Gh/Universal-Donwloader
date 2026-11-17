@@ -2,6 +2,7 @@
 # Build artifacts
 **/dist/**
 **/build/**
+**/build*/**
 **/bin/**
 **/obj/**
 *.user
