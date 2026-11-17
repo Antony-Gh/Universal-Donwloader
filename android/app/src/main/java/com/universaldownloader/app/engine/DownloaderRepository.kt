@@ -418,6 +418,65 @@ class DownloaderRepository(private val appContext: Context) {
             .trim()
     }
 
+    private fun upgradePublicAvatarUrl(url: String): List<String> {
+        val variants = LinkedHashSet<String>()
+        val lowered = url.lowercase(Locale.US)
+        if (lowered.contains("pbs.twimg.com/profile_images/")) {
+            for (suffix in listOf("_normal.", "_bigger.", "_mini.", "_200x200.")) {
+                if (url.contains(suffix)) {
+                    variants.add(url.replace(suffix, "."))
+                    variants.add(url.replace(suffix, "_400x400."))
+                    break
+                }
+            }
+        }
+        if ((lowered.contains("yt3.googleusercontent.com") || lowered.contains("yt3.ggpht.com")) &&
+            Regex("=s\\d{2,3}(?=[-&]|$)").containsMatchIn(url)
+        ) {
+            variants.add(Regex("=s\\d{2,3}(?=[-&]|$)").replace(url, "=s1024"))
+        }
+        variants.add(url)
+        return variants.toList()
+    }
+
+    private fun estimateImageResolutionScore(url: String): Long {
+        val lowered = url.lowercase(Locale.US)
+        val isFbAvatar = lowered.contains("/t39.30808-1/") || lowered.contains("/t1.6435-1/")
+        val isFbCover = lowered.contains("/t39.30808-6/")
+        val bucketPriority = when {
+            isFbAvatar -> 2L
+            isFbCover -> 0L
+            else -> 1L
+        }
+
+        val dims = mutableListOf<Int>()
+        Regex("""(?:^|[&/?_=.,-])(?:mx|s|p|w)(\d{2,4})x(\d{2,4})""").findAll(lowered).forEach { m ->
+            dims.add(maxOf(m.groupValues[1].toInt(), m.groupValues[2].toInt()))
+        }
+        Regex("""=[sw](\d{2,4})(?:[-&#]|$)""").findAll(lowered).forEach { m ->
+            dims.add(m.groupValues[1].toInt())
+        }
+        if (lowered.contains("pbs.twimg.com/profile_images/")) {
+            dims.add(
+                when {
+                    lowered.contains("_normal.") || lowered.contains("_mini.") -> 48
+                    lowered.contains("_bigger.") -> 73
+                    lowered.contains("_200x200.") -> 200
+                    lowered.contains("_400x400.") -> 400
+                    else -> 1080
+                }
+            )
+        }
+
+        val maxDim = dims.maxOrNull() ?: 1080
+        val tier = when {
+            maxDim >= 600 -> 3L
+            maxDim >= 300 -> 2L
+            else -> 1L
+        }
+        return bucketPriority * 1_000_000L + tier * 100_000L + maxDim
+    }
+
     private fun extractPublicProfileImages(htmlText: String, baseUrl: String): List<String> {
         val found = LinkedHashSet<String>()
 
@@ -430,11 +489,11 @@ class DownloaderRepository(private val appContext: Context) {
                 runCatching { URI(baseUrl).resolve(unescaped).toString() }.getOrDefault(unescaped)
             }
             if ((resolved.startsWith("http://") || resolved.startsWith("https://")) && !isGenericSiteLogo(resolved)) {
-                found.add(resolved)
+                upgradePublicAvatarUrl(resolved).forEach { found.add(it) }
             }
         }
 
-        // 1. Publicly embedded SSR profile avatar fields (highest resolution first)
+        // 1. Publicly embedded SSR profile avatar fields
         val embeddedPatterns = listOf(
             Regex(""""profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
             Regex(""""profile_pic_url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
@@ -442,6 +501,9 @@ class DownloaderRepository(private val appContext: Context) {
             Regex(""""profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
             Regex(""""profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
             Regex(""""profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""profile_photo"\s*:\s*\{[^{}]{0,400}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex("""<image[^>]+(?:xlink:)?href=["'](https?://scontent[^"']+)["']""", RegexOption.IGNORE_CASE),
             Regex(""""avatarLarger"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
             Regex(""""avatarMedium"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
             Regex(""""profile_image_url_https"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
@@ -461,7 +523,7 @@ class DownloaderRepository(private val appContext: Context) {
             regex.findAll(htmlText).forEach { addCandidate(it.groupValues[1]) }
         }
 
-        return found.toList()
+        return found.sortedByDescending { estimateImageResolutionScore(it) }
     }
 
     /**
@@ -538,7 +600,11 @@ class DownloaderRepository(private val appContext: Context) {
                 }
             }
 
-            val validCandidates = candidates.distinct().filterNot { isGenericSiteLogo(it) }
+            val validCandidates = candidates
+                .flatMap { upgradePublicAvatarUrl(it) }
+                .distinct()
+                .filterNot { isGenericSiteLogo(it) }
+                .sortedByDescending { estimateImageResolutionScore(it) }
             if (validCandidates.isEmpty()) {
                 throw RuntimeException(
                     if (hasCookies) {

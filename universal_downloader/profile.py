@@ -196,6 +196,74 @@ def _unescape_embedded_url(raw: str) -> str:
     return html.unescape(cleaned).strip()
 
 
+def upgrade_public_avatar_url(url: str) -> list[str]:
+    """
+    Return highest-resolution standard public CDN renditions first for known avatar URL patterns,
+    followed by the original URL as fallback.
+    """
+    variants: list[str] = []
+    lowered = url.lower()
+
+    # X / Twitter: replace _normal (48x48) or _bigger (73x73) with original & _400x400
+    if "pbs.twimg.com/profile_images/" in lowered:
+        for suffix in ("_normal.", "_bigger.", "_mini.", "_200x200."):
+            if suffix in url:
+                variants.append(url.replace(suffix, "."))
+                variants.append(url.replace(suffix, "_400x400."))
+                break
+
+    # YouTube / Google CDN: upgrade =s88 / =s176 / =s240 avatars to =s1024
+    if ("yt3.googleusercontent.com" in lowered or "yt3.ggpht.com" in lowered) and re.search(r"=s\d{2,3}(?=[-&]|$)", url):
+        variants.append(re.sub(r"=s\d{2,3}(?=[-&]|$)", "=s1024", url))
+
+    variants.append(url)
+    return list(dict.fromkeys(variants))
+
+
+def estimate_image_resolution_score(url: str) -> tuple[int, int, int]:
+    """
+    Rank public profile image URLs so the highest-resolution avatar rendition sorts first.
+    Returns (bucket_priority, resolution_tier, estimated_max_dimension).
+    """
+    lowered = url.lower()
+
+    is_fb_avatar_bucket = "/t39.30808-1/" in lowered or "/t1.6435-1/" in lowered
+    is_fb_cover_bucket = "/t39.30808-6/" in lowered
+
+    # Extract explicit pixel dimension hints (mx877x858, s960x960, p720x720, s160x160, etc.)
+    dims: list[int] = []
+    for match in re.finditer(r"(?:^|[&/?_=.,-])(?:mx|s|p|w)(\d{2,4})x(\d{2,4})", lowered):
+        dims.append(max(int(match.group(1)), int(match.group(2))))
+
+    # YouTube / Google CDN =s1024 / =s176 / =s88
+    for match in re.finditer(r"=[sw](\d{2,4})(?:[-&#]|$)", lowered):
+        dims.append(int(match.group(1)))
+
+    # X / Twitter size tokens
+    if "pbs.twimg.com/profile_images/" in lowered:
+        if "_normal." in lowered or "_mini." in lowered:
+            dims.append(48)
+        elif "_bigger." in lowered:
+            dims.append(73)
+        elif "_200x200." in lowered:
+            dims.append(200)
+        elif "_400x400." in lowered:
+            dims.append(400)
+        else:
+            dims.append(1080)
+
+    # Prefer dedicated avatar buckets over generic cover photos
+    bucket_priority = 2 if is_fb_avatar_bucket else (0 if is_fb_cover_bucket else 1)
+
+    if dims:
+        max_dim = max(dims)
+        tier = 3 if max_dim >= 600 else (2 if max_dim >= 300 else 1)
+        return (bucket_priority, tier, max_dim)
+
+    # Unscaled CDN image without small resize flags (e.g. full HD IG/FB/TikTok avatar)
+    return (bucket_priority, 3, 1080)
+
+
 def extract_profile_title(html_text: str) -> Optional[str]:
     for pattern in (
         re.compile(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)', re.I),
@@ -230,7 +298,8 @@ def extract_meta_image(html_text: str) -> Optional[str]:
 def extract_public_profile_images(html_text: str, base_url: str = "") -> list[str]:
     """
     Extract publicly exposed profile avatar URLs already present in the returned page HTML
-    (embedded public SSR metadata, JSON-LD, and OpenGraph/Twitter meta tags).
+    (embedded public SSR metadata, SVG avatar elements, JSON-LD, and OpenGraph/Twitter tags),
+    ranked highest-resolution first.
     """
     candidates: list[str] = []
 
@@ -240,20 +309,28 @@ def extract_public_profile_images(html_text: str, base_url: str = "") -> list[st
         url = _unescape_embedded_url(raw_val)
         if base_url and not url.startswith(("http://", "https://")):
             url = urllib.parse.urljoin(base_url, url)
-        if url.startswith(("http://", "https://")) and not is_generic_site_logo(url):
-            if url not in candidates:
-                candidates.append(url)
+        if not url.startswith(("http://", "https://")) or is_generic_site_logo(url):
+            return
+        for variant in upgrade_public_avatar_url(url):
+            if variant not in candidates:
+                candidates.append(variant)
 
-    # 1. Publicly embedded SSR profile picture fields (ordered highest-resolution first)
+    # 1. Publicly embedded SSR profile picture fields
     embedded_patterns = [
         # Instagram / Threads public SSR
         re.compile(r'"profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"', re.I),
         re.compile(r'"profile_pic_url"\s*:\s*"(https?:[^"]+)"', re.I),
-        # Facebook public SSR (including the public avatar Facebook still exposes for locked profiles)
+        # Facebook public SSR avatar fields
         re.compile(r'"profilePicLarge"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
         re.compile(r'"profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
         re.compile(r'"profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
         re.compile(r'"profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
+        re.compile(r'"profile_photo"\s*:\s*\{[^{}]{0,400}?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
+        re.compile(r'"image"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"', re.I),
+        # Facebook public profile-picture CDN bucket URLs anywhere in public SSR payload
+        re.compile(r'"(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"', re.I),
+        # SVG <image xlink:href="..."> used by Facebook's public profile header
+        re.compile(r'<image[^>]+(?:xlink:)?href=["\'](https?://scontent[^"\']+)["\']', re.I),
         # TikTok public SSR
         re.compile(r'"avatarLarger"\s*:\s*"(https?:[^"]+)"', re.I),
         re.compile(r'"avatarMedium"\s*:\s*"(https?:[^"]+)"', re.I),
@@ -306,6 +383,8 @@ def extract_public_profile_images(html_text: str, base_url: str = "") -> list[st
         for match in pattern.finditer(html_text):
             add_url(match.group(1))
 
+    # Sort all discovered public renditions highest-resolution first
+    candidates.sort(key=estimate_image_resolution_score, reverse=True)
     return candidates
 
 
@@ -450,8 +529,16 @@ def download_public_image(
     opener = _build_url_opener(cookie_jar)
     try:
         with opener.open(request, timeout=timeout) as response:
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            if content_type and not (
+                content_type.startswith("image/") or "octet-stream" in content_type
+            ):
+                raise ProfileError(f"Expected image response, got {content_type}.")
             with temp_path.open("wb") as fh:
                 shutil.copyfileobj(response, fh, length=1024 * 128)
+
+        if temp_path.stat().st_size < 512:
+            raise ProfileError("Downloaded profile image was empty or invalid.")
 
         temp_path.replace(destination)
         return destination
@@ -531,13 +618,16 @@ class ProfilePhotoResolver:
         unique_candidates: list[str] = []
         seen: set[str] = set()
         for candidate in candidates:
-            if (
-                candidate.startswith(("http://", "https://"))
-                and candidate not in seen
-                and not is_generic_site_logo(candidate)
-            ):
-                seen.add(candidate)
-                unique_candidates.append(candidate)
+            for variant in upgrade_public_avatar_url(candidate):
+                if (
+                    variant.startswith(("http://", "https://"))
+                    and variant not in seen
+                    and not is_generic_site_logo(variant)
+                ):
+                    seen.add(variant)
+                    unique_candidates.append(variant)
+
+        unique_candidates.sort(key=estimate_image_resolution_score, reverse=True)
 
         if not unique_candidates:
             if cookie_jar is not None:

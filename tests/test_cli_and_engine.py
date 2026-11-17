@@ -120,6 +120,27 @@ def test_extract_public_profile_images_parses_ssr_jsonld_and_og():
         "https://p16-sign.tiktokcdn.com/av.jpeg",
     ]
 
+    # Verify high-resolution Facebook mx877x858 rendition outranks 160x160 thumbnail
+    fb_multi = r'''
+    <script>
+      {"profilePic160":{"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-1\/1_n.jpg?stp=dst-jpg_p160x160"}}
+      {"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-1\/2_n.jpg?stp=dst-jpg_tt6\u0026cstp=mx877x858\u0026ctp=mx877x858"}
+    </script>
+    '''
+    ranked = extract_public_profile_images(fb_multi)
+    assert "mx877x858" in ranked[0]
+    assert "p160x160" in ranked[-1]
+
+    # Verify X/Twitter _normal and YouTube =s88 upgrade to high-resolution renditions first
+    social_small = r'''
+    <meta property="og:image" content="https://yt3.googleusercontent.com/abc=s88-c-k-c0x00ffffff-no-rj" />
+    <script>{"profile_image_url_https":"https:\/\/pbs.twimg.com\/profile_images\/123\/pic_normal.jpg"}</script>
+    '''
+    upgraded = extract_public_profile_images(social_small)
+    assert "https://pbs.twimg.com/profile_images/123/pic.jpg" in upgraded
+    assert "https://yt3.googleusercontent.com/abc=s1024-c-k-c0x00ffffff-no-rj" in upgraded
+    assert upgraded.index("https://yt3.googleusercontent.com/abc=s1024-c-k-c0x00ffffff-no-rj") < upgraded.index("https://yt3.googleusercontent.com/abc=s88-c-k-c0x00ffffff-no-rj")
+
 
 def test_parse_rate_limit():
     assert parse_rate_limit("5M") == 5 * 1024 * 1024
