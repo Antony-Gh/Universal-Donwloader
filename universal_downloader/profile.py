@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import http.cookiejar
+import json
 import logging
 import re
 import shutil
@@ -190,6 +191,11 @@ def resolve_profile_input(value: str) -> str:
     )
 
 
+def _unescape_embedded_url(raw: str) -> str:
+    cleaned = raw.replace("\\/", "/").replace("\\u0026", "&").replace("\\u003d", "=")
+    return html.unescape(cleaned).strip()
+
+
 def extract_meta_image(html_text: str) -> Optional[str]:
     patterns = [
         re.compile(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', re.I),
@@ -207,28 +213,138 @@ def extract_meta_image(html_text: str) -> Optional[str]:
     return None
 
 
+def extract_public_profile_images(html_text: str, base_url: str = "") -> list[str]:
+    """
+    Extract publicly exposed profile avatar URLs already present in the returned page HTML
+    (embedded public SSR metadata, JSON-LD, and OpenGraph/Twitter meta tags).
+    """
+    candidates: list[str] = []
+
+    def add_url(raw_val: Optional[str]) -> None:
+        if not raw_val or not isinstance(raw_val, str):
+            return
+        url = _unescape_embedded_url(raw_val)
+        if base_url and not url.startswith(("http://", "https://")):
+            url = urllib.parse.urljoin(base_url, url)
+        if url.startswith(("http://", "https://")) and not is_generic_site_logo(url):
+            if url not in candidates:
+                candidates.append(url)
+
+    # 1. Publicly embedded SSR profile picture fields (ordered highest-resolution first)
+    embedded_patterns = [
+        # Instagram / Threads public SSR
+        re.compile(r'"profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"', re.I),
+        re.compile(r'"profile_pic_url"\s*:\s*"(https?:[^"]+)"', re.I),
+        # Facebook public SSR (including the public avatar Facebook still exposes for locked profiles)
+        re.compile(r'"profilePicLarge"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
+        re.compile(r'"profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
+        re.compile(r'"profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
+        re.compile(r'"profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I),
+        # TikTok public SSR
+        re.compile(r'"avatarLarger"\s*:\s*"(https?:[^"]+)"', re.I),
+        re.compile(r'"avatarMedium"\s*:\s*"(https?:[^"]+)"', re.I),
+        # X / Twitter public SSR
+        re.compile(r'"profile_image_url_https"\s*:\s*"(https?:[^"]+)"', re.I),
+    ]
+    for pattern in embedded_patterns:
+        for match in pattern.finditer(html_text):
+            add_url(match.group(1))
+
+    # 2. JSON-LD structured public metadata (<script type="application/ld+json">)
+    ld_pattern = re.compile(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        re.I | re.S,
+    )
+    for match in ld_pattern.finditer(html_text):
+        raw_json = match.group(1).strip()
+        if not raw_json:
+            continue
+        try:
+            parsed = json.loads(raw_json)
+        except Exception:
+            continue
+        items = parsed if isinstance(parsed, list) else [parsed]
+        for obj in items:
+            if not isinstance(obj, dict):
+                continue
+            for key in ("image", "thumbnailUrl"):
+                val = obj.get(key)
+                if isinstance(val, str):
+                    add_url(val)
+                elif isinstance(val, dict):
+                    add_url(val.get("url") or val.get("contentUrl"))
+                elif isinstance(val, list):
+                    for elem in val:
+                        if isinstance(elem, str):
+                            add_url(elem)
+                        elif isinstance(elem, dict):
+                            add_url(elem.get("url") or elem.get("contentUrl"))
+
+    # 3. Standard OpenGraph / Twitter meta tags
+    meta_patterns = [
+        re.compile(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', re.I),
+        re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', re.I),
+        re.compile(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)', re.I),
+        re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image', re.I),
+        re.compile(r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)', re.I),
+    ]
+    for pattern in meta_patterns:
+        for match in pattern.finditer(html_text):
+            add_url(match.group(1))
+
+    return candidates
+
+
 def fetch_public_html(
     url: str,
     timeout: int,
     cookie_jar: Optional[http.cookiejar.CookieJar] = None,
 ) -> str:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/128.0.0.0 Safari/537.36"
-            ),
-            "Accept": (
-                "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                "image/avif,image/webp,*/*;q=0.8"
-            ),
-            "Accept-Language": "en-US,en;q=0.9",
-        },
-        method="GET",
-    )
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;q=0.9,"
+            "image/avif,image/webp,*/*;q=0.8"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+    }
 
+    # Prefer curl_cffi (Chrome HTTP/2 TLS fingerprint) when available so social platforms
+    # return their normal public SSR HTML instead of an empty bot-check shell.
+    try:
+        from curl_cffi import requests as curl_requests
+
+        cookie_dict = None
+        if cookie_jar is not None:
+            host = (urllib.parse.urlparse(url).hostname or "").lower()
+            cookie_dict = {
+                c.name: c.value
+                for c in cookie_jar
+                if c.value is not None
+                and (not c.domain or host == c.domain.lstrip(".").lower() or host.endswith("." + c.domain.lstrip(".").lower()))
+            } or None
+
+        resp = curl_requests.get(
+            url,
+            headers=headers,
+            cookies=cookie_dict,
+            impersonate="chrome",
+            timeout=timeout,
+            allow_redirects=True,
+        )
+        if 200 <= resp.status_code < 400 and resp.text:
+            return resp.text
+    except Exception as exc:
+        LOGGER.debug("curl_cffi profile HTML fetch fallback to urllib: %s", exc)
+
+    request = urllib.request.Request(url, headers=headers, method="GET")
     opener = _build_url_opener(cookie_jar)
     try:
         with opener.open(request, timeout=timeout) as response:
@@ -373,14 +489,10 @@ class ProfilePhotoResolver:
         except ExtractionError as exc:
             LOGGER.info("yt-dlp profile metadata unavailable: %s", exc)
 
-        # 2. Second attempt: standard profile page HTML metadata (public or user-authenticated)
+        # 2. Second attempt: standard profile page HTML metadata (public SSR, JSON-LD, OpenGraph)
         try:
             page = fetch_public_html(target.normalized_url, self.config.timeout, cookie_jar=cookie_jar)
-            meta_image = extract_meta_image(page)
-            if meta_image:
-                candidates.append(
-                    urllib.parse.urljoin(target.normalized_url, meta_image)
-                )
+            candidates.extend(extract_public_profile_images(page, base_url=target.normalized_url))
         except ProfileError as exc:
             LOGGER.info("Profile HTML lookup failed: %s", exc)
 

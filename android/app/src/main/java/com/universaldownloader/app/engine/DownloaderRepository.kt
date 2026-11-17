@@ -409,20 +409,59 @@ class DownloaderRepository(private val appContext: Context) {
         ).any { lowered.contains(it) }
     }
 
-    private fun extractMetaImageUrl(htmlText: String): String? {
-        val patterns = listOf(
+    private fun unescapeEmbeddedUrl(raw: String): String {
+        return raw
+            .replace("\\/", "/")
+            .replace("\\u0026", "&")
+            .replace("\\u003d", "=")
+            .replace("&amp;", "&")
+            .trim()
+    }
+
+    private fun extractPublicProfileImages(htmlText: String, baseUrl: String): List<String> {
+        val found = LinkedHashSet<String>()
+
+        fun addCandidate(raw: String?) {
+            if (raw.isNullOrBlank()) return
+            val unescaped = unescapeEmbeddedUrl(raw)
+            val resolved = if (unescaped.startsWith("http://") || unescaped.startsWith("https://")) {
+                unescaped
+            } else {
+                runCatching { URI(baseUrl).resolve(unescaped).toString() }.getOrDefault(unescaped)
+            }
+            if ((resolved.startsWith("http://") || resolved.startsWith("https://")) && !isGenericSiteLogo(resolved)) {
+                found.add(resolved)
+            }
+        }
+
+        // 1. Publicly embedded SSR profile avatar fields (highest resolution first)
+        val embeddedPatterns = listOf(
+            Regex(""""profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""profile_pic_url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""profilePicLarge"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""avatarLarger"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""avatarMedium"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""profile_image_url_https"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE),
+        )
+        for (regex in embeddedPatterns) {
+            regex.findAll(htmlText).forEach { addCandidate(it.groupValues[1]) }
+        }
+
+        // 2. Standard OpenGraph / Twitter meta tags
+        val metaPatterns = listOf(
             Regex("""<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)""", RegexOption.IGNORE_CASE),
             Regex("""<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image""", RegexOption.IGNORE_CASE),
             Regex("""<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)""", RegexOption.IGNORE_CASE),
             Regex("""<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image""", RegexOption.IGNORE_CASE),
         )
-        for (regex in patterns) {
-            val match = regex.find(htmlText)
-            if (match != null) {
-                return match.groupValues[1].replace("&amp;", "&")
-            }
+        for (regex in metaPatterns) {
+            regex.findAll(htmlText).forEach { addCandidate(it.groupValues[1]) }
         }
-        return null
+
+        return found.toList()
     }
 
     /**
@@ -492,10 +531,7 @@ class DownloaderRepository(private val appContext: Context) {
                 try {
                     if (conn.responseCode in 200..299) {
                         val html = conn.inputStream.bufferedReader().use { it.readText() }
-                        extractMetaImageUrl(html)?.let { img ->
-                            val absUrl = runCatching { URI(profileUrl).resolve(img).toString() }.getOrDefault(img)
-                            if (absUrl.startsWith("http")) candidates.add(absUrl)
-                        }
+                        candidates.addAll(extractPublicProfileImages(html, profileUrl))
                     }
                 } finally {
                     conn.disconnect()

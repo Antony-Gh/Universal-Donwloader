@@ -17,6 +17,7 @@ from universal_downloader.exceptions import ConfigurationError, ProfileError
 from universal_downloader.extractor import parse_rate_limit
 from universal_downloader.models import AppConfig, ContentType, DetectedTarget, Platform
 from universal_downloader.profile import (
+    extract_public_profile_images,
     extract_username_from_profile_url,
     is_generic_site_logo,
     load_cookie_jar,
@@ -94,6 +95,30 @@ def test_resolve_profile_input():
     # Ambiguous bare @username must raise error
     with pytest.raises(ProfileError, match="ambiguous"):
         resolve_profile_input("@dancer")
+
+
+def test_extract_public_profile_images_parses_ssr_jsonld_and_og():
+    fb_html = r'''
+    <html><head>
+      <meta property="og:image" content="https://static.xx.fbcdn.net/rsrc.php/v3/y/r/fb_icon_325x325.png" />
+      <script type="application/ld+json">{"@type":"Person","image":{"url":"https://scontent.xx.fbcdn.net/v/ld_avatar.jpg"}}</script>
+    </head><body>
+      <script>{"profilePicLarge":{"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/large_avatar.jpg?a=1\u0026b=2"}}</script>
+    </body></html>
+    '''
+    urls = extract_public_profile_images(fb_html, "https://www.facebook.com/example/")
+    assert urls[0] == "https://scontent.xx.fbcdn.net/v/large_avatar.jpg?a=1&b=2"
+    assert "https://scontent.xx.fbcdn.net/v/ld_avatar.jpg" in urls
+    assert all("rsrc.php" not in u for u in urls)
+
+    ig_tiktok_html = r'''
+    <script>{"profile_pic_url_hd":"https:\/\/scontent.cdninstagram.com\/hd.jpg","avatarLarger":"https:\/\/p16-sign.tiktokcdn.com\/av.jpeg"}</script>
+    '''
+    urls2 = extract_public_profile_images(ig_tiktok_html)
+    assert urls2 == [
+        "https://scontent.cdninstagram.com/hd.jpg",
+        "https://p16-sign.tiktokcdn.com/av.jpeg",
+    ]
 
 
 def test_parse_rate_limit():
