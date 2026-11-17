@@ -8,6 +8,12 @@ import shutil
 from typing import Any, Callable, Optional
 
 from universal_downloader.exceptions import DependencyError, DownloadError, ExtractionError
+from universal_downloader.ffmpeg_manager import (
+    ensure_ffmpeg,
+    find_ffmpeg,
+    find_ffprobe,
+    is_ffmpeg_available,
+)
 from universal_downloader.logging_utils import clean_error_message
 from universal_downloader.models import AppConfig, Platform
 
@@ -27,11 +33,11 @@ def import_yt_dlp():
 
 
 def check_ffmpeg() -> bool:
-    return shutil.which("ffmpeg") is not None
+    return is_ffmpeg_available()
 
 
 def check_ffprobe() -> bool:
-    return shutil.which("ffprobe") is not None
+    return find_ffprobe() is not None
 
 
 def discover_js_runtimes() -> dict[str, dict[str, str]]:
@@ -131,6 +137,10 @@ class YTDLPExtractor:
         js_runtimes = discover_js_runtimes()
         if js_runtimes:
             options["js_runtimes"] = js_runtimes
+
+        ffmpeg_bin = find_ffmpeg()
+        if ffmpeg_bin:
+            options["ffmpeg_location"] = str(ffmpeg_bin.parent)
 
         if self.config.cookies_file:
             options["cookiefile"] = str(self.config.cookies_file)
@@ -266,52 +276,62 @@ class YTDLPExtractor:
             or self.config.quality.strip().lower() in {"audio", "audio-only"}
         )
 
+        # Auto-detect or transparently bootstrap FFmpeg if missing
+        ffmpeg_bin = find_ffmpeg()
+        if not ffmpeg_bin:
+            ffmpeg_bin = ensure_ffmpeg(auto_download=True)
+
+        has_ffmpeg = ffmpeg_bin is not None
+        if has_ffmpeg:
+            options["ffmpeg_location"] = str(ffmpeg_bin.parent)
+
         if wants_audio:
-            if not check_ffmpeg():
-                raise DependencyError(
-                    "FFmpeg is required for audio extraction.\n\n"
-                    "Please install FFmpeg and ensure it is available in PATH."
-                )
-
             options["format"] = "bestaudio/best"
+            if has_ffmpeg:
+                if self.config.audio_format != "best":
+                    postprocessors.append(
+                        {
+                            "key": "FFmpegExtractAudio",
+                            "preferredcodec": self.config.audio_format,
+                            "preferredquality": self.config.audio_quality,
+                        }
+                    )
+            else:
+                LOGGER.info("FFmpeg not detected; saving original audio stream in native format.")
 
-            if self.config.audio_format != "best":
-                postprocessors.append(
-                    {
-                        "key": "FFmpegExtractAudio",
-                        "preferredcodec": self.config.audio_format,
-                        "preferredquality": self.config.audio_quality,
-                    }
-                )
-
-        elif "+" in format_selector and not check_ffmpeg():
-            raise DependencyError(
-                "FFmpeg is required to merge separate audio/video streams.\n\n"
-                "Please install FFmpeg and ensure it is available in PATH."
-            )
+        elif "+" in format_selector:
+            if has_ffmpeg:
+                options["format"] = format_selector
+            else:
+                LOGGER.info("FFmpeg not detected; downloading best pre-merged video+audio stream.")
+                options["format"] = "best[acodec!=none][vcodec!=none]/best"
 
         # Metadata embedding
         if self.config.embed_metadata:
-            if not check_ffmpeg():
-                raise DependencyError("FFmpeg is required for embedding metadata.")
-            postprocessors.append(
-                {
-                    "key": "FFmpegMetadata",
-                    "add_metadata": True,
-                    "add_chapters": True,
-                }
-            )
+            if has_ffmpeg:
+                postprocessors.append(
+                    {
+                        "key": "FFmpegMetadata",
+                        "add_metadata": True,
+                        "add_chapters": True,
+                    }
+                )
+            else:
+                LOGGER.info("FFmpeg not detected; preserving metadata as companion JSON file.")
+                self.config.no_metadata = False
 
         # Thumbnail embedding
         if self.config.embed_thumbnail:
-            if not check_ffmpeg():
-                raise DependencyError("FFmpeg is required for embedding thumbnails.")
-            postprocessors.append(
-                {
-                    "key": "EmbedThumbnail",
-                    "already_have_thumbnail": False,
-                }
-            )
+            if has_ffmpeg:
+                postprocessors.append(
+                    {
+                        "key": "EmbedThumbnail",
+                        "already_have_thumbnail": False,
+                    }
+                )
+            else:
+                LOGGER.info("FFmpeg not detected; saving standalone thumbnail image.")
+                options["writethumbnail"] = True
 
         # Subtitles configuration
         if self.config.write_subs or self.config.embed_subs or self.config.auto_subs:
@@ -329,34 +349,38 @@ class YTDLPExtractor:
                 options["subtitleslangs"] = ["all", "-live_chat"]
 
             if self.config.embed_subs:
-                if not check_ffmpeg():
-                    raise DependencyError("FFmpeg is required to embed subtitles.")
-                postprocessors.append(
-                    {
-                        "key": "FFmpegEmbedSubtitle",
-                    }
-                )
+                if has_ffmpeg:
+                    postprocessors.append(
+                        {
+                            "key": "FFmpegEmbedSubtitle",
+                        }
+                    )
+                else:
+                    LOGGER.info("FFmpeg not detected; saving external subtitle file.")
+                    options["writesubtitles"] = True
 
         # Video remuxing
         if self.config.remux_video and not wants_audio:
-            if not check_ffmpeg():
-                raise DependencyError("FFmpeg is required for remuxing video containers.")
-            postprocessors.append(
-                {
-                    "key": "FFmpegVideoRemuxer",
-                    "preferedformat": self.config.remux_video,
-                }
-            )
+            if has_ffmpeg:
+                postprocessors.append(
+                    {
+                        "key": "FFmpegVideoRemuxer",
+                        "preferedformat": self.config.remux_video,
+                    }
+                )
+            else:
+                LOGGER.info("FFmpeg not detected; preserving original container format.")
 
         # Chapter splitting
         if self.config.split_chapters:
-            if not check_ffmpeg():
-                raise DependencyError("FFmpeg is required for chapter splitting.")
-            postprocessors.append(
-                {
-                    "key": "FFmpegSplitChapters",
-                }
-            )
+            if has_ffmpeg:
+                postprocessors.append(
+                    {
+                        "key": "FFmpegSplitChapters",
+                    }
+                )
+            else:
+                LOGGER.info("FFmpeg not detected; skipping chapter splitting.")
 
         # SponsorBlock removal
         if self.config.sponsorblock_remove:

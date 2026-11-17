@@ -37,3 +37,4 @@ test_dist/
 *.orig
 *.rej
 instructions.txt
+.universal_downloader/

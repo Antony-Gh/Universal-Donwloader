@@ -58,6 +58,13 @@ from universal_downloader.extractor import (
     parse_rate_limit,
     parse_timestamp_seconds,
 )
+from universal_downloader.ffmpeg_manager import (
+    ensure_ffmpeg,
+    find_ffmpeg,
+    find_ffprobe,
+    get_local_bin_dir,
+    is_ffmpeg_available,
+)
 from universal_downloader.formats import (
     format_sort_key,
     parse_format,
@@ -195,6 +202,11 @@ __all__ = [
     "import_yt_dlp",
     "check_ffmpeg",
     "check_ffprobe",
+    "find_ffmpeg",
+    "find_ffprobe",
+    "ensure_ffmpeg",
+    "is_ffmpeg_available",
+    "get_local_bin_dir",
     "discover_js_runtimes",
     "parse_rate_limit",
     "parse_timestamp_seconds",

@@ -137,6 +137,34 @@ def build_python_backend() -> Optional[Path]:
     return None
 
 
+def ensure_release_ffmpeg() -> None:
+    """Stage static FFmpeg into dist/ for zero-friction turnkey releases."""
+    print_step("Checking Standalone FFmpeg Engine")
+    dist_dir = ROOT_DIR / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+
+    exe_name = "ffmpeg.exe" if sys.platform.startswith("win") else "ffmpeg"
+    probe_name = "ffprobe.exe" if sys.platform.startswith("win") else "ffprobe"
+
+    if (dist_dir / exe_name).exists():
+        print_success(f"FFmpeg binary ready at {dist_dir / exe_name}")
+        return
+
+    try:
+        from universal_downloader.ffmpeg_manager import find_ffmpeg, ensure_ffmpeg
+        found = find_ffmpeg() or ensure_ffmpeg(auto_download=True)
+        if found and found.exists():
+            shutil.copy2(found, dist_dir / exe_name)
+            probe = found.with_name(probe_name)
+            if probe.exists():
+                shutil.copy2(probe, dist_dir / probe_name)
+            print_success(f"Staged {exe_name} into dist/ for embedded single-file packaging.")
+        else:
+            print_warning("FFmpeg not staged locally; runtime will auto-download when needed.")
+    except Exception as exc:
+        print_warning(f"FFmpeg staging skipped: {exc}")
+
+
 def publish_dotnet_target(project_path: Path, rid: str, output_dir: Path) -> bool:
     """Publish a self-contained, single-file .NET 9 application for a target RID with fallback."""
     print(f"  Building {project_path.stem} for {rid}...")
@@ -463,6 +491,7 @@ def main() -> None:
 
     # 1. Build Standalone Python Backend
     python_bin = build_python_backend()
+    ensure_release_ffmpeg()
 
     # 2. Build C# Avalonia for all platforms
     avalonia_proj = ROOT_DIR / "src" / "UniversalDownloader.Avalonia" / "UniversalDownloader.Avalonia.csproj"

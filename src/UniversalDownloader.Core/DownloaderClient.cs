@@ -52,6 +52,9 @@ public class DownloaderClient
         }
 
         // 2.5. Check embedded resource (for single-file all-in-one executable distribution)
+        TryExtractEmbeddedBackend(PlatformUtils.IsWindows ? "ffmpeg.exe" : "ffmpeg");
+        TryExtractEmbeddedBackend(PlatformUtils.IsWindows ? "ffprobe.exe" : "ffprobe");
+
         var extractedPath = TryExtractEmbeddedBackend(binaryName);
         if (extractedPath != null && File.Exists(extractedPath))
         {
@@ -296,6 +299,17 @@ public class DownloaderClient
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+
+        var localBin = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "UniversalDownloader",
+            "bin"
+        );
+        if (Directory.Exists(localBin))
+        {
+            var curPath = psi.EnvironmentVariables.ContainsKey("PATH") ? psi.EnvironmentVariables["PATH"] : Environment.GetEnvironmentVariable("PATH") ?? "";
+            psi.EnvironmentVariables["PATH"] = $"{localBin}{Path.PathSeparator}{curPath}";
+        }
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
 

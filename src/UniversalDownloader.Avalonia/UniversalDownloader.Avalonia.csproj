@@ -27,7 +27,7 @@
     <ProjectReference Include="..\UniversalDownloader.Core\UniversalDownloader.Core.csproj" />
   </ItemGroup>
 
-  <!-- Embed compiled standalone backend for all-in-one distribution -->
+  <!-- Embed compiled standalone backend and optional media engines for all-in-one distribution -->
   <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\dist\downloader.exe')">
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\dist\downloader.exe">
       <LogicalName>downloader.exe</LogicalName>
@@ -36,6 +36,26 @@
   <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\dist\downloader')">
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\dist\downloader">
       <LogicalName>downloader</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\dist\ffmpeg.exe')">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\dist\ffmpeg.exe">
+      <LogicalName>ffmpeg.exe</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\dist\ffprobe.exe')">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\dist\ffprobe.exe">
+      <LogicalName>ffprobe.exe</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\dist\ffmpeg')">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\dist\ffmpeg">
+      <LogicalName>ffmpeg</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\dist\ffprobe')">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\dist\ffprobe">
+      <LogicalName>ffprobe</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 
