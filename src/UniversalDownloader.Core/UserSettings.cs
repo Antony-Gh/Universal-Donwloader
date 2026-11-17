@@ -18,6 +18,7 @@ public class UserSettings
     public int CookiesBrowserIndex { get; set; } = 0;
     public string CookiesFilePath { get; set; } = string.Empty;
     public bool SponsorBlockEnabled { get; set; } = false;
+    public string Language { get; set; } = "en";
 
     public static string SettingsFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

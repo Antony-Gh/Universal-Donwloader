@@ -17,6 +17,7 @@ import com.universaldownloader.app.model.QueueItem
 import com.universaldownloader.app.model.QueueItemStatus
 import com.universaldownloader.app.model.StreamFormat
 import com.universaldownloader.app.service.DownloadForegroundService
+import com.universaldownloader.app.ui.i18n.AppLanguage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -59,6 +60,7 @@ data class MainUiState(
     val detectedClipboardUrl: String? = null,
     val queue: List<QueueItem> = emptyList(),
     val isQueueRunning: Boolean = false,
+    val language: AppLanguage = AppLanguage.EN,
     val globalStatus: String = "Initializing engine...",
     val selectedTab: Int = 0,
 ) {
@@ -81,7 +83,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val prefsStore = app.preferencesStore
     private val updateChecker = AppUpdateChecker()
 
-    private val _uiState = MutableStateFlow(MainUiState(options = prefsStore.loadOptions()))
+    private val _uiState = MutableStateFlow(
+        MainUiState(
+            options = prefsStore.loadOptions(),
+            language = if (prefsStore.loadLanguageCode() == "ar") AppLanguage.AR else AppLanguage.EN,
+        )
+    )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     private var metadataJob: Job? = null
@@ -301,6 +308,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectTab(index: Int) {
         _uiState.update { it.copy(selectedTab = index) }
+    }
+
+    fun toggleLanguage() {
+        _uiState.update { state ->
+            val next = if (state.language == AppLanguage.AR) AppLanguage.EN else AppLanguage.AR
+            prefsStore.saveLanguageCode(next.code)
+            state.copy(language = next)
+        }
     }
 
     fun onUrlChanged(newValue: String, immediate: Boolean = false) {

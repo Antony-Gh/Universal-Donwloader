@@ -1,0 +1,115 @@
+using System.Collections.Generic;
+
+namespace UniversalDownloader.Avalonia;
+
+/// <summary>
+/// Bilingual English (LTR) and Arabic (RTL) UI string catalog for the Avalonia desktop application.
+/// </summary>
+public static class Localization
+{
+    private static readonly Dictionary<string, string> En = new()
+    {
+        ["AppTitle"] = "Universal Media Downloader",
+        ["CheckUpdates"] = "Check Updates",
+        ["TabDownload"] = "Download",
+        ["TabQueue"] = "Queue",
+        ["TabStreams"] = "Streams",
+        ["TabHistory"] = "History",
+        ["TabLogs"] = "Console Logs",
+        ["MediaUrl"] = "Media URL",
+        ["UrlWatermark"] = "Paste video, audio, or playlist URL here...",
+        ["Paste"] = "Paste",
+        ["InspectStreams"] = "Inspect Streams",
+        ["DownloadOptions"] = "Download Options",
+        ["Quality"] = "Quality",
+        ["Codec"] = "Codec Preference",
+        ["Fragments"] = "Fragments",
+        ["SaveDirectory"] = "Save Directory",
+        ["Browse"] = "Browse...",
+        ["Open"] = "Open",
+        ["BrowserCookies"] = "Browser Cookies",
+        ["CookiesFile"] = "Cookies File (cookies.txt)",
+        ["EmbedMetadata"] = "Embed Metadata",
+        ["EmbedCoverArt"] = "Embed Cover Art",
+        ["EmbedSubtitles"] = "Embed Subtitles",
+        ["SaveThumbnail"] = "Save Thumbnail File",
+        ["AdvancedHeader"] = "Clip Trimmer, Playlist Selection & SponsorBlock (Advanced)",
+        ["StartTime"] = "Start Time",
+        ["EndTime"] = "End Time",
+        ["PlaylistItems"] = "Playlist Items",
+        ["SponsorBlock"] = "Remove SponsorBlock Segments (sponsor, intro, outro, selfpromo)",
+        ["StartDownload"] = "Start Download",
+        ["AddToQueue"] = "+ Add to Queue",
+        ["Cancel"] = "Cancel",
+        ["LiveTerminal"] = "Live Terminal Output",
+        ["CopyOutput"] = "Copy Output",
+        ["QueueHeader"] = "Batch Download Queue",
+        ["QueueAddUrls"] = "+ Add URLs",
+        ["StartQueue"] = "Start Queue",
+        ["Stop"] = "Stop",
+        ["ClearCompleted"] = "Clear Completed",
+        ["RefreshStreams"] = "Refresh Streams",
+        ["Search"] = "Search",
+        ["Refresh"] = "Refresh",
+        ["ClearAll"] = "Clear All",
+        ["BackendLogs"] = "Backend Engine Logs",
+        ["Ready"] = "Ready",
+        ["LangToggle"] = "عربي",
+    };
+
+    private static readonly Dictionary<string, string> Ar = new()
+    {
+        ["AppTitle"] = "المحمل الشامل للوسائط",
+        ["CheckUpdates"] = "التحقق من التحديثات",
+        ["TabDownload"] = "التحميل",
+        ["TabQueue"] = "قائمة الانتظار",
+        ["TabStreams"] = "الجودات والصيغ",
+        ["TabHistory"] = "السجل",
+        ["TabLogs"] = "سجل التشغيل",
+        ["MediaUrl"] = "رابط الفيديو أو القائمة",
+        ["UrlWatermark"] = "الصق رابط الفيديو أو الصوت أو قائمة التشغيل هنا...",
+        ["Paste"] = "لصق",
+        ["InspectStreams"] = "فحص الجودات",
+        ["DownloadOptions"] = "خيارات التحميل",
+        ["Quality"] = "الجودة",
+        ["Codec"] = "ترميز الفيديو (Codec)",
+        ["Fragments"] = "عدد الأجزاء المتوازية",
+        ["SaveDirectory"] = "مجلد الحفظ",
+        ["Browse"] = "استعراض...",
+        ["Open"] = "فتح",
+        ["BrowserCookies"] = "ملفات تعريف المتصفح",
+        ["CookiesFile"] = "ملف الكوكيز (cookies.txt)",
+        ["EmbedMetadata"] = "تضمين البيانات الوصفية",
+        ["EmbedCoverArt"] = "تضمين الصورة المصغرة",
+        ["EmbedSubtitles"] = "تضمين الترجمة",
+        ["SaveThumbnail"] = "حفظ الصورة المصغرة كملف",
+        ["AdvancedHeader"] = "قص الفيديو واختيار عناصر القائمة وحذف الإعلانات (متقدم)",
+        ["StartTime"] = "وقت البداية",
+        ["EndTime"] = "وقت النهاية",
+        ["PlaylistItems"] = "عناصر القائمة",
+        ["SponsorBlock"] = "حذف المقاطع الدعائية تلقائياً (SponsorBlock)",
+        ["StartDownload"] = "بدء التحميل",
+        ["AddToQueue"] = "+ إضافة للقائمة",
+        ["Cancel"] = "إلغاء",
+        ["LiveTerminal"] = "مخرجات المحرك المباشرة",
+        ["CopyOutput"] = "نسخ المخرجات",
+        ["QueueHeader"] = "قائمة التحميل المجمّع",
+        ["QueueAddUrls"] = "+ إضافة الروابط",
+        ["StartQueue"] = "بدء القائمة",
+        ["Stop"] = "إيقاف",
+        ["ClearCompleted"] = "مسح المكتمل",
+        ["RefreshStreams"] = "تحديث الجودات",
+        ["Search"] = "بحث",
+        ["Refresh"] = "تحديث",
+        ["ClearAll"] = "مسح الكل",
+        ["BackendLogs"] = "سجلات المحرك الكاملة",
+        ["Ready"] = "جاهز",
+        ["LangToggle"] = "EN",
+    };
+
+    public static string Get(string lang, string key)
+    {
+        var map = lang == "ar" ? Ar : En;
+        return map.TryGetValue(key, out var val) ? val : (En.TryGetValue(key, out var fallback) ? fallback : key);
+    }
+}

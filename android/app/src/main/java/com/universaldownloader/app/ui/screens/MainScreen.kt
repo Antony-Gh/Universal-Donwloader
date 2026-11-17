@@ -81,6 +81,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -93,9 +94,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -110,6 +113,9 @@ import com.universaldownloader.app.model.QueueItemStatus
 import com.universaldownloader.app.model.StreamFormat
 import com.universaldownloader.app.ui.components.InfoLabel
 import com.universaldownloader.app.ui.components.WebViewCookieLoginDialog
+import com.universaldownloader.app.ui.i18n.AppLanguage
+import com.universaldownloader.app.ui.i18n.LocalAppStrings
+import com.universaldownloader.app.ui.i18n.stringsFor
 import com.universaldownloader.app.ui.theme.AccentBlue
 import com.universaldownloader.app.ui.theme.AccentIndigo
 import com.universaldownloader.app.ui.theme.AccentMint
@@ -147,6 +153,13 @@ fun MainScreen(viewModel: MainViewModel) {
         }
     }
 
+    val strings = stringsFor(state.language)
+    val layoutDir = if (state.language == AppLanguage.AR) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+    CompositionLocalProvider(
+        LocalAppStrings provides strings,
+        LocalLayoutDirection provides layoutDir,
+    ) {
     Scaffold(
         containerColor = BgDark,
         topBar = {
@@ -159,7 +172,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     title = {
                         Column {
                             Text(
-                                text = "Universal Downloader",
+                                text = strings.appTitle,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary,
@@ -181,6 +194,17 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     },
                     actions = {
+                        TextButton(
+                            onClick = { viewModel.toggleLanguage() },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = strings.langToggleLabel,
+                                color = AccentSky,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                            )
+                        }
                         Box {
                             IconButton(
                                 onClick = { showUpdateMenu = true },
@@ -209,14 +233,14 @@ fun MainScreen(viewModel: MainViewModel) {
                                 onDismissRequest = { showUpdateMenu = false },
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Check App Update (APK)") },
+                                    text = { Text(strings.checkAppUpdate) },
                                     onClick = {
                                         showUpdateMenu = false
                                         viewModel.checkForAppUpdate(silent = false)
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Update yt-dlp Engine") },
+                                    text = { Text(strings.updateYtDlpEngine) },
                                     enabled = state.engineStatus == EngineStatus.READY,
                                     onClick = {
                                         showUpdateMenu = false
@@ -315,10 +339,10 @@ fun MainScreen(viewModel: MainViewModel) {
 
                 NavigationBar(containerColor = SurfaceCardAlt) {
                     val navItems = listOf(
-                        Triple("Download", Icons.Default.Download, 0),
-                        Triple("Streams", Icons.Default.Layers, 1),
-                        Triple("History", Icons.Default.History, 2),
-                        Triple("Logs", Icons.Default.Terminal, 3),
+                        Triple(strings.tabDownload, Icons.Default.Download, 0),
+                        Triple(strings.tabStreams, Icons.Default.Layers, 1),
+                        Triple(strings.tabHistory, Icons.Default.History, 2),
+                        Triple(strings.tabLogs, Icons.Default.Terminal, 3),
                     )
                     navItems.forEach { (label, icon, idx) ->
                         NavigationBarItem(
@@ -428,10 +452,11 @@ fun MainScreen(viewModel: MainViewModel) {
                         openExternalUrl(context, updateInfo.releaseUrl)
                     },
                 ) {
-                    Text("Release Page", color = AccentSky)
+                    Text(strings.releasePage, color = AccentSky)
                 }
             },
         )
+    }
     }
 }
 
@@ -442,6 +467,7 @@ private fun DownloadTab(
     viewModel: MainViewModel,
     context: Context,
 ) {
+    val strings = LocalAppStrings.current
     val scrollState = rememberScrollState()
 
     Column(
@@ -461,7 +487,7 @@ private fun DownloadTab(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 InfoLabel(
-                    title = "Media URL",
+                    title = strings.mediaUrl,
                     explanation = "Paste any video, audio, reel, or playlist URL from 1,000+ supported sites (YouTube, Instagram, TikTok, Facebook, X/Twitter, SoundCloud, Vimeo, Reddit, Twitch, etc.). You can also Share directly from other apps!",
                     color = TextPrimary,
                     fontWeight = FontWeight.SemiBold,
@@ -471,7 +497,7 @@ private fun DownloadTab(
                 OutlinedTextField(
                     value = state.urlInput,
                     onValueChange = { viewModel.onUrlChanged(it) },
-                    placeholder = { Text("Paste video, reel, or audio URL...", color = TextMuted, fontSize = 13.sp) },
+                    placeholder = { Text(strings.urlPlaceholder, color = TextMuted, fontSize = 13.sp) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     trailingIcon = {
@@ -506,7 +532,7 @@ private fun DownloadTab(
                     ) {
                         Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp), tint = TextSecondary)
                         Spacer(Modifier.width(6.dp))
-                        Text("Paste", color = TextPrimary, fontSize = 13.sp)
+                        Text(strings.paste, color = TextPrimary, fontSize = 13.sp)
                     }
 
                     Button(
@@ -522,11 +548,11 @@ private fun DownloadTab(
                                 color = AccentSky,
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text("Inspecting...", fontSize = 13.sp, color = Color.White)
+                            Text(strings.inspecting, fontSize = 13.sp, color = Color.White)
                         } else {
                             Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp), tint = AccentSky)
                             Spacer(Modifier.width(6.dp))
-                            Text("Inspect Streams", fontSize = 13.sp, color = Color.White)
+                            Text(strings.inspectStreams, fontSize = 13.sp, color = Color.White)
                         }
                     }
                 }
@@ -728,13 +754,13 @@ private fun DownloadTab(
                 modifier = Modifier.padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Download Options", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
+                Text(strings.downloadOptions, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
 
                 // Quality Dropdown
                 var qualityExpanded by remember { mutableStateOf(false) }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     InfoLabel(
-                        title = "Quality",
+                        title = strings.quality,
                         explanation = "Select the target video resolution (1080p, 720p, 480p) or Audio Only (MP3). 'Best Available' automatically downloads the highest resolution available.",
                     )
                     ExposedDropdownMenuBox(
@@ -848,25 +874,25 @@ private fun DownloadTab(
 
                 // Toggles with Info Icons
                 OptionSwitchRow(
-                    title = "Embed Metadata",
+                    title = strings.embedMetadata,
                     explanation = "Embeds title, artist/uploader, date, description, and chapters directly into the media file's tags (ID3 / MP4 atoms).",
                     checked = state.options.embedMetadata,
                     onCheckedChange = viewModel::updateEmbedMetadata,
                 )
                 OptionSwitchRow(
-                    title = "Embed Cover Art",
+                    title = strings.embedCoverArt,
                     explanation = "Embeds the high-resolution source thumbnail directly into the downloaded video or MP3 as album artwork.",
                     checked = state.options.embedThumbnail,
                     onCheckedChange = viewModel::updateEmbedThumbnail,
                 )
                 OptionSwitchRow(
-                    title = "Embed Subtitles",
+                    title = strings.embedSubtitles,
                     explanation = "Embeds available subtitle tracks directly into video files using FFmpeg without burning them into the picture.",
                     checked = state.options.embedSubs,
                     onCheckedChange = viewModel::updateEmbedSubs,
                 )
                 OptionSwitchRow(
-                    title = "Save Thumbnail File",
+                    title = strings.saveThumbnailFile,
                     explanation = "Saves the original thumbnail image alongside the downloaded video/audio inside Downloads/UniversalDownloader.",
                     checked = state.options.writeThumbnail,
                     onCheckedChange = viewModel::updateWriteThumbnail,
@@ -890,7 +916,7 @@ private fun DownloadTab(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             InfoLabel(
-                                title = "Cookies & Account Login",
+                                title = strings.cookiesTitle,
                                 explanation = "Sign in directly via the built-in WebView (Instagram, YouTube, TikTok, X, Facebook) or import a Netscape cookies.txt file to unlock login-gated Reels and age-restricted videos.",
                                 color = TextPrimary,
                                 fontSize = 13.sp,
@@ -921,7 +947,7 @@ private fun DownloadTab(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
                         ) {
-                            Text("Web Login", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(strings.webLogin, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
                         }
                         OutlinedButton(
                             onClick = { cookiesPickerLauncher.launch(arrayOf("text/plain", "*/*")) },
@@ -929,7 +955,7 @@ private fun DownloadTab(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             border = BorderStroke(1.dp, BorderSubtle),
                         ) {
-                            Text(if (hasCookies) "Replace File" else "Import cookies.txt", fontSize = 12.sp, color = AccentSky)
+                            Text(if (hasCookies) strings.replaceFile else strings.importCookies, fontSize = 12.sp, color = AccentSky)
                         }
                     }
                 }
@@ -952,7 +978,7 @@ private fun DownloadTab(
                     border = BorderStroke(1.dp, BorderSubtle),
                 ) {
                     Text(
-                        text = if (showAdvanced) "Hide Clip Trimmer, Playlist & SponsorBlock" else "Clip Trimmer, Playlist & SponsorBlock (Advanced)",
+                        text = if (showAdvanced) strings.hideAdvanced else strings.showAdvanced,
                         color = AccentSky,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1042,7 +1068,7 @@ private fun DownloadTab(
             ) {
                 Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
                 Spacer(Modifier.width(6.dp))
-                Text("Download", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+                Text(strings.download, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
             }
 
             OutlinedButton(
@@ -1052,7 +1078,7 @@ private fun DownloadTab(
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, BorderSubtle),
             ) {
-                Text("+ Queue", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = AccentSky)
+                Text(strings.addToQueue, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = AccentSky)
             }
 
             if (state.isDownloading || state.isQueueRunning) {
@@ -1062,7 +1088,7 @@ private fun DownloadTab(
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
                 ) {
-                    Text("Stop", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(strings.stop, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
@@ -1238,7 +1264,7 @@ private fun DownloadTab(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     InfoLabel(
-                        title = "Live Terminal Output",
+                        title = strings.liveTerminal,
                         explanation = "Real-time output from the embedded yt-dlp and FFmpeg engine showing milestones, format selection, and diagnostics.",
                         color = TextPrimary,
                         fontWeight = FontWeight.SemiBold,
@@ -1254,7 +1280,7 @@ private fun DownloadTab(
                     ) {
                         Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(12.dp), tint = TextSecondary)
                         Spacer(Modifier.width(4.dp))
-                        Text("Copy", fontSize = 11.sp, color = TextPrimary)
+                        Text(strings.copy, fontSize = 11.sp, color = TextPrimary)
                     }
                 }
 

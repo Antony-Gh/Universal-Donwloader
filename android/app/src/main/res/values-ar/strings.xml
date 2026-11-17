@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">المحمل الشامل</string>
+    <string name="notification_channel_downloads">تنزيلات الوسائط</string>
+    <string name="notification_channel_downloads_desc">إشعارات التقدم واكتمال التحميل للوسائط.</string>
+</resources>

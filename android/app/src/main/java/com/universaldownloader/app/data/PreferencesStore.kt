@@ -43,6 +43,12 @@ class PreferencesStore(context: Context) {
             .apply()
     }
 
+    fun loadLanguageCode(): String = prefs.getString(KEY_LANGUAGE, "en") ?: "en"
+
+    fun saveLanguageCode(code: String) {
+        prefs.edit().putString(KEY_LANGUAGE, code).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "universal_downloader_prefs"
         private const val KEY_QUALITY = "quality"
@@ -54,5 +60,6 @@ class PreferencesStore(context: Context) {
         private const val KEY_WRITE_THUMBNAIL = "write_thumbnail"
         private const val KEY_COOKIES_PATH = "cookies_path"
         private const val KEY_SPONSORBLOCK = "sponsorblock"
+        private const val KEY_LANGUAGE = "language"
     }
 }

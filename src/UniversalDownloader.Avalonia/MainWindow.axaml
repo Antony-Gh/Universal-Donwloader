@@ -71,19 +71,22 @@
         <Grid Grid.Row="0" Margin="0,0,0,12" ColumnDefinitions="Auto,*">
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Image Source="/Assets/app-icon.png" Width="36" Height="36"/>
-                <TextBlock Text="Universal Media Downloader" FontSize="20" FontWeight="Bold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
+                <TextBlock x:Name="AppTitleText" Text="Universal Media Downloader" FontSize="20" FontWeight="Bold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
                 <Border Background="#27272A" CornerRadius="6" Padding="8,3" VerticalAlignment="Center">
                     <TextBlock x:Name="AppVersionBadge" Text="v2.1.0" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8"/>
                 </Border>
             </StackPanel>
 
-            <Button x:Name="CheckUpdatesButton" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="10,6" Background="#27272A" Foreground="#E2E8F0" Click="CheckUpdatesButton_Click" ToolTip.Tip="Check GitHub Releases for a newer version of Universal Media Downloader">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon x:Name="CheckUpdatesIcon" Data="{StaticResource UpdateIcon}" Width="14" Height="14" Foreground="#38BDF8"/>
-                    <PathIcon x:Name="CheckUpdatesSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="14" Height="14" Foreground="#38BDF8" IsVisible="False"/>
-                    <TextBlock x:Name="CheckUpdatesText" Text="Check Updates" FontSize="12" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button x:Name="LanguageToggleButton" Padding="10,6" Background="#27272A" Foreground="#38BDF8" FontWeight="Bold" FontSize="12" Content="عربي" Click="LanguageToggleButton_Click" ToolTip.Tip="Switch interface language between English (LTR) and Arabic (RTL)"/>
+                <Button x:Name="CheckUpdatesButton" Padding="10,6" Background="#27272A" Foreground="#E2E8F0" Click="CheckUpdatesButton_Click" ToolTip.Tip="Check GitHub Releases for a newer version of Universal Media Downloader">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon x:Name="CheckUpdatesIcon" Data="{StaticResource UpdateIcon}" Width="14" Height="14" Foreground="#38BDF8"/>
+                        <PathIcon x:Name="CheckUpdatesSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="14" Height="14" Foreground="#38BDF8" IsVisible="False"/>
+                        <TextBlock x:Name="CheckUpdatesText" Text="Check Updates" FontSize="12" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </Grid>
 
         <!-- App Update Available Banner -->
@@ -109,23 +112,23 @@
         <!-- Main Tab Control -->
         <TabControl x:Name="MainTabControl" Grid.Row="2">
             <!-- DOWNLOAD TAB -->
-            <TabItem Header="Download">
+            <TabItem x:Name="DownloadTab" Header="Download">
                 <ScrollViewer Margin="0,15,0,0">
                     <StackPanel Spacing="16">
                         <!-- URL Input Card -->
                         <Border Background="#1E1E24" CornerRadius="8" Padding="16">
                             <StackPanel Spacing="10">
                                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                    <TextBlock Text="Media URL" FontWeight="SemiBold" Foreground="#F4F4F8"/>
+                                    <TextBlock x:Name="MediaUrlHeader" Text="Media URL" FontWeight="SemiBold" Foreground="#F4F4F8"/>
                                     <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                               ToolTip.Tip="Enter or paste any media URL, playlist, or public post from 1,000+ supported platforms (YouTube, TikTok, Instagram, Facebook, X/Twitter, SoundCloud, Vimeo, Reddit, Twitch, etc.)."/>
                                 </StackPanel>
                                 <Grid ColumnDefinitions="*,Auto,Auto">
-                                    <TextBox x:Name="UrlTextBox" Grid.Column="0" Watermark="Paste video, audio, or playlist URL here..." TextChanged="UrlTextBox_TextChanged"/>
+                                    <TextBox x:Name="UrlTextBox" Grid.Column="0" FlowDirection="LeftToRight" Watermark="Paste video, audio, or playlist URL here..." TextChanged="UrlTextBox_TextChanged"/>
                                     <Button x:Name="PasteButton" Grid.Column="1" Margin="8,0,0,0" Padding="12,8" Click="PasteButton_Click">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
                                             <PathIcon Data="{StaticResource PasteIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
-                                            <TextBlock Text="Paste" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="PasteButtonText" Text="Paste" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <Button x:Name="InspectButton" Grid.Column="2" Margin="8,0,0,0" Padding="12,8" Background="#374151" Click="InspectButton_Click">
@@ -197,11 +200,11 @@
                         <!-- Options Card -->
                         <Border Background="#1E1E24" CornerRadius="8" Padding="16">
                             <StackPanel Spacing="12">
-                                <TextBlock Text="Download Options" FontWeight="SemiBold" Foreground="#F4F4F8"/>
+                                <TextBlock x:Name="DownloadOptionsHeader" Text="Download Options" FontWeight="SemiBold" Foreground="#F4F4F8"/>
                                 <Grid ColumnDefinitions="*,*,*">
                                     <StackPanel Grid.Column="0" Margin="0,0,10,0" Spacing="6">
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                            <TextBlock Text="Quality" Foreground="#9CA3AF" FontSize="12"/>
+                                            <TextBlock x:Name="QualityHeader" Text="Quality" Foreground="#9CA3AF" FontSize="12"/>
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Select the desired video resolution or audio extraction. 'Best Available' automatically chooses the highest quality stream provided by the source platform."/>
                                         </StackPanel>
@@ -216,7 +219,7 @@
 
                                     <StackPanel Grid.Column="1" Margin="0,0,10,0" Spacing="6">
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                            <TextBlock Text="Codec Preference" Foreground="#9CA3AF" FontSize="12"/>
+                                            <TextBlock x:Name="CodecHeader" Text="Codec Preference" Foreground="#9CA3AF" FontSize="12"/>
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Preferred video compression codec:&#x0a;• Default (Auto): Source default stream.&#x0a;• H.264 / AVC1: Maximum compatibility with TVs, phones, and media players.&#x0a;• VP9: Efficient Google/YouTube codec for 2K/4K resolution.&#x0a;• AV1: Next-generation ultra-efficient compression."/>
                                         </StackPanel>
@@ -230,7 +233,7 @@
 
                                     <StackPanel Grid.Column="2" Spacing="6">
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                            <TextBlock Text="Fragments" Foreground="#9CA3AF" FontSize="12"/>
+                                            <TextBlock x:Name="FragmentsHeader" Text="Fragments" Foreground="#9CA3AF" FontSize="12"/>
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Number of concurrent stream chunks downloaded in parallel for DASH and HLS video streams (1 to 16). Higher values significantly accelerate download speeds on fast internet connections."/>
                                         </StackPanel>
@@ -241,22 +244,22 @@
                                 <!-- Output Directory -->
                                 <StackPanel Spacing="6" Margin="0,4,0,0">
                                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                        <TextBlock Text="Save Directory" Foreground="#9CA3AF" FontSize="12"/>
+                                        <TextBlock x:Name="SaveDirHeader" Text="Save Directory" Foreground="#9CA3AF" FontSize="12"/>
                                         <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                   ToolTip.Tip="The local folder on your device where downloaded media files, playlists, and tracks will be stored. Defaults to your user Downloads folder."/>
                                     </StackPanel>
                                     <Grid ColumnDefinitions="*,Auto,Auto">
-                                        <TextBox x:Name="OutputDirBox" Grid.Column="0" Watermark="Default directory (or ~/Downloads)"/>
+                                        <TextBox x:Name="OutputDirBox" Grid.Column="0" FlowDirection="LeftToRight" Watermark="Default directory (or ~/Downloads)"/>
                                         <Button x:Name="BrowseDirButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,6" Click="BrowseDirButton_Click">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <PathIcon Data="{StaticResource FolderBrowseIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
-                                                <TextBlock Text="Browse..." VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="BrowseDirText" Text="Browse..." VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
                                         <Button x:Name="OpenDirButton" Grid.Column="2" Margin="8,0,0,0" Padding="10,6" Background="#374151" Click="OpenDirButton_Click">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <PathIcon Data="{StaticResource FolderOpenIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
-                                                <TextBlock Text="Open" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="OpenDirText" Text="Open" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
                                     </Grid>
@@ -266,7 +269,7 @@
                                 <Grid ColumnDefinitions="220,*" Margin="0,4,0,0">
                                     <StackPanel Grid.Column="0" Margin="0,0,10,0" Spacing="6">
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                            <TextBlock Text="Browser Cookies" Foreground="#9CA3AF" FontSize="12"/>
+                                            <TextBlock x:Name="BrowserCookiesHeader" Text="Browser Cookies" Foreground="#9CA3AF" FontSize="12"/>
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Automatically read your signed-in session cookies from an installed browser to unlock age-restricted YouTube videos and login-gated Instagram/Facebook posts."/>
                                         </StackPanel>
@@ -284,12 +287,12 @@
 
                                     <StackPanel Grid.Column="1" Spacing="6">
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                            <TextBlock Text="Cookies File (cookies.txt)" Foreground="#9CA3AF" FontSize="12"/>
+                                            <TextBlock x:Name="CookiesFileHeader" Text="Cookies File (cookies.txt)" Foreground="#9CA3AF" FontSize="12"/>
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Optional Netscape-format cookies.txt file exported from your browser. Overrides Browser Cookies when set."/>
                                         </StackPanel>
                                         <Grid ColumnDefinitions="*,Auto,Auto">
-                                            <TextBox x:Name="CookiesFileBox" Grid.Column="0" Watermark="Optional path to cookies.txt..."/>
+                                            <TextBox x:Name="CookiesFileBox" Grid.Column="0" FlowDirection="LeftToRight" Watermark="Optional path to cookies.txt..."/>
                                             <Button x:Name="BrowseCookiesButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,6" Content="Browse..." Click="BrowseCookiesButton_Click"/>
                                             <Button x:Name="ClearCookiesButton" Grid.Column="2" Margin="6,0,0,0" Padding="8,6" Background="#374151" Content="✕" Click="ClearCookiesButton_Click"/>
                                         </Grid>
@@ -325,35 +328,35 @@
                                 <!-- Collapsible Clip Trimmer, Playlist Picker & SponsorBlock -->
                                 <Expander HorizontalAlignment="Stretch" Background="#16161C" BorderBrush="#27272A" BorderThickness="1" CornerRadius="6" Margin="0,6,0,0">
                                     <Expander.Header>
-                                        <TextBlock Text="Clip Trimmer, Playlist Selection &amp; SponsorBlock (Advanced)" FontSize="12" FontWeight="SemiBold" Foreground="#CBD5E1"/>
+                                        <TextBlock x:Name="AdvancedExpanderHeader" Text="Clip Trimmer, Playlist Selection &amp; SponsorBlock (Advanced)" FontSize="12" FontWeight="SemiBold" Foreground="#CBD5E1"/>
                                     </Expander.Header>
                                     <StackPanel Spacing="10" Margin="4,8,4,4">
                                         <Grid ColumnDefinitions="*,*,*">
                                             <StackPanel Grid.Column="0" Margin="0,0,10,0" Spacing="5">
                                                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                                                    <TextBlock Text="Start Time" Foreground="#9CA3AF" FontSize="12"/>
+                                                    <TextBlock x:Name="StartTimeHeader" Text="Start Time" Foreground="#9CA3AF" FontSize="12"/>
                                                     <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                               ToolTip.Tip="Optional clip start timestamp (e.g. 00:01:30 or 90). Only downloads from this point onward."/>
                                                 </StackPanel>
-                                                <TextBox x:Name="StartTimeBox" Watermark="e.g. 00:00:30"/>
+                                                <TextBox x:Name="StartTimeBox" FlowDirection="LeftToRight" Watermark="e.g. 00:00:30"/>
                                             </StackPanel>
 
                                             <StackPanel Grid.Column="1" Margin="0,0,10,0" Spacing="5">
                                                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                                                    <TextBlock Text="End Time" Foreground="#9CA3AF" FontSize="12"/>
+                                                    <TextBlock x:Name="EndTimeHeader" Text="End Time" Foreground="#9CA3AF" FontSize="12"/>
                                                     <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                               ToolTip.Tip="Optional clip end timestamp (e.g. 00:03:15 or 195). Cuts the video precisely at this timestamp using FFmpeg."/>
                                                 </StackPanel>
-                                                <TextBox x:Name="EndTimeBox" Watermark="e.g. 00:02:15"/>
+                                                <TextBox x:Name="EndTimeBox" FlowDirection="LeftToRight" Watermark="e.g. 00:02:15"/>
                                             </StackPanel>
 
                                             <StackPanel Grid.Column="2" Spacing="5">
                                                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                                                    <TextBlock Text="Playlist Items" Foreground="#9CA3AF" FontSize="12"/>
+                                                    <TextBlock x:Name="PlaylistItemsHeader" Text="Playlist Items" Foreground="#9CA3AF" FontSize="12"/>
                                                     <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                               ToolTip.Tip="Select specific items from a playlist by index or range (e.g. 1,3,5-8). Leave empty to download all."/>
                                                 </StackPanel>
-                                                <TextBox x:Name="PlaylistItemsBox" Watermark="e.g. 1,2,5-8"/>
+                                                <TextBox x:Name="PlaylistItemsBox" FlowDirection="LeftToRight" Watermark="e.g. 1,2,5-8"/>
                                             </StackPanel>
                                         </Grid>
 
@@ -372,7 +375,7 @@
                             <Button x:Name="DownloadButton" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="#6366F1" Foreground="White" Padding="14" FontWeight="Bold" Click="DownloadButton_Click">
                                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
                                     <PathIcon Data="{StaticResource DownloadArrowIcon}" Width="16" Height="16" Foreground="White"/>
-                                    <TextBlock Text="Start Download" VerticalAlignment="Center" FontSize="14"/>
+                                    <TextBlock x:Name="StartDownloadText" Text="Start Download" VerticalAlignment="Center" FontSize="14"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="AddToQueueButton" Grid.Column="1" Margin="10,0,0,0" Background="#374151" Foreground="White" Padding="14" FontWeight="SemiBold" Content="+ Add to Queue" Click="AddToQueueButton_Click" ToolTip.Tip="Add this URL with your current options to the batch Download Queue"/>
@@ -399,7 +402,7 @@
                             <StackPanel Spacing="8">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                        <TextBlock Text="Live Terminal Output" FontWeight="SemiBold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="LiveTerminalHeader" Text="Live Terminal Output" FontWeight="SemiBold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
                                         <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                   ToolTip.Tip="Real-time console output from the downloader engine, displaying download milestones, FFmpeg multiplexing, and diagnostic messages."/>
                                     </StackPanel>
@@ -410,7 +413,7 @@
                                         </StackPanel>
                                     </Button>
                                 </Grid>
-                                <Border Background="#090A0F" CornerRadius="6" BorderBrush="#27272A" BorderThickness="1" Padding="6" Height="160">
+                                <Border Background="#090A0F" CornerRadius="6" BorderBrush="#27272A" BorderThickness="1" Padding="6" Height="160" FlowDirection="LeftToRight">
                                     <ListBox x:Name="QuickLogListBox" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                         <ListBox.Styles>
                                             <Style Selector="ListBoxItem">
@@ -442,7 +445,7 @@
                         <!-- Batch URL Input -->
                         <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,12">
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <TextBlock Text="Batch Download Queue" FontWeight="Bold" FontSize="15" Foreground="#F4F4F8"/>
+                                <TextBlock x:Name="QueueHeaderLabel" Text="Batch Download Queue" FontWeight="Bold" FontSize="15" Foreground="#F4F4F8"/>
                                 <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                           ToolTip.Tip="Paste one or more media URLs (one per line) to enqueue them with your current Download Options and run them automatically in parallel."/>
                             </StackPanel>
@@ -557,7 +560,7 @@
             </TabItem>
 
             <!-- HISTORY TAB -->
-            <TabItem Header="History">
+            <TabItem x:Name="HistoryTab" Header="History">
                 <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
                     <StackPanel Spacing="12">
                         <Grid ColumnDefinitions="*,Auto,Auto,Auto">
@@ -609,13 +612,13 @@
             </TabItem>
 
             <!-- CONSOLE LOGS TAB WITH INDIVIDUAL LINE COLORS -->
-            <TabItem Header="Console Logs">
+            <TabItem x:Name="LogsTab" Header="Console Logs">
                 <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
                     <Grid RowDefinitions="Auto,*,Auto">
                         <!-- Toolbar -->
                         <Grid Grid.Row="0" Margin="0,0,0,12" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
                             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <TextBlock Text="Backend Engine Logs" VerticalAlignment="Center" FontWeight="Bold" Foreground="#F4F4F8" FontSize="15"/>
+                                <TextBlock x:Name="BackendLogsHeader" Text="Backend Engine Logs" VerticalAlignment="Center" FontWeight="Bold" Foreground="#F4F4F8" FontSize="15"/>
                                 <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                           ToolTip.Tip="Full console log output with real-time text filtering, search, export to file, and pop-out multi-window support."/>
                             </StackPanel>

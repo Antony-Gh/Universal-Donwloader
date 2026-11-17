@@ -150,6 +150,76 @@ public partial class MainWindow : Window
         EmbedSubsCheck.IsChecked = _settings.EmbedSubs;
         WriteThumbnailCheck.IsChecked = _settings.WriteThumbnail;
         SponsorBlockCheck.IsChecked = _settings.SponsorBlockEnabled;
+        ApplyLanguage(_settings.Language);
+    }
+
+    private void LanguageToggleButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var nextLang = _settings.Language == "ar" ? "en" : "ar";
+        _settings.Language = nextLang;
+        ApplyLanguage(nextLang);
+        SaveUserSettings();
+    }
+
+    private void ApplyLanguage(string lang)
+    {
+        var code = lang == "ar" ? "ar" : "en";
+        FlowDirection = code == "ar"
+            ? global::Avalonia.Media.FlowDirection.RightToLeft
+            : global::Avalonia.Media.FlowDirection.LeftToRight;
+
+        string T(string key) => Localization.Get(code, key);
+
+        Title = T("AppTitle");
+        AppTitleText.Text = T("AppTitle");
+        LanguageToggleButton.Content = T("LangToggle");
+        CheckUpdatesText.Text = T("CheckUpdates");
+
+        DownloadTab.Header = T("TabDownload");
+        QueueTab.Header = T("TabQueue");
+        StreamsTab.Header = T("TabStreams");
+        HistoryTab.Header = T("TabHistory");
+        LogsTab.Header = T("TabLogs");
+
+        MediaUrlHeader.Text = T("MediaUrl");
+        UrlTextBox.Watermark = T("UrlWatermark");
+        PasteButtonText.Text = T("Paste");
+        InspectButtonText.Text = T("InspectStreams");
+
+        DownloadOptionsHeader.Text = T("DownloadOptions");
+        QualityHeader.Text = T("Quality");
+        CodecHeader.Text = T("Codec");
+        FragmentsHeader.Text = T("Fragments");
+        SaveDirHeader.Text = T("SaveDirectory");
+        BrowseDirText.Text = T("Browse");
+        OpenDirText.Text = T("Open");
+        BrowserCookiesHeader.Text = T("BrowserCookies");
+        CookiesFileHeader.Text = T("CookiesFile");
+
+        EmbedMetadataCheck.Content = T("EmbedMetadata");
+        EmbedThumbnailCheck.Content = T("EmbedCoverArt");
+        EmbedSubsCheck.Content = T("EmbedSubtitles");
+        WriteThumbnailCheck.Content = T("SaveThumbnail");
+        AdvancedExpanderHeader.Text = T("AdvancedHeader");
+        StartTimeHeader.Text = T("StartTime");
+        EndTimeHeader.Text = T("EndTime");
+        PlaylistItemsHeader.Text = T("PlaylistItems");
+        SponsorBlockCheck.Content = T("SponsorBlock");
+
+        StartDownloadText.Text = T("StartDownload");
+        AddToQueueButton.Content = T("AddToQueue");
+        CancelButton.Content = T("Cancel");
+        LiveTerminalHeader.Text = T("LiveTerminal");
+        QuickCopyText.Text = T("CopyOutput");
+
+        QueueHeaderLabel.Text = T("QueueHeader");
+        QueueAddBatchButton.Content = T("QueueAddUrls");
+        StartQueueButton.Content = T("StartQueue");
+        StopQueueButton.Content = T("Stop");
+        ClearQueueButton.Content = T("ClearCompleted");
+
+        RefreshStreamsButtonText.Text = T("RefreshStreams");
+        BackendLogsHeader.Text = T("BackendLogs");
     }
 
     private void SaveUserSettings()
