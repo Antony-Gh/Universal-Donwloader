@@ -310,28 +310,61 @@ public class DownloaderClient
     }
 
     /// <summary>
-    /// Download a public profile picture.
+    /// Download a public or cookie-authorized profile picture (accepts profile URL or platform:username).
     /// </summary>
-    public async Task<string?> DownloadProfilePictureAsync(string profileInput, CancellationToken cancellationToken = default)
+    public async Task<string> DownloadProfilePictureAsync(
+        string profileInput,
+        string? outputDirectory = null,
+        string? cookiesFromBrowser = null,
+        string? cookiesFile = null,
+        CancellationToken cancellationToken = default)
     {
         var arguments = new List<string>();
         if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        if (!string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            arguments.Add("--output");
+            arguments.Add($"\"{outputDirectory}\"");
+        }
+        if (!string.IsNullOrWhiteSpace(cookiesFile))
+        {
+            arguments.Add("--cookies");
+            arguments.Add($"\"{cookiesFile}\"");
+        }
+        else if (!string.IsNullOrWhiteSpace(cookiesFromBrowser))
+        {
+            arguments.Add("--cookies-from-browser");
+            arguments.Add(cookiesFromBrowser);
+        }
         arguments.Add("--profile");
         arguments.Add($"\"{profileInput}\"");
         arguments.Add("--json");
 
         var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            throw new Exception("Backend returned no output while resolving profile picture.");
+        }
+
+        // Parse last JSON object in output (in case any diagnostic text preceded it)
+        var jsonStart = output.LastIndexOf('{');
+        var candidateJson = jsonStart >= 0 ? output[jsonStart..] : output;
         try
         {
-            using var doc = JsonDocument.Parse(output);
+            using var doc = JsonDocument.Parse(candidateJson);
             if (doc.RootElement.TryGetProperty("saved_profile", out var saved))
             {
-                return saved.GetString();
+                var path = saved.GetString();
+                if (!string.IsNullOrWhiteSpace(path)) return path;
+            }
+            if (doc.RootElement.TryGetProperty("error", out var err))
+            {
+                throw new Exception(err.GetString() ?? "Profile picture download failed.");
             }
         }
         catch (JsonException) { }
 
-        return null;
+        throw new Exception(output.Trim());
     }
 
     /// <summary>

@@ -16,7 +16,12 @@ from universal_downloader.engine import DownloadEngine
 from universal_downloader.exceptions import ConfigurationError, ProfileError
 from universal_downloader.extractor import parse_rate_limit
 from universal_downloader.models import AppConfig, ContentType, DetectedTarget, Platform
-from universal_downloader.profile import resolve_profile_input
+from universal_downloader.profile import (
+    extract_username_from_profile_url,
+    is_generic_site_logo,
+    load_cookie_jar,
+    resolve_profile_input,
+)
 
 
 def test_validate_url_option():
@@ -59,10 +64,32 @@ def test_resolve_profile_input():
     assert resolve_profile_input("https://instagram.com/testuser/") == "https://instagram.com/testuser/"
 
     # platform:username syntax
+    assert resolve_profile_input("facebook:meta") == "https://facebook.com/meta/"
+    assert resolve_profile_input("fb:meta") == "https://facebook.com/meta/"
     assert resolve_profile_input("instagram:john_doe") == "https://instagram.com/john_doe/"
     assert resolve_profile_input("tiktok:@dancer") == "https://tiktok.com/dancer/"
     assert resolve_profile_input("x:techlead") == "https://x.com/techlead/"
     assert resolve_profile_input("youtube:CreatorStudio") == "https://youtube.com/@CreatorStudio"
+
+    # Facebook profile.php?id=... extraction
+    assert extract_username_from_profile_url("https://www.facebook.com/profile.php?id=100012345", Platform.FACEBOOK) == "100012345"
+    assert extract_username_from_profile_url("https://www.facebook.com/zuck", Platform.FACEBOOK) == "zuck"
+
+    # Generic site logo filter
+    assert is_generic_site_logo("https://static.xx.fbcdn.net/rsrc.php/v3/y/r/fb_icon_325x325.png")
+    assert not is_generic_site_logo("https://scontent.cdninstagram.com/v/t51.2885-19/123456_n.jpg")
+
+    # Netscape cookies.txt loading
+    with tempfile.TemporaryDirectory() as td:
+        cookie_path = Path(td) / "cookies.txt"
+        cookie_path.write_text(
+            "# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tabc123\n",
+            encoding="utf-8",
+        )
+        cfg = AppConfig(cookies_file=cookie_path)
+        jar = load_cookie_jar(cfg)
+        assert jar is not None
+        assert any(c.name == "sessionid" for c in jar)
 
     # Ambiguous bare @username must raise error
     with pytest.raises(ProfileError, match="ambiguous"):

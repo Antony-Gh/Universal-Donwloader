@@ -765,17 +765,24 @@ def main() -> int:
         # Profile picture resolution mode
         if args.profile:
             prof_val = clean_protocol_url(args.profile)
-            if not config.json_output and not config.json_stream:
-                print_banner(config)
+            try:
+                if not config.json_output and not config.json_stream:
+                    print_banner(config)
 
-            saved = engine.download_profile(prof_val)
+                saved = engine.download_profile(prof_val)
 
-            if config.json_output or config.json_stream:
-                print(json.dumps({"success": True, "saved_profile": str(saved)}))
-            else:
-                success(f"Profile picture saved: {saved}", config)
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": True, "saved_profile": str(saved)}))
+                else:
+                    success(f"Profile picture saved: {saved}", config)
 
-            return 0
+                return 0
+            except (ProfileError, Exception) as exc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(exc)}))
+                else:
+                    failure(f"Profile picture download failed: {exc}", config)
+                return 1
 
         # Batch mode
         if args.batch:

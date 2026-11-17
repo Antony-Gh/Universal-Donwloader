@@ -1,8 +1,9 @@
-"""Public profile photo resolution and image extraction."""
+"""Public and cookie-authorized profile photo resolution and image extraction."""
 
 from __future__ import annotations
 
 import html
+import http.cookiejar
 import logging
 import re
 import shutil
@@ -27,6 +28,8 @@ from universal_downloader.utils.net import detect_target, normalize_url
 LOGGER = logging.getLogger("universal_downloader")
 
 USERNAME_PLATFORM_PREFIXES = {
+    "facebook": Platform.FACEBOOK,
+    "fb": Platform.FACEBOOK,
     "instagram": Platform.INSTAGRAM,
     "tiktok": Platform.TIKTOK,
     "twitter": Platform.TWITTER,
@@ -40,16 +43,67 @@ USERNAME_PLATFORM_PREFIXES = {
     "bluesky": Platform.BLUESKY,
 }
 
+GENERIC_LOGO_SUBSTRINGS = (
+    "/rsrc.php/",
+    "static.xx.fbcdn.net/rsrc",
+    "static.cdninstagram.com/rsrc",
+    "instagram.com/static/images/ico",
+    "abs.twimg.com/responsive-web/client-web/icon",
+    "favicon.ico",
+    "apple-touch-icon",
+    "fb_icon_325x325.png",
+)
+
+
+def is_generic_site_logo(url: str) -> bool:
+    lowered = url.lower()
+    return any(token in lowered for token in GENERIC_LOGO_SUBSTRINGS)
+
+
+def load_cookie_jar(config: AppConfig) -> Optional[http.cookiejar.CookieJar]:
+    """Load the user's configured cookies (cookies.txt or browser session) for authorized profile access."""
+    if config.cookies_file and config.cookies_file.exists():
+        jar = http.cookiejar.MozillaCookieJar(str(config.cookies_file))
+        try:
+            jar.load(ignore_discard=True, ignore_expires=True)
+            return jar
+        except Exception as exc:
+            LOGGER.warning("Could not load cookies file %s: %s", config.cookies_file, exc)
+
+    if config.cookies_from_browser:
+        try:
+            from yt_dlp.cookies import extract_cookies_from_browser
+
+            return extract_cookies_from_browser(config.cookies_from_browser)
+        except Exception as exc:
+            LOGGER.warning("Could not load cookies from browser '%s': %s", config.cookies_from_browser, exc)
+
+    return None
+
+
+def _build_url_opener(cookie_jar: Optional[http.cookiejar.CookieJar]) -> urllib.request.OpenerDirector:
+    if cookie_jar is not None:
+        return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
+    return urllib.request.build_opener()
+
 
 def extract_username_from_profile_url(
     url: str,
     platform: Platform,
 ) -> Optional[str]:
-    path = urllib.parse.urlparse(url).path.strip("/")
+    parsed = urllib.parse.urlparse(url)
+    path = parsed.path.strip("/")
     if not path:
         return None
 
     segments = [segment for segment in path.split("/") if segment]
+
+    if platform == Platform.FACEBOOK:
+        if segments[0].lower() == "profile.php":
+            qs = urllib.parse.parse_qs(parsed.query)
+            profile_id = qs.get("id", [None])[0]
+            return profile_id or "facebook_profile"
+        return segments[0]
 
     if platform == Platform.YOUTUBE:
         if segments[0].startswith("@"):
@@ -108,6 +162,7 @@ def resolve_profile_input(value: str) -> str:
         if platform and username.strip():
             username = username.strip().lstrip("@")
             domain_map = {
+                Platform.FACEBOOK: "facebook.com",
                 Platform.INSTAGRAM: "instagram.com",
                 Platform.TIKTOK: "tiktok.com",
                 Platform.TWITTER: "x.com",
@@ -152,7 +207,11 @@ def extract_meta_image(html_text: str) -> Optional[str]:
     return None
 
 
-def fetch_public_html(url: str, timeout: int) -> str:
+def fetch_public_html(
+    url: str,
+    timeout: int,
+    cookie_jar: Optional[http.cookiejar.CookieJar] = None,
+) -> str:
     request = urllib.request.Request(
         url,
         headers={
@@ -170,14 +229,15 @@ def fetch_public_html(url: str, timeout: int) -> str:
         method="GET",
     )
 
+    opener = _build_url_opener(cookie_jar)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with opener.open(request, timeout=timeout) as response:
             charset = response.headers.get_content_charset() or "utf-8"
             return response.read().decode(charset, errors="replace")
     except urllib.error.HTTPError as exc:
-        raise ProfileError(f"Public profile page returned HTTP {exc.code}.") from exc
+        raise ProfileError(f"Profile page returned HTTP {exc.code}.") from exc
     except urllib.error.URLError as exc:
-        raise ProfileError(f"Could not access public profile page: {exc.reason}") from exc
+        raise ProfileError(f"Could not access profile page: {exc.reason}") from exc
     except TimeoutError as exc:
         raise ProfileError("Profile request timed out.") from exc
 
@@ -238,6 +298,7 @@ def download_public_image(
     destination: Path,
     timeout: int,
     base_dir: Path,
+    cookie_jar: Optional[http.cookiejar.CookieJar] = None,
 ) -> Path:
     request = urllib.request.Request(
         image_url,
@@ -256,8 +317,9 @@ def download_public_image(
     destination = ensure_inside_directory(base_dir, destination)
     temp_path = destination.with_suffix(destination.suffix + ".part")
 
+    opener = _build_url_opener(cookie_jar)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with opener.open(request, timeout=timeout) as response:
             with temp_path.open("wb") as fh:
                 shutil.copyfileobj(response, fh, length=1024 * 128)
 
@@ -273,7 +335,7 @@ def download_public_image(
 
 
 class ProfilePhotoResolver:
-    """Best-effort public profile image resolver."""
+    """Best-effort profile image resolver for public and cookie-authorized profiles."""
 
     def __init__(
         self,
@@ -290,13 +352,17 @@ class ProfilePhotoResolver:
         username_hint: Optional[str] = None,
     ) -> Path:
         target = detect_target(profile_url, timeout=self.config.timeout)
+        cookie_jar = load_cookie_jar(self.config)
 
         info(f"Platform: {platform.value}", self.config)
-        info("Resolving publicly exposed profile image...", self.config)
+        if cookie_jar is not None:
+            info("Resolving profile image using your configured session cookies...", self.config)
+        else:
+            info("Resolving publicly exposed profile image...", self.config)
 
         candidates: list[str] = []
 
-        # 1. First attempt: yt-dlp metadata
+        # 1. First attempt: yt-dlp metadata (automatically uses configured cookies)
         try:
             extracted = self.extractor.extract_info(
                 target.normalized_url,
@@ -307,28 +373,37 @@ class ProfilePhotoResolver:
         except ExtractionError as exc:
             LOGGER.info("yt-dlp profile metadata unavailable: %s", exc)
 
-        # 2. Second attempt: public HTML metadata
+        # 2. Second attempt: standard profile page HTML metadata (public or user-authenticated)
         try:
-            page = fetch_public_html(target.normalized_url, self.config.timeout)
+            page = fetch_public_html(target.normalized_url, self.config.timeout, cookie_jar=cookie_jar)
             meta_image = extract_meta_image(page)
             if meta_image:
                 candidates.append(
                     urllib.parse.urljoin(target.normalized_url, meta_image)
                 )
         except ProfileError as exc:
-            LOGGER.info("Public HTML profile lookup failed: %s", exc)
+            LOGGER.info("Profile HTML lookup failed: %s", exc)
 
         unique_candidates: list[str] = []
         seen: set[str] = set()
         for candidate in candidates:
-            if candidate.startswith(("http://", "https://")) and candidate not in seen:
+            if (
+                candidate.startswith(("http://", "https://"))
+                and candidate not in seen
+                and not is_generic_site_logo(candidate)
+            ):
                 seen.add(candidate)
                 unique_candidates.append(candidate)
 
         if not unique_candidates:
+            if cookie_jar is not None:
+                raise ProfileError(
+                    "No profile picture could be resolved with your current session cookies. "
+                    "The account may be private/locked to accounts without permission, or cookies may need refreshing."
+                )
             raise ProfileError(
                 "No publicly exposed profile image could be resolved. "
-                "The profile may require authentication or be private."
+                "If your account is authorized to view this profile, select Browser Cookies or import cookies.txt and try again."
             )
 
         username = (
@@ -357,10 +432,11 @@ class ProfilePhotoResolver:
                     destination,
                     self.config.timeout,
                     self.config.output_dir,
+                    cookie_jar=cookie_jar,
                 )
             except Exception as exc:
                 LOGGER.info("Profile image candidate failed: %s", exc)
 
         raise ProfileError(
-            "A public image URL was found, but it could not be downloaded."
+            "A profile image URL was found, but it could not be downloaded."
         )

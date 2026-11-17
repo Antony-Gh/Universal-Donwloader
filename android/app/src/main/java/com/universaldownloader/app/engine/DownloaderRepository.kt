@@ -16,6 +16,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URI
+import java.net.URL
 import java.util.Locale
 
 class DownloaderRepository(private val appContext: Context) {
@@ -329,6 +332,231 @@ class DownloaderRepository(private val appContext: Context) {
         try {
             YoutubeDL.getInstance().destroyProcessById(processId)
         } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Resolve shorthand inputs (e.g. instagram:user, facebook:user, tiktok:user, x:user, youtube:user)
+     * or standard profile URLs into a normalized HTTPS profile URL.
+     */
+    fun resolveProfileUrl(rawInput: String): String {
+        val cleaned = rawInput.trim().trim('"', '\'')
+        if (cleaned.isBlank()) throw IllegalArgumentException("Enter a profile URL or platform:username.")
+
+        if (cleaned.contains("://") || cleaned.startsWith("www.") || cleaned.substringBefore('/').contains('.')) {
+            return normalizeUrl(cleaned)
+        }
+
+        if (cleaned.contains(':')) {
+            val prefix = cleaned.substringBefore(':').trim().lowercase(Locale.US)
+            val user = cleaned.substringAfter(':').trim().trimStart('@')
+            if (user.isNotBlank()) {
+                return when (prefix) {
+                    "facebook", "fb" -> "https://www.facebook.com/$user/"
+                    "instagram", "ig" -> "https://www.instagram.com/$user/"
+                    "tiktok" -> "https://www.tiktok.com/@$user"
+                    "twitter", "x" -> "https://x.com/$user"
+                    "threads" -> "https://www.threads.net/@$user"
+                    "youtube", "yt" -> "https://www.youtube.com/@$user"
+                    "reddit" -> "https://www.reddit.com/user/$user"
+                    "twitch" -> "https://www.twitch.tv/$user"
+                    "soundcloud" -> "https://soundcloud.com/$user"
+                    "bluesky", "bsky" -> "https://bsky.app/profile/$user"
+                    else -> "https://$prefix.com/$user/"
+                }
+            }
+        }
+
+        throw IllegalArgumentException(
+            "Use a full profile URL or platform:username (e.g. instagram:user, facebook:user, tiktok:user, x:user)."
+        )
+    }
+
+    private fun buildCookieHeaderForHost(cookiesFilePath: String?, host: String): String? {
+        if (cookiesFilePath.isNullOrBlank()) return null
+        val file = File(cookiesFilePath)
+        if (!file.exists()) return null
+
+        val targetHost = host.lowercase(Locale.US)
+        val pairs = mutableListOf<String>()
+        file.forEachLine { rawLine ->
+            val line = rawLine.trim()
+            if (line.isEmpty() || (line.startsWith("#") && !line.startsWith("#HttpOnly_"))) return@forEachLine
+            val normalizedLine = line.removePrefix("#HttpOnly_")
+            val cols = normalizedLine.split('\t')
+            if (cols.size < 7) return@forEachLine
+            val domain = cols[0].trim().lowercase(Locale.US).trimStart('.')
+            val name = cols[5].trim()
+            val value = cols[6].trim()
+            if (domain.isNotEmpty() && name.isNotEmpty() && (targetHost == domain || targetHost.endsWith(".$domain"))) {
+                pairs.add("$name=$value")
+            }
+        }
+        return pairs.takeIf { it.isNotEmpty() }?.joinToString("; ")
+    }
+
+    private fun isGenericSiteLogo(url: String): Boolean {
+        val lowered = url.lowercase(Locale.US)
+        return listOf(
+            "/rsrc.php/",
+            "static.xx.fbcdn.net/rsrc",
+            "static.cdninstagram.com/rsrc",
+            "instagram.com/static/images/ico",
+            "abs.twimg.com/responsive-web/client-web/icon",
+            "favicon.ico",
+            "apple-touch-icon",
+            "fb_icon_325x325.png",
+        ).any { lowered.contains(it) }
+    }
+
+    private fun extractMetaImageUrl(htmlText: String): String? {
+        val patterns = listOf(
+            Regex("""<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)""", RegexOption.IGNORE_CASE),
+            Regex("""<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image""", RegexOption.IGNORE_CASE),
+            Regex("""<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)""", RegexOption.IGNORE_CASE),
+            Regex("""<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image""", RegexOption.IGNORE_CASE),
+        )
+        for (regex in patterns) {
+            val match = regex.find(htmlText)
+            if (match != null) {
+                return match.groupValues[1].replace("&amp;", "&")
+            }
+        }
+        return null
+    }
+
+    /**
+     * Download a public or cookie-authorized profile picture into Downloads/UniversalDownloader/profile_pictures/.
+     * Strictly respects platform authorization via the user's own optional cookies.txt session.
+     */
+    suspend fun downloadProfilePicture(
+        profileInput: String,
+        cookiesFilePath: String? = null,
+        onLog: (String) -> Unit,
+    ): Result<File> = withContext(Dispatchers.IO) {
+        runCatching {
+            val profileUrl = resolveProfileUrl(profileInput)
+            val host = runCatching { URI(profileUrl).host.orEmpty() }.getOrDefault("")
+            val hasCookies = !cookiesFilePath.isNullOrBlank() && File(cookiesFilePath).exists()
+            onLog(
+                if (hasCookies) "[Profile] Resolving profile picture using configured cookies: $profileUrl"
+                else "[Profile] Resolving public profile picture: $profileUrl"
+            )
+
+            val candidates = mutableListOf<String>()
+
+            // 1. Try yt-dlp flat info (uses user's cookies if configured)
+            runCatching {
+                val req = YoutubeDLRequest(profileUrl).apply {
+                    addOption("--dump-single-json")
+                    addOption("--skip-download")
+                    addOption("--flat-playlist")
+                    if (hasCookies) {
+                        addOption("--cookies", cookiesFilePath!!)
+                    }
+                }
+                val resp = YoutubeDL.getInstance().execute(req, null)
+                val raw = resp.out.trim()
+                val startIdx = raw.indexOf('{')
+                if (startIdx >= 0) {
+                    val json = JSONObject(raw.substring(startIdx))
+                    for (key in listOf("avatar", "channel_thumbnail", "uploader_thumbnail", "thumbnail")) {
+                        val v = json.optString(key, "")
+                        if (v.startsWith("http")) candidates.add(v)
+                    }
+                    val thumbs = json.optJSONArray("thumbnails")
+                    if (thumbs != null) {
+                        for (i in thumbs.length() - 1 downTo 0) {
+                            val u = thumbs.optJSONObject(i)?.optString("url", "") ?: ""
+                            if (u.startsWith("http")) candidates.add(u)
+                        }
+                    }
+                }
+            }
+
+            // 2. Standard profile HTML OpenGraph metadata (with user's session cookies if available)
+            runCatching {
+                val conn = (URL(profileUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    instanceFollowRedirects = true
+                    connectTimeout = 15_000
+                    readTimeout = 20_000
+                    setRequestProperty(
+                        "User-Agent",
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                    )
+                    buildCookieHeaderForHost(cookiesFilePath, host)?.let {
+                        setRequestProperty("Cookie", it)
+                    }
+                }
+                try {
+                    if (conn.responseCode in 200..299) {
+                        val html = conn.inputStream.bufferedReader().use { it.readText() }
+                        extractMetaImageUrl(html)?.let { img ->
+                            val absUrl = runCatching { URI(profileUrl).resolve(img).toString() }.getOrDefault(img)
+                            if (absUrl.startsWith("http")) candidates.add(absUrl)
+                        }
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            }
+
+            val validCandidates = candidates.distinct().filterNot { isGenericSiteLogo(it) }
+            if (validCandidates.isEmpty()) {
+                throw RuntimeException(
+                    if (hasCookies) {
+                        "No profile picture could be resolved with your current session cookies. " +
+                            "The account may be private/locked without permission, or cookies may need refreshing."
+                    } else {
+                        "No public profile picture found. For profiles your account is authorized to view, sign in via Web Login or import cookies.txt."
+                    }
+                )
+            }
+
+            val outDir = File(getOutputDirectory(audioOnly = false), "profile_pictures").apply { mkdirs() }
+            val safeName = (URI(profileUrl).path.trim('/').split('/').lastOrNull()?.trimStart('@') ?: "profile")
+                .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                .ifBlank { "profile" }
+
+            var lastError: Exception? = null
+            for (imageUrl in validCandidates) {
+                try {
+                    val imgHost = runCatching { URI(imageUrl).host.orEmpty() }.getOrDefault("")
+                    val ext = URI(imageUrl).path.substringAfterLast('.', "").lowercase(Locale.US)
+                        .takeIf { it in setOf("jpg", "jpeg", "png", "webp", "gif") } ?: "jpg"
+                    val dest = File(outDir, "${safeName}_${System.currentTimeMillis()}.$ext")
+                    val conn = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        instanceFollowRedirects = true
+                        connectTimeout = 15_000
+                        readTimeout = 20_000
+                        setRequestProperty(
+                            "User-Agent",
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                        )
+                        buildCookieHeaderForHost(cookiesFilePath, imgHost)?.let {
+                            setRequestProperty("Cookie", it)
+                        }
+                    }
+                    try {
+                        if (conn.responseCode !in 200..299) {
+                            throw RuntimeException("Image download returned HTTP ${conn.responseCode}")
+                        }
+                        conn.inputStream.use { input ->
+                            dest.outputStream().use { output -> input.copyTo(output) }
+                        }
+                    } finally {
+                        conn.disconnect()
+                    }
+                    MediaScannerConnection.scanFile(appContext, arrayOf(dest.absolutePath), null, null)
+                    onLog("[Complete] Profile picture saved: ${dest.name}")
+                    return@runCatching dest
+                } catch (ex: Exception) {
+                    lastError = ex
+                }
+            }
+            throw lastError ?: RuntimeException("Profile picture could not be downloaded.")
         }
     }
 

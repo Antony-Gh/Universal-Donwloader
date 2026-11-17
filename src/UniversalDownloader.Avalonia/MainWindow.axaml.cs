@@ -215,6 +215,7 @@ public partial class MainWindow : Window
         SponsorBlockCheck.Content = T("SponsorBlock");
 
         StartDownloadText.Text = T("StartDownload");
+        ProfilePicButtonText.Text = T("ProfilePic");
         AddToQueueButton.Content = T("AddToQueue");
         CancelButton.Content = T("Cancel");
         LiveTerminalHeader.Text = T("LiveTerminal");
@@ -655,6 +656,70 @@ public partial class MainWindow : Window
         SaveUserSettings();
         var options = BuildOptionsFromUi();
         await StartDownloadWithUrl(url, options);
+    }
+
+    private async void ProfilePicButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var input = UrlTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            GlobalStatusText.Text = "Enter a profile URL or platform:username (e.g. instagram:user, facebook:user, tiktok:user).";
+            return;
+        }
+
+        SaveUserSettings();
+        ProfilePicButton.IsEnabled = false;
+        ProfilePicIcon.IsVisible = false;
+        ProfilePicSpinner.IsVisible = true;
+        BeginGlobalActivity("Resolving & downloading profile picture...");
+        OnRawOutputReceived(this, $"[Profile] Resolving profile picture for: {input}");
+
+        try
+        {
+            var customDir = OutputDirBox.Text?.Trim();
+            var cookiesFile = GetSelectedCookiesFile();
+            var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
+
+            var savedPath = await _client.DownloadProfilePictureAsync(
+                input,
+                outputDirectory: string.IsNullOrWhiteSpace(customDir) ? null : customDir,
+                cookiesFromBrowser: cookiesBrowser,
+                cookiesFile: cookiesFile);
+
+            OnRawOutputReceived(this, $"[Complete] Profile picture saved: {savedPath}");
+            GlobalStatusText.Text = $"Profile picture saved: {Path.GetFileName(savedPath)}";
+
+            // Display saved image in preview card immediately
+            if (File.Exists(savedPath))
+            {
+                try
+                {
+                    var bytes = await File.ReadAllBytesAsync(savedPath);
+                    using var ms = new MemoryStream(bytes);
+                    ThumbnailImage.Source = new Bitmap(ms);
+                    PlatformBadge.Text = "PROFILE PIC";
+                    VideoTitleLabel.Text = Path.GetFileName(savedPath);
+                    UploaderLabel.Text = savedPath;
+                    ViewsLabel.Text = PlatformUtils.FormatBytes(bytes.Length);
+                    DurationBadge.IsVisible = false;
+                    MetadataLoadingText.IsVisible = false;
+                    MetadataCard.IsVisible = true;
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            OnRawOutputReceived(this, $"[Error] Profile picture failed: {ex.Message}");
+            GlobalStatusText.Text = $"Profile picture failed: {ex.Message}";
+        }
+        finally
+        {
+            ProfilePicButton.IsEnabled = true;
+            ProfilePicIcon.IsVisible = true;
+            ProfilePicSpinner.IsVisible = false;
+            EndGlobalActivity();
+        }
     }
 
     private async Task StartDownloadWithUrl(string url, DownloadOptions options)

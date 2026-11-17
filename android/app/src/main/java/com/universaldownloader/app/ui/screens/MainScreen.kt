@@ -1072,13 +1072,35 @@ private fun DownloadTab(
             }
 
             OutlinedButton(
+                onClick = { viewModel.downloadProfilePicture() },
+                enabled = state.urlInput.isNotBlank() && !state.isDownloadingProfilePic,
+                modifier = Modifier.height(50.dp),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp),
+                border = BorderStroke(1.dp, BorderSubtle),
+            ) {
+                if (state.isDownloadingProfilePic) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = AccentSky,
+                    )
+                } else {
+                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp), tint = AccentSky)
+                }
+                Spacer(Modifier.width(4.dp))
+                Text(strings.profilePic, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextPrimary)
+            }
+
+            OutlinedButton(
                 onClick = { viewModel.addToQueue() },
                 enabled = state.urlInput.isNotBlank(),
                 modifier = Modifier.height(50.dp),
                 shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp),
                 border = BorderStroke(1.dp, BorderSubtle),
             ) {
-                Text(strings.addToQueue, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = AccentSky)
+                Text(strings.addToQueue, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = AccentSky)
             }
 
             if (state.isDownloading || state.isQueueRunning) {

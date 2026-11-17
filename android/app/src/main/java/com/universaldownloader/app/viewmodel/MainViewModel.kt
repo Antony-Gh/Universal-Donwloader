@@ -39,6 +39,7 @@ data class MainUiState(
     val metadata: MediaMetadata? = null,
     val preliminaryPlatform: String = "",
     val isInspectingStreams: Boolean = false,
+    val isDownloadingProfilePic: Boolean = false,
     val streams: List<StreamFormat> = emptyList(),
     val streamsHeader: String = "Enter or paste a media URL to inspect available streams.",
     val isDownloading: Boolean = false,
@@ -69,6 +70,7 @@ data class MainUiState(
             engineStatus == EngineStatus.UPDATING ||
             isFetchingMetadata ||
             isInspectingStreams ||
+            isDownloadingProfilePic ||
             isDownloading ||
             isQueueRunning ||
             isLoadingHistory ||
@@ -685,6 +687,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isIndeterminateProgress = false,
                 downloadStatusText = "Download canceled.",
                 globalStatus = "Download canceled",
+            )
+        }
+    }
+
+    fun downloadProfilePicture() {
+        val rawInput = _uiState.value.urlInput.trim()
+        if (rawInput.isBlank() || _uiState.value.isDownloadingProfilePic) return
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isDownloadingProfilePic = true,
+                    globalStatus = "Resolving & downloading profile picture...",
+                )
+            }
+
+            val result = repo.downloadProfilePicture(
+                profileInput = rawInput,
+                cookiesFilePath = _uiState.value.options.cookiesFilePath,
+                onLog = { line -> appendLog(line) },
+            )
+
+            result.fold(
+                onSuccess = { savedFile ->
+                    val platform = repo.detectPlatformLabel(rawInput)
+                    withContext(Dispatchers.IO) {
+                        historyStore.record(
+                            url = rawInput,
+                            title = "Profile Picture: ${savedFile.name}",
+                            platform = platform,
+                            filePath = savedFile.absolutePath,
+                        )
+                    }
+                    loadHistory()
+                    _uiState.update {
+                        it.copy(
+                            isDownloadingProfilePic = false,
+                            globalStatus = "Saved profile picture: ${savedFile.name}",
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    val msg = err.message ?: "Profile picture download failed"
+                    appendLog("[Error] $msg")
+                    _uiState.update {
+                        it.copy(
+                            isDownloadingProfilePic = false,
+                            globalStatus = "Profile pic failed: $msg",
+                        )
+                    }
+                },
             )
         }
     }
