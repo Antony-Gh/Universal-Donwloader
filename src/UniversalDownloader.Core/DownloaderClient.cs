@@ -107,7 +107,7 @@ public class DownloaderClient
                     switch (eventName)
                     {
                         case "progress":
-                            var prog = JsonSerializer.Deserialize<DownloadProgressEvent>(line);
+                            var prog = JsonSerializer.Deserialize(line, DownloaderJsonContext.Default.DownloadProgressEvent);
                             if (prog != null)
                             {
                                 ProgressChanged?.Invoke(this, prog);
@@ -120,7 +120,7 @@ public class DownloaderClient
                             return;
 
                         case "complete":
-                            completedResult = JsonSerializer.Deserialize<DownloadCompleteEvent>(line);
+                            completedResult = JsonSerializer.Deserialize(line, DownloaderJsonContext.Default.DownloadCompleteEvent);
                             if (completedResult != null)
                             {
                                 DownloadCompleted?.Invoke(this, completedResult);
@@ -129,7 +129,7 @@ public class DownloaderClient
                             return;
 
                         case "error":
-                            var errEvt = JsonSerializer.Deserialize<DownloadErrorEvent>(line);
+                            var errEvt = JsonSerializer.Deserialize(line, DownloaderJsonContext.Default.DownloadErrorEvent);
                             failureMessage = errEvt?.Error ?? "Unknown download error.";
                             if (errEvt != null)
                             {
@@ -210,7 +210,7 @@ public class DownloaderClient
 
         try
         {
-            return JsonSerializer.Deserialize<MediaMetadataModel>(output);
+            return JsonSerializer.Deserialize(output, DownloaderJsonContext.Default.MediaMetadataModel);
         }
         catch (JsonException)
         {
@@ -250,7 +250,7 @@ public class DownloaderClient
             using var doc = JsonDocument.Parse(output);
             if (doc.RootElement.TryGetProperty("formats", out var formatsArray))
             {
-                return JsonSerializer.Deserialize<List<FormatInfoModel>>(formatsArray.GetRawText()) ?? new();
+                return JsonSerializer.Deserialize(formatsArray.GetRawText(), DownloaderJsonContext.Default.ListFormatInfoModel) ?? new();
             }
         }
         catch (JsonException ex)
@@ -287,7 +287,7 @@ public class DownloaderClient
 
         try
         {
-            return JsonSerializer.Deserialize<List<HistoryRecordModel>>(output) ?? new();
+            return JsonSerializer.Deserialize(output, DownloaderJsonContext.Default.ListHistoryRecordModel) ?? new();
         }
         catch (JsonException)
         {

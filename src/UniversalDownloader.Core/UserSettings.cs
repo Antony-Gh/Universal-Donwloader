@@ -33,7 +33,7 @@ public class UserSettings
             if (File.Exists(path))
             {
                 var json = File.ReadAllText(path);
-                var loaded = JsonSerializer.Deserialize<UserSettings>(json);
+                var loaded = JsonSerializer.Deserialize(json, DownloaderJsonContext.Default.UserSettings);
                 if (loaded != null)
                 {
                     loaded.ConcurrentFragments = Math.Clamp(loaded.ConcurrentFragments, 1, 16);
@@ -58,7 +58,7 @@ public class UserSettings
             {
                 Directory.CreateDirectory(dir);
             }
-            var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(this, DownloaderJsonContext.Default.UserSettings);
             File.WriteAllText(path, json);
         }
         catch
