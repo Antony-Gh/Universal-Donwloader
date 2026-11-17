@@ -77,12 +77,57 @@ def run_command(cmd: List[str], cwd: Optional[Path] = None, check: bool = True) 
     return proc
 
 
+APP_CONFIG_FILE = ROOT_DIR / "app_config.json"
+
+
+def load_app_config() -> dict:
+    """Load the single shared app_config.json used across Desktop, Android, and Python."""
+    if APP_CONFIG_FILE.exists():
+        try:
+            return json.loads(APP_CONFIG_FILE.read_text(encoding="utf-8"))
+        except Exception as exc:
+            print_warning(f"Failed to parse {APP_CONFIG_FILE}: {exc}")
+    return {}
+
+
+def sync_app_config(version: str, version_code: Optional[int] = None) -> None:
+    """Update app_config.json (if overridden via CLI) and keep pyproject.toml version synced."""
+    cfg = load_app_config()
+    if cfg:
+        changed = False
+        if cfg.get("version_name") != version:
+            cfg["version_name"] = version
+            changed = True
+        if version_code is not None and cfg.get("version_code") != version_code:
+            cfg["version_code"] = version_code
+            changed = True
+        elif changed:
+            parts = [int(p) if p.isdigit() else 0 for p in version.lstrip("v").split(".")]
+            major = parts[0] if len(parts) > 0 else 1
+            minor = parts[1] if len(parts) > 1 else 0
+            patch = parts[2] if len(parts) > 2 else 0
+            cfg["version_code"] = major * 100 + minor * 10 + patch
+        if changed:
+            APP_CONFIG_FILE.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+            print_success(f"Updated app_config.json -> version_name={cfg['version_name']}, version_code={cfg['version_code']}")
+
+    pyproj = ROOT_DIR / "pyproject.toml"
+    if pyproj.exists():
+        text = pyproj.read_text(encoding="utf-8")
+        updated = re.sub(r'(?m)^version\s*=\s*"[^"]+"', f'version = "{version}"', text)
+        if updated != text:
+            pyproj.write_text(updated, encoding="utf-8")
+            print_success(f"Synced pyproject.toml -> version={version}")
+
+
 def detect_repo_info() -> Tuple[str, str]:
-    """Extract owner and repository name from git remote origin."""
+    """Read GitHub owner/repo from app_config.json, falling back to git remote origin."""
+    cfg = load_app_config()
+    if cfg.get("github_owner") and cfg.get("github_repo"):
+        return str(cfg["github_owner"]), str(cfg["github_repo"])
     try:
         proc = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True, check=True)
         url = proc.stdout.strip()
-        # Matches https://github.com/owner/repo.git or git@github.com:owner/repo.git
         match = re.search(r"github\.com[/:](?P<owner>[^/]+)/(?P<repo>[^/.]+)", url)
         if match:
             return match.group("owner"), match.group("repo")
@@ -92,7 +137,10 @@ def detect_repo_info() -> Tuple[str, str]:
 
 
 def get_default_version() -> str:
-    """Detect version from pyproject.toml or universal_downloader."""
+    """Read default version_name directly from shared app_config.json."""
+    cfg = load_app_config()
+    if cfg.get("version_name"):
+        return str(cfg["version_name"]).lstrip("v")
     pyproj = ROOT_DIR / "pyproject.toml"
     if pyproj.exists():
         text = pyproj.read_text(encoding="utf-8")
@@ -393,23 +441,8 @@ def package_tar_release(platform_name: str, rid: str, version: str) -> List[Path
 
 
 def sync_android_version(version: str) -> None:
-    """Keep android/app/build.gradle.kts versionName and versionCode aligned with the release version."""
-    gradle_file = ROOT_DIR / "android" / "app" / "build.gradle.kts"
-    if not gradle_file.exists():
-        return
-
-    parts = [int(p) if p.isdigit() else 0 for p in version.lstrip("v").split(".")]
-    major = parts[0] if len(parts) > 0 else 1
-    minor = parts[1] if len(parts) > 1 else 0
-    patch = parts[2] if len(parts) > 2 else 0
-    version_code = major * 100 + minor * 10 + patch
-
-    content = gradle_file.read_text(encoding="utf-8")
-    updated = re.sub(r'versionName\s*=\s*"[^"]+"', f'versionName = "{version}"', content)
-    updated = re.sub(r'versionCode\s*=\s*\d+', f'versionCode = {version_code}', updated)
-    if updated != content:
-        gradle_file.write_text(updated, encoding="utf-8")
-        print_success(f"Synced Android version -> versionName={version}, versionCode={version_code}")
+    """Ensure shared app_config.json (read directly by android/app/build.gradle.kts) matches the target version."""
+    sync_app_config(version)
 
 
 def detect_android_sdk() -> Optional[Path]:
@@ -656,6 +689,7 @@ def main() -> None:
     args = parser.parse_args()
 
     version = (args.version or get_default_version()).lstrip("v")
+    sync_app_config(version)
     tag = f"v{version}"
     owner, repo = detect_repo_info()
 

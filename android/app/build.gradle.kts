@@ -1,19 +1,51 @@
+import groovy.json.JsonSlurper
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Single source of truth: reads shared ../app_config.json at Gradle build time
+@Suppress("UNCHECKED_CAST")
+val sharedAppConfig: Map<String, Any> = run {
+    val cfgFile = rootProject.file("../app_config.json")
+    if (cfgFile.exists()) {
+        JsonSlurper().parse(cfgFile) as Map<String, Any>
+    } else {
+        emptyMap()
+    }
+}
+@Suppress("UNCHECKED_CAST")
+val androidCfg = (sharedAppConfig["android"] as? Map<String, Any>) ?: emptyMap()
+
+val cfgAppName = (sharedAppConfig["app_name"] as? String) ?: "Universal Media Downloader"
+val cfgShortName = (sharedAppConfig["short_name"] as? String) ?: "Universal Downloader"
+val cfgVersionName = (sharedAppConfig["version_name"] as? String) ?: "1.5.0"
+val cfgVersionCode = (sharedAppConfig["version_code"] as? Number)?.toInt() ?: 150
+val cfgGithubOwner = (sharedAppConfig["github_owner"] as? String) ?: "Antony-Gh"
+val cfgGithubRepo = (sharedAppConfig["github_repo"] as? String) ?: "Universal-Donwloader"
+val cfgAppId = (androidCfg["application_id"] as? String) ?: "com.universaldownloader.app"
+val cfgMinSdk = (androidCfg["min_sdk"] as? Number)?.toInt() ?: 24
+val cfgTargetSdk = (androidCfg["target_sdk"] as? Number)?.toInt() ?: 35
+val cfgCompileSdk = (androidCfg["compile_sdk"] as? Number)?.toInt() ?: 35
+val cfgYtdlVersion = (androidCfg["youtubedl_android_version"] as? String) ?: "0.18.1"
+
 android {
     namespace = "com.universaldownloader.app"
-    compileSdk = 35
+    compileSdk = cfgCompileSdk
 
     defaultConfig {
-        applicationId = "com.universaldownloader.app"
-        minSdk = 24
-        targetSdk = 35
-        versionCode = 150
-        versionName = "1.5.0"
+        applicationId = cfgAppId
+        minSdk = cfgMinSdk
+        targetSdk = cfgTargetSdk
+        versionCode = cfgVersionCode
+        versionName = cfgVersionName
+
+        buildConfigField("String", "APP_NAME", "\"$cfgAppName\"")
+        buildConfigField("String", "SHORT_NAME", "\"$cfgShortName\"")
+        buildConfigField("String", "GITHUB_OWNER", "\"$cfgGithubOwner\"")
+        buildConfigField("String", "GITHUB_REPO", "\"$cfgGithubRepo\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -108,9 +140,8 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
 
     // Native Embedded Python + yt-dlp + FFmpeg Engine
-    val youtubedlAndroidVersion = "0.18.1"
-    implementation("io.github.junkfood02.youtubedl-android:library:$youtubedlAndroidVersion")
-    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:$youtubedlAndroidVersion")
+    implementation("io.github.junkfood02.youtubedl-android:library:$cfgYtdlVersion")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:$cfgYtdlVersion")
 
     // Debug & Testing
     debugImplementation("androidx.compose.ui:ui-tooling")

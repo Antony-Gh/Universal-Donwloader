@@ -20,15 +20,29 @@ public record AppUpdateInfo
 
 /// <summary>
 /// Cross-platform update checker querying GitHub Releases for Windows, Linux, and macOS builds.
+/// Reads app version, version code, display name, and GitHub repo directly from app_config.json (embedded via Directory.Build.props).
 /// </summary>
 public static class UpdateChecker
 {
-    public const string RepoOwner = "Antony-Gh";
-    public const string RepoName = "Universal-Donwloader";
-    public const string LatestReleaseApiUrl = $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest";
-    public const string LatestReleaseWebUrl = $"https://github.com/{RepoOwner}/{RepoName}/releases/latest";
+    public static string RepoOwner => GetAssemblyMetadata("GitHubOwner") ?? "Antony-Gh";
+    public static string RepoName => GetAssemblyMetadata("GitHubRepo") ?? "Universal-Donwloader";
+    public static string AppDisplayName => GetAssemblyMetadata("AppDisplayName") ?? "Universal Media Downloader";
+    public static int AppVersionCode => int.TryParse(GetAssemblyMetadata("AppVersionCode"), out var code) ? code : 150;
+    public static string LatestReleaseApiUrl => $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest";
+    public static string LatestReleaseWebUrl => $"https://github.com/{RepoOwner}/{RepoName}/releases/latest";
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(12) };
+
+    private static string? GetAssemblyMetadata(string key)
+    {
+        var asm = Assembly.GetEntryAssembly() ?? typeof(UpdateChecker).Assembly;
+        return asm.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))
+            ?.Value
+            ?? typeof(UpdateChecker).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+                .FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))
+                ?.Value;
+    }
 
     public static string GetCurrentVersion()
     {

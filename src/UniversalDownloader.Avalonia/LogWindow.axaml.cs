@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using UniversalDownloader.Core;
 using UniversalDownloader.Core.Models;
 
 namespace UniversalDownloader.Avalonia;
@@ -20,6 +21,7 @@ public partial class LogWindow : Window
     public LogWindow()
     {
         InitializeComponent();
+        LogVersionLabel.Text = $"{UpdateChecker.AppDisplayName} v{UpdateChecker.GetCurrentVersion()}";
         LogListBox.ItemsSource = _filteredLogs;
     }
 

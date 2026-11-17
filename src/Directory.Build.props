@@ -1,0 +1,27 @@
+<Project>
+  <!-- Automatically reads shared app_config.json from repository root across all C# projects -->
+  <PropertyGroup>
+    <_AppConfigPath>$(MSBuildThisFileDirectory)..\app_config.json</_AppConfigPath>
+    <_AppConfigText Condition="Exists('$(_AppConfigPath)')">$([System.IO.File]::ReadAllText('$(_AppConfigPath)'))</_AppConfigText>
+
+    <Version Condition="'$(_AppConfigText)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_AppConfigText)', '"version_name"\s*:\s*"([^"]+)"').Groups[1].Value)</Version>
+    <AppVersionCode Condition="'$(_AppConfigText)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_AppConfigText)', '"version_code"\s*:\s*(\d+)').Groups[1].Value)</AppVersionCode>
+    <AppDisplayName Condition="'$(_AppConfigText)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_AppConfigText)', '"app_name"\s*:\s*"([^"]+)"').Groups[1].Value)</AppDisplayName>
+    <GitHubOwner Condition="'$(_AppConfigText)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_AppConfigText)', '"github_owner"\s*:\s*"([^"]+)"').Groups[1].Value)</GitHubOwner>
+    <GitHubRepo Condition="'$(_AppConfigText)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_AppConfigText)', '"github_repo"\s*:\s*"([^"]+)"').Groups[1].Value)</GitHubRepo>
+
+    <!-- Fallback defaults -->
+    <Version Condition="'$(Version)' == ''">1.5.0</Version>
+    <AppVersionCode Condition="'$(AppVersionCode)' == ''">150</AppVersionCode>
+    <AppDisplayName Condition="'$(AppDisplayName)' == ''">Universal Media Downloader</AppDisplayName>
+    <GitHubOwner Condition="'$(GitHubOwner)' == ''">Antony-Gh</GitHubOwner>
+    <GitHubRepo Condition="'$(GitHubRepo)' == ''">Universal-Donwloader</GitHubRepo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="AppDisplayName" Value="$(AppDisplayName)" />
+    <AssemblyMetadata Include="AppVersionCode" Value="$(AppVersionCode)" />
+    <AssemblyMetadata Include="GitHubOwner" Value="$(GitHubOwner)" />
+    <AssemblyMetadata Include="GitHubRepo" Value="$(GitHubRepo)" />
+  </ItemGroup>
+</Project>

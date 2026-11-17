@@ -23,10 +23,10 @@ data class AppUpdateInfo(
 class AppUpdateChecker {
 
     companion object {
-        const val REPO_OWNER = "Antony-Gh"
-        const val REPO_NAME = "Universal-Donwloader"
-        const val LATEST_RELEASE_API = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
-        const val LATEST_RELEASE_WEB = "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest"
+        val REPO_OWNER: String = BuildConfig.GITHUB_OWNER
+        val REPO_NAME: String = BuildConfig.GITHUB_REPO
+        val LATEST_RELEASE_API: String = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
+        val LATEST_RELEASE_WEB: String = "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest"
     }
 
     suspend fun checkForUpdates(): Result<AppUpdateInfo> = withContext(Dispatchers.IO) {

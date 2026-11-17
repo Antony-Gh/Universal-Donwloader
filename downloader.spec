@@ -52,6 +52,7 @@ hidden_imports = [
 
 datas = [
     ("universal_downloader", "universal_downloader"),
+    ("app_config.json", "."),
 ] + collect_data_files("certifi") + extra_datas
 
 a = Analysis(

@@ -60,7 +60,7 @@
         <!-- Status Footer -->
         <Grid Grid.Row="2" Margin="0,8,0,0" ColumnDefinitions="*,Auto">
             <TextBlock x:Name="LogCountLabel" Grid.Column="0" Text="0 lines" Foreground="#9CA3AF" FontSize="11" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" Text="Universal Downloader v1.5.0" Foreground="#6B7280" FontSize="11" VerticalAlignment="Center"/>
+            <TextBlock x:Name="LogVersionLabel" Grid.Column="1" Text="Universal Downloader" Foreground="#6B7280" FontSize="11" VerticalAlignment="Center"/>
         </Grid>
     </Grid>
 </Window>
