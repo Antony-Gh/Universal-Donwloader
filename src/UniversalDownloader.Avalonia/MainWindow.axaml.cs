@@ -34,6 +34,14 @@ public partial class MainWindow : Window
     private int _activeTaskCount = 0;
     private AppUpdateInfo? _latestUpdateInfo;
     private UserSettings _settings = new();
+    private string? _detectedClipboardUrl;
+    private string? _dismissedClipboardUrl;
+    private static readonly string[] SupportedClipboardHosts =
+    [
+        "youtube.com", "youtu.be", "instagram.com", "tiktok.com", "facebook.com", "fb.watch",
+        "twitter.com", "x.com", "soundcloud.com", "vimeo.com", "reddit.com", "redd.it",
+        "twitch.tv", "threads.net", "pinterest.com", "pin.it", "dailymotion.com", "bilibili.com"
+    ];
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(12) };
 
     public MainWindow()
@@ -64,8 +72,64 @@ public partial class MainWindow : Window
         {
             await LoadHistoryAsync();
             _ = CheckForAppUpdatesAsync(silent: true);
+            await CheckClipboardForMediaUrlAsync();
         };
+        Activated += async (s, e) => await CheckClipboardForMediaUrlAsync();
         Closing += (s, e) => SaveUserSettings();
+    }
+
+    private async Task CheckClipboardForMediaUrlAsync()
+    {
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard == null) return;
+            var raw = (await clipboard.GetTextAsync())?.Trim();
+            if (string.IsNullOrWhiteSpace(raw) || raw.Length > 1000) return;
+
+            if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return;
+            }
+
+            var host = uri.Host.ToLowerInvariant();
+            if (!SupportedClipboardHosts.Any(h => host == h || host.EndsWith("." + h)))
+            {
+                return;
+            }
+
+            var currentInput = UrlTextBox.Text?.Trim();
+            if (string.Equals(raw, currentInput, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(raw, _dismissedClipboardUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                ClipboardBanner.IsVisible = false;
+                return;
+            }
+
+            _detectedClipboardUrl = raw;
+            ClipboardBannerText.Text = $"Copied link detected: {raw}";
+            ClipboardBanner.IsVisible = true;
+        }
+        catch
+        {
+            // Clipboard access may fail silently when locked by another app
+        }
+    }
+
+    private void AcceptClipboardButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_detectedClipboardUrl))
+        {
+            ClipboardBanner.IsVisible = false;
+            UrlTextBox.Text = _detectedClipboardUrl;
+        }
+    }
+
+    private void DismissClipboardButton_Click(object? sender, RoutedEventArgs e)
+    {
+        _dismissedClipboardUrl = _detectedClipboardUrl;
+        ClipboardBanner.IsVisible = false;
     }
 
     private void LoadUserSettings()

@@ -1,6 +1,8 @@
 package com.universaldownloader.app
 
 import android.Manifest
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -39,6 +41,20 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIncomingShareIntent(intent)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            try {
+                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val text = cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()
+                if (!text.isNullOrBlank()) {
+                    viewModel.onClipboardTextDetected(text)
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun handleIncomingShareIntent(incomingIntent: Intent?) {

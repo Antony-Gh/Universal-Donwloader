@@ -504,6 +504,46 @@ private fun DownloadTab(
                         }
                     }
                 }
+
+                // Smart Clipboard Suggestion Banner
+                val clipUrl = state.detectedClipboardUrl
+                if (!clipUrl.isNullOrBlank()) {
+                    Surface(
+                        color = Color(0xFF162032),
+                        border = BorderStroke(1.dp, AccentSky),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "Copied link: $clipUrl",
+                                color = Color(0xFFBAE6FD),
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                onClick = { viewModel.acceptClipboardUrl() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            ) {
+                                Text("Load", color = AccentSky, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                            IconButton(
+                                onClick = { viewModel.dismissClipboardUrl() },
+                                modifier = Modifier.size(22.dp),
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = TextSecondary, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    }
+                }
             }
         }
 

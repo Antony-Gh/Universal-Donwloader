@@ -51,6 +51,7 @@ data class MainUiState(
     val isCheckingAppUpdate: Boolean = false,
     val appUpdateInfo: AppUpdateInfo? = null,
     val isUpdateBannerDismissed: Boolean = false,
+    val detectedClipboardUrl: String? = null,
     val globalStatus: String = "Initializing engine...",
     val selectedTab: Int = 0,
 ) {
@@ -79,6 +80,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var downloadJob: Job? = null
     private var activeProcessId: String? = null
     private var lastFetchedUrl: String? = null
+    private var dismissedClipboardUrl: String? = null
+
+    private val supportedClipboardHosts = listOf(
+        "youtube.com", "youtu.be", "instagram.com", "tiktok.com", "facebook.com", "fb.watch",
+        "twitter.com", "x.com", "soundcloud.com", "vimeo.com", "reddit.com", "redd.it",
+        "twitch.tv", "threads.net", "pinterest.com", "pin.it", "dailymotion.com",
+    )
 
     init {
         initializeEngine()
@@ -133,6 +141,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissUpdateBanner() {
         _uiState.update { it.copy(isUpdateBannerDismissed = true) }
+    }
+
+    fun onClipboardTextDetected(rawText: String) {
+        val candidate = repo.normalizeUrl(rawText)
+        if (candidate.isBlank() || (!candidate.startsWith("http://") && !candidate.startsWith("https://"))) {
+            return
+        }
+        val lower = candidate.lowercase(Locale.US)
+        if (supportedClipboardHosts.none { lower.contains(it) }) return
+        if (candidate == _uiState.value.urlInput.trim() || candidate == dismissedClipboardUrl) return
+
+        _uiState.update { it.copy(detectedClipboardUrl = candidate) }
+    }
+
+    fun acceptClipboardUrl() {
+        val url = _uiState.value.detectedClipboardUrl ?: return
+        _uiState.update { it.copy(detectedClipboardUrl = null) }
+        onUrlChanged(url, immediate = true)
+    }
+
+    fun dismissClipboardUrl() {
+        dismissedClipboardUrl = _uiState.value.detectedClipboardUrl
+        _uiState.update { it.copy(detectedClipboardUrl = null) }
     }
 
     private fun initializeEngine() {

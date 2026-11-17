@@ -136,6 +136,14 @@
                                         </StackPanel>
                                     </Button>
                                 </Grid>
+                                <!-- Smart Clipboard Suggestion Banner -->
+                                <Border x:Name="ClipboardBanner" IsVisible="False" Background="#162032" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="6" Padding="10,6">
+                                    <Grid ColumnDefinitions="*,Auto,Auto">
+                                        <TextBlock x:Name="ClipboardBannerText" Grid.Column="0" Text="Copied media URL detected" Foreground="#BAE6FD" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <Button x:Name="AcceptClipboardButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,4" Background="#0284C7" Foreground="White" FontSize="11" FontWeight="SemiBold" Content="Paste &amp; Load" Click="AcceptClipboardButton_Click"/>
+                                        <Button x:Name="DismissClipboardButton" Grid.Column="2" Margin="4,0,0,0" Padding="6,4" Background="Transparent" Foreground="#94A3B8" FontSize="11" Content="✕" Click="DismissClipboardButton_Click"/>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
                         </Border>
 
