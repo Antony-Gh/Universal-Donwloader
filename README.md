@@ -220,6 +220,42 @@ process.BeginOutputReadLine();
 process.WaitForExit();
 ```
 
+### Building Standalone Executable (PyInstaller)
+
+To ship a self-contained `downloader.exe` binary so users do not need Python or dependencies installed:
+
+```bash
+# Automatically installs PyInstaller if needed and compiles downloader.exe into dist/
+python build_exe.py
+```
+
+The resulting `dist/downloader.exe` is a single standalone executable that supports all CLI arguments and real-time `--json-stream` events.
+
+---
+
+## C# .NET Desktop Application Suite
+
+The project includes a complete .NET 9 solution (`UniversalDownloader.sln`) with:
+
+1. **`UniversalDownloader.Core`**:
+   - Reusable class library with strongly-typed models (`DownloadProgressEvent`, `DownloadCompleteEvent`, `FormatInfoModel`, `HistoryRecordModel`, `DownloadOptions`).
+   - `DownloaderClient`: Asynchronous IPC client that automatically locates either `dist/downloader.exe` or `downloader.py`, spawns the process in background, and streams real-time events to your UI.
+2. **`UniversalDownloader.App`**:
+   - Full native modern Dark-themed desktop app built with WPF on .NET 9.
+   - Features real-time progress bars, speed and ETA indicators, format inspection tables, paste shortcuts, and a full SQLite download history browser with "Open File" and "Show in Folder".
+3. **`UniversalDownloader.Avalonia`**:
+   - Cross-platform Avalonia UI project targeting Windows, macOS, and Linux.
+
+### Building & Running the C# Desktop App
+
+```bash
+# Build the core library and WPF application
+dotnet build src/UniversalDownloader.App/UniversalDownloader.App.csproj
+
+# Run the native desktop application
+dotnet run --project src/UniversalDownloader.App/UniversalDownloader.App.csproj
+```
+
 ---
 
 ## Configuration

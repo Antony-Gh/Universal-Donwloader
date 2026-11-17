@@ -1,0 +1,127 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="UniversalDownloader.Avalonia.MainWindow"
+        Title="Universal Media Downloader (Avalonia)"
+        Width="960" Height="680"
+        WindowStartupLocation="CenterScreen"
+        Background="#121214">
+
+    <Grid Margin="24" RowDefinitions="Auto,*,Auto">
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="Universal Media Downloader" FontSize="24" FontWeight="Bold" Foreground="#F4F4F8"/>
+            <TextBlock Text="High-speed Cross-Platform Avalonia UI (.NET 9)" FontSize="13" Foreground="#9CA3AF" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Main Body -->
+        <TabControl Grid.Row="1">
+            <TabItem Header="Download">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="16" Margin="0,15,0,0">
+                        <!-- URL Card -->
+                        <Border Background="#1E1E24" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="Media URL" FontWeight="SemiBold" Foreground="#F4F4F8"/>
+                                <Grid ColumnDefinitions="*,Auto,Auto">
+                                    <TextBox x:Name="UrlTextBox" Grid.Column="0" Watermark="Paste video/media URL here..."/>
+                                    <Button x:Name="PasteButton" Grid.Column="1" Content="Paste" Margin="8,0,0,0" Click="PasteButton_Click"/>
+                                    <Button x:Name="InspectButton" Grid.Column="2" Content="Inspect Formats" Margin="8,0,0,0" Click="InspectButton_Click"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Options Card -->
+                        <Border Background="#1E1E24" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Download Options" FontWeight="SemiBold" Foreground="#F4F4F8"/>
+                                <Grid ColumnDefinitions="*,*,*">
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0" Spacing="6">
+                                        <TextBlock Text="Quality" Foreground="#9CA3AF" FontSize="12"/>
+                                        <ComboBox x:Name="QualityComboBox" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                            <ComboBoxItem Content="Best Available (Max)"/>
+                                            <ComboBoxItem Content="1080p Full HD"/>
+                                            <ComboBoxItem Content="720p HD"/>
+                                            <ComboBoxItem Content="480p SD"/>
+                                            <ComboBoxItem Content="Audio Only (MP3)"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Margin="0,0,10,0" Spacing="6">
+                                        <TextBlock Text="Codec Preference" Foreground="#9CA3AF" FontSize="12"/>
+                                        <ComboBox x:Name="CodecComboBox" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                            <ComboBoxItem Content="Default (Auto)"/>
+                                            <ComboBoxItem Content="H.264 / AVC1 (Universal)"/>
+                                            <ComboBoxItem Content="VP9 (High Quality)"/>
+                                            <ComboBoxItem Content="AV1 (Ultra Compressed)"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" Spacing="6">
+                                        <TextBlock Text="Fragments" Foreground="#9CA3AF" FontSize="12"/>
+                                        <NumericUpDown x:Name="FragmentsNumeric" Value="4" Minimum="1" Maximum="16"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <WrapPanel Margin="0,6,0,0">
+                                    <CheckBox x:Name="EmbedMetadataCheck" Content="Embed Metadata" IsChecked="True" Margin="0,0,16,0"/>
+                                    <CheckBox x:Name="EmbedThumbnailCheck" Content="Embed Cover Art" IsChecked="True" Margin="0,0,16,0"/>
+                                    <CheckBox x:Name="EmbedSubsCheck" Content="Embed Subtitles" IsChecked="False" Margin="0,0,16,0"/>
+                                    <CheckBox x:Name="WriteThumbnailCheck" Content="Save Thumbnail File" IsChecked="False"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Action Bar -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Button x:Name="DownloadButton" Grid.Column="0" Content="Start Download" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="#6366F1" Foreground="White" Padding="14" FontWeight="Bold" Click="DownloadButton_Click"/>
+                            <Button x:Name="CancelButton" Grid.Column="1" Content="Cancel" Margin="10,0,0,0" Background="#EF4444" Foreground="White" Padding="14" IsEnabled="False" Click="CancelButton_Click"/>
+                        </Grid>
+
+                        <!-- Real-time Progress Card -->
+                        <Border x:Name="ProgressCard" IsVisible="False" Background="#1E1E24" CornerRadius="8" Padding="16">
+                            <StackPanel Spacing="8">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock x:Name="StatusLabel" Grid.Column="0" Text="Downloading..." FontWeight="SemiBold" Foreground="#F4F4F8"/>
+                                    <TextBlock x:Name="PercentLabel" Grid.Column="1" Text="0.0%" FontWeight="Bold" Foreground="#6366F1"/>
+                                </Grid>
+                                <ProgressBar x:Name="DownloadProgressBar" Height="8" Minimum="0" Maximum="100" Value="0" Foreground="#6366F1"/>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock x:Name="DetailsLabel" Grid.Column="0" Text="0 B / 0 B • 0 B/s" FontSize="12" Foreground="#9CA3AF"/>
+                                    <TextBlock x:Name="EtaLabel" Grid.Column="1" Text="ETA: --:--" FontSize="12" Foreground="#9CA3AF"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="History">
+                <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <TextBox x:Name="HistorySearchBox" Grid.Column="0" Watermark="Search history..."/>
+                            <Button x:Name="HistorySearchButton" Grid.Column="1" Content="Search" Margin="8,0,0,0" Click="HistorySearchButton_Click"/>
+                            <Button x:Name="HistoryRefreshButton" Grid.Column="2" Content="Refresh" Margin="8,0,0,0" Click="HistoryRefreshButton_Click"/>
+                        </Grid>
+                        <ListBox x:Name="HistoryListBox" MaxHeight="400" Background="#18181B">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="4">
+                                        <TextBlock Grid.Column="0" Text="{Binding DateFormatted}" Width="150" Foreground="#9CA3AF"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="Medium" Foreground="#F4F4F8" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding Status}" Width="90" Foreground="#10B981" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </Border>
+            </TabItem>
+        </TabControl>
+
+        <!-- Status Footer -->
+        <Border Grid.Row="2" Background="#18181B" CornerRadius="6" Padding="10" Margin="0,12,0,0">
+            <TextBlock x:Name="GlobalStatusText" Text="Ready" Foreground="#9CA3AF" FontSize="12"/>
+        </Border>
+    </Grid>
+</Window>

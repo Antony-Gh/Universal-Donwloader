@@ -1,16 +1,37 @@
+
+# Build artifacts
+**/dist/**
+**/build/**
+**/bin/**
+**/obj/**
+*.user
+.vs/
+
+
+# IDEs
+.vscode/**
+.idea/**
+*.swp
+*.swo
+
+
+# Python
 **/.pytest_cache/**
-
 **/cache/**
-
 **/__pycache__/**
-
 **/.venv/**
-
-
 **/downloads/**
-
-
 **/downloads_test/**
-
 **/logs/**
 
+
+build_exe.py
+
+downloader.exe
+
+downloader.spec
+
+# Other
+*.bak
+*.orig
+*.rej

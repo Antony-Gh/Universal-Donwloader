@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <Authors>Universal Downloader Team</Authors>
+    <Description>High-speed IPC client and model definitions for Universal Media Downloader.</Description>
+    <Version>1.1.0</Version>
+  </PropertyGroup>
+
+</Project>
