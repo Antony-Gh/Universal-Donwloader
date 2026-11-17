@@ -22,12 +22,16 @@ class DownloaderRepository(private val appContext: Context) {
 
     private val ignoredLogPatterns = listOf(
         "SSAP (server-side ads) experiment",
+        "SABR-only streaming experiment",
         "Missing required Visitor Data",
         "android client https formats require a GVS PO Token",
         "No GVS PO Token provided",
         "This client will be deprioritized",
         "Some web client https formats have been skipped",
+        "Some ios client https formats have been skipped",
         "formats have been skipped as they are missing a url",
+        "unavailable video is hidden",
+        "unavailable videos are hidden",
     )
 
     suspend fun initEngine(): Result<Unit> = withContext(Dispatchers.IO) {
@@ -113,7 +117,7 @@ class DownloaderRepository(private val appContext: Context) {
                 addOption("--dump-single-json")
                 addOption("--no-playlist")
                 addOption("--no-warnings")
-                addOption("--extractor-args", "youtube:player_client=ios,android_vr,web;formats=missing_pot")
+                addOption("--extractor-args", "youtube:player_client=android_vr,tv_embedded,web;formats=missing_pot")
                 addOption("--socket-timeout", "25")
                 if (!cookiesFilePath.isNullOrBlank() && File(cookiesFilePath).exists()) {
                     addOption("--cookies", cookiesFilePath)
@@ -226,10 +230,13 @@ class DownloaderRepository(private val appContext: Context) {
             val request = YoutubeDLRequest(url).apply {
                 addOption("-o", "${outDir.absolutePath}/%(title).120B [%(id)s].%(ext)s")
                 addOption("--concurrent-fragments", options.concurrentFragments.coerceIn(1, 16).toString())
-                addOption("--extractor-args", "youtube:player_client=ios,android_vr,web;formats=missing_pot")
+                addOption("--extractor-args", "youtube:player_client=android_vr,tv_embedded,web;formats=missing_pot")
                 addOption("--retries", "3")
                 addOption("--fragment-retries", "3")
                 addOption("--newline")
+                if (url.contains("list=", ignoreCase = true) || url.contains("/playlist", ignoreCase = true)) {
+                    addOption("--ignore-errors")
+                }
 
                 if (options.explicitFormatId != null) {
                     addOption("-f", "${options.explicitFormatId}+bestaudio/${options.explicitFormatId}/best")

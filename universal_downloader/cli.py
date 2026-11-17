@@ -24,7 +24,7 @@ from universal_downloader.exceptions import (
 from universal_downloader.formats import parse_format, print_formats, unique_video_heights
 from universal_downloader.history import clear_history, get_db_path, get_history
 from universal_downloader.logging_utils import configure_logging, format_download_error
-from universal_downloader.models import DetectedTarget
+from universal_downloader.models import ContentType, DetectedTarget
 from universal_downloader.notify import send_notification
 from universal_downloader.profile import USERNAME_PLATFORM_PREFIXES
 from universal_downloader.protocol import clean_protocol_url, register_protocol, unregister_protocol
@@ -606,18 +606,38 @@ def main() -> int:
             meta_url = clean_protocol_url(args.metadata)
             try:
                 target = detect_target(meta_url, timeout=config.timeout)
+                is_pl = target.content_type == ContentType.PLAYLIST
                 info_data = engine.inspect(
                     target.normalized_url,
                     platform=target.platform,
+                    flat_playlist=is_pl,
                 )
+                entries = [e for e in (info_data.get("entries") or []) if isinstance(e, dict)]
+                title = info_data.get("title") or "Unknown Title"
+                if is_pl and entries:
+                    title = f"{title} ({len(entries)} videos)"
+
+                thumb = info_data.get("thumbnail")
+                if not thumb and info_data.get("thumbnails"):
+                    thumbs = [t for t in info_data["thumbnails"] if isinstance(t, dict) and t.get("url")]
+                    if thumbs:
+                        thumb = thumbs[-1]["url"]
+                if not thumb and entries:
+                    first_entry = entries[0]
+                    thumb = first_entry.get("thumbnail")
+                    if not thumb and first_entry.get("thumbnails"):
+                        e_thumbs = [t for t in first_entry["thumbnails"] if isinstance(t, dict) and t.get("url")]
+                        if e_thumbs:
+                            thumb = e_thumbs[-1]["url"]
+
                 payload = {
                     "url": target.normalized_url,
                     "platform": target.platform.value,
-                    "title": info_data.get("title") or "Unknown Title",
+                    "title": title,
                     "uploader": info_data.get("uploader") or info_data.get("channel") or info_data.get("creator") or "Unknown Creator",
                     "duration": info_data.get("duration"),
                     "duration_string": info_data.get("duration_string"),
-                    "thumbnail": info_data.get("thumbnail"),
+                    "thumbnail": thumb,
                     "description": (info_data.get("description") or "")[:500],
                     "view_count": info_data.get("view_count"),
                 }
@@ -641,6 +661,7 @@ def main() -> int:
             fmt_url = clean_protocol_url(args.formats)
             try:
                 target = detect_target(fmt_url, timeout=config.timeout)
+                is_pl = target.content_type == ContentType.PLAYLIST
 
                 if not config.json_output and not config.json_stream:
                     print_banner(config)
@@ -651,7 +672,12 @@ def main() -> int:
                 info_data = engine.inspect(
                     target.normalized_url,
                     platform=target.platform,
+                    playlist_items="1" if is_pl else None,
                 )
+                if is_pl and isinstance(info_data.get("entries"), list):
+                    valid_entries = [e for e in info_data["entries"] if isinstance(e, dict)]
+                    if valid_entries:
+                        info_data = valid_entries[0]
 
                 if config.json_output or config.json_stream:
                     formats_data = [fmt.raw for fmt in parse_format(info_data)]

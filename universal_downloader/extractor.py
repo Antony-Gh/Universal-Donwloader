@@ -96,17 +96,21 @@ class YTDLPLogger:
     """Route yt-dlp log output through the application logger."""
 
     IGNORED_WARNING_PATTERNS = (
-        "SSAP (server-side ads) experiment",
-        "Missing required Visitor Data",
-        "android client https formats require a GVS PO Token",
-        "No GVS PO Token provided",
-        "This client will be deprioritized",
-        "Some web client https formats have been skipped",
+        "ssap (server-side ads) experiment",
+        "sabr-only streaming experiment",
+        "missing required visitor data",
+        "android client https formats require a gvs po token",
+        "no gvs po token provided",
+        "this client will be deprioritized",
+        "some web client https formats have been skipped",
+        "some ios client https formats have been skipped",
         "formats have been skipped as they are missing a url",
-        "General metadata extraction failed",
+        "unavailable video is hidden",
+        "unavailable videos are hidden",
+        "general metadata extraction failed",
         "unable to extract shared data",
         "unable to extract additional data",
-        "Main webpage is locked behind the login page",
+        "main webpage is locked behind the login page",
     )
 
     def __init__(self, config: AppConfig) -> None:
@@ -122,7 +126,8 @@ class YTDLPLogger:
 
     def warning(self, message: str) -> None:
         cleaned = clean_error_message(message)
-        if any(pattern in cleaned for pattern in self.IGNORED_WARNING_PATTERNS):
+        lowered = cleaned.lower()
+        if any(pattern in lowered for pattern in self.IGNORED_WARNING_PATTERNS):
             LOGGER.debug(cleaned)
             return
         LOGGER.warning(cleaned)
@@ -173,12 +178,12 @@ class YTDLPExtractor:
             options["ffmpeg_location"] = str(ffmpeg_bin.parent)
 
         # Configure YouTube client and format extraction:
-        # 1. 'ios' and 'android_vr' avoid desktop SSAP server-side ads and GVS PO Token warnings.
+        # 1. 'android_vr' and 'tv_embedded' avoid desktop SSAP, iOS SABR-only restrictions, and PO Token warnings.
         # 2. 'missing_pot' ensures formats remain selectable when PO tokens are absent.
         # 3. Webpage is NOT skipped so visitor data and JavaScript n-sig decryption stay available.
         options["extractor_args"] = {
             "youtube": {
-                "player_client": ["ios", "android_vr", "web"],
+                "player_client": ["android_vr", "tv_embedded", "web"],
                 "formats": ["missing_pot"],
             }
         }
@@ -237,15 +242,15 @@ class YTDLPExtractor:
                 "sleep_interval_requests": 1,
             }
         if platform == Platform.YOUTUBE:
-            # Rotate client signatures across attempts to bypass bot checks & SSAP reload gates
+            # Rotate client signatures across attempts to bypass bot checks, iOS SABR-only, & SSAP reload gates
             if attempt == 2:
-                clients = ["android", "web"]
+                clients = ["web", "android_vr"]
             elif attempt == 3:
-                clients = ["tv_embedded", "ios", "web"]
+                clients = ["android", "tv_embedded", "web"]
             elif attempt >= 4:
                 clients = ["visionos", "web"]
             else:
-                clients = ["ios", "android_vr", "web"]
+                clients = ["android_vr", "tv_embedded", "web"]
 
             return {
                 "extractor_args": {
@@ -294,6 +299,7 @@ class YTDLPExtractor:
         progress_hook: Callable[[dict[str, Any]], None],
         platform: Platform = Platform.UNKNOWN,
         attempt: int = 1,
+        is_playlist: bool = False,
     ) -> dict[str, Any]:
         options = self.base_options()
         options.update(self.platform_extra_options(platform, attempt=attempt))
@@ -307,7 +313,8 @@ class YTDLPExtractor:
                 "progress_hooks": [progress_hook],
                 "retries": 0,
                 "fragment_retries": 0,
-                "ignoreerrors": False,
+                # On playlists, skip deleted/private/unavailable videos instead of aborting the whole playlist
+                "ignoreerrors": "only_download" if is_playlist else False,
                 "writethumbnail": self.config.write_thumbnail or self.config.embed_thumbnail,
                 "writeinfojson": False,
             }

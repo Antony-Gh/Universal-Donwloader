@@ -60,10 +60,12 @@ def test_ytdlp_logger_warning_filter(monkeypatch):
     monkeypatch.setattr("universal_downloader.extractor.LOGGER.warning", lambda msg: logged_warnings.append(msg))
     monkeypatch.setattr("universal_downloader.extractor.LOGGER.debug", lambda msg: logged_debugs.append(msg))
 
-    # Noise warnings should be downgraded to debug
+    # Noise warnings should be downgraded to debug (case-insensitive)
     logger.warning("Some web client https formats have been skipped as they are missing a url. The current session may have the SSAP (server-side ads) experiment")
+    logger.warning("[youtube] PmZdQ4MiqwQ: Some ios client https formats have been skipped as they are missing a URL. YouTube may have enabled the SABR-only streaming experiment for the current session.")
+    logger.warning("[youtube:tab] YouTube said: INFO - 1 unavailable video is hidden")
     assert len(logged_warnings) == 0
-    assert len(logged_debugs) == 1
+    assert len(logged_debugs) == 3
 
     # Real warnings should be kept as warning
     logger.warning("Actual problem occurred during format selection")

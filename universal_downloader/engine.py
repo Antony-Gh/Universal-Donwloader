@@ -79,14 +79,22 @@ class DownloadEngine:
         self,
         url: str,
         platform: Platform = Platform.UNKNOWN,
+        flat_playlist: bool = False,
+        playlist_items: Optional[str] = None,
     ) -> dict[str, Any]:
+        extra_opts: dict[str, Any] = {
+            "skip_download": True,
+            "ignoreerrors": True,
+            **self.extractor.platform_extra_options(platform),
+        }
+        if flat_playlist:
+            extra_opts["extract_flat"] = "in_playlist"
+        if playlist_items:
+            extra_opts["playlist_items"] = playlist_items
         return self.extractor.extract_info(
             url,
             download=False,
-            extra={
-                "skip_download": True,
-                **self.extractor.platform_extra_options(platform),
-            },
+            extra=extra_opts,
         )
 
     def download_once(self, target: DetectedTarget, attempt: int = 1) -> DownloadResult:
@@ -237,6 +245,7 @@ class DownloadEngine:
                 progress,
                 platform=target.platform,
                 attempt=attempt,
+                is_playlist=(target.content_type == ContentType.PLAYLIST),
             )
 
         last_error: Optional[DownloadError] = None
