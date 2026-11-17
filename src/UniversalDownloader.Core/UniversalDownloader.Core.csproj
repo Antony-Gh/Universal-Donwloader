@@ -7,7 +7,7 @@
     <LangVersion>latest</LangVersion>
     <Authors>Universal Downloader Team</Authors>
     <Description>High-speed IPC client and model definitions for Universal Media Downloader.</Description>
-    <Version>1.1.0</Version>
+    <Version>1.4.0</Version>
   </PropertyGroup>
 
 </Project>

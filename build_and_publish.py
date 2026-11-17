@@ -99,7 +99,7 @@ def get_default_version() -> str:
         match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', text)
         if match:
             return match.group(1).lstrip("v")
-    return "1.1.0"
+    return "1.4.0"
 
 
 def compute_sha256(filepath: Path) -> str:
@@ -237,27 +237,56 @@ exec "$DIR/UniversalDownloader.Avalonia" "$@"
 def package_windows_release(version: str) -> List[Path]:
     """Create single-file Windows executable and clean distribution zip."""
     print_step("Packaging Windows x64 Standalone Executable")
+    RELEASES_DIR.mkdir(parents=True, exist_ok=True)
+    BUILD_TMP_DIR.mkdir(parents=True, exist_ok=True)
+
     avalonia_dir = BUILD_TMP_DIR / "win-x64-avalonia"
+    wpf_dir = BUILD_TMP_DIR / "win-x64-wpf"
     
-    # Locate built Windows single-file executable
-    candidate_exe = None
-    for name in ["UniversalDownloader.exe", "UniversalDownloader.Avalonia.exe"]:
-        if (avalonia_dir / name).exists():
-            candidate_exe = avalonia_dir / name
+    # Locate built Windows single-file executable across build_temp and bin/Release
+    candidate_exe: Optional[Path] = None
+    search_dirs = [
+        avalonia_dir,
+        wpf_dir,
+        ROOT_DIR / "src" / "UniversalDownloader.Avalonia" / "bin" / "Release" / "net9.0" / "win-x64" / "publish",
+        ROOT_DIR / "src" / "UniversalDownloader.Avalonia" / "bin" / "Release" / "net9.0" / "win-x64",
+        ROOT_DIR / "src" / "UniversalDownloader.App" / "bin" / "Release" / "net9.0-windows" / "win-x64" / "publish",
+        ROOT_DIR / "src" / "UniversalDownloader.App" / "bin" / "Release" / "net9.0-windows" / "win-x64",
+    ]
+
+    for sdir in search_dirs:
+        if not sdir.exists():
+            continue
+        for name in ["UniversalDownloader.exe", "UniversalDownloader.Avalonia.exe", "UniversalDownloader.App.exe"]:
+            target = sdir / name
+            if target.exists() and target.is_file() and target.stat().st_size > 1024 * 1024:
+                candidate_exe = target
+                break
+        if candidate_exe:
             break
 
-    if not candidate_exe and avalonia_dir.exists():
-        for item in avalonia_dir.glob("*.exe"):
-            candidate_exe = item
-            break
+    if not candidate_exe:
+        # Fallback: find any valid .exe in search directories
+        for sdir in search_dirs:
+            if not sdir.exists():
+                continue
+            for item in sdir.glob("*.exe"):
+                if item.is_file() and item.stat().st_size > 1024 * 1024:
+                    candidate_exe = item
+                    break
+            if candidate_exe:
+                break
 
     results: List[Path] = []
     if candidate_exe and candidate_exe.exists():
-        # 1. Output the single standalone .exe directly for one-click downloading!
         direct_exe = RELEASES_DIR / "UniversalDownloader.exe"
-        shutil.copy2(candidate_exe, direct_exe)
-        print_success(f"Generated Standalone Windows Executable: {direct_exe.name} ({direct_exe.stat().st_size / 1024 / 1024:.1f} MB)")
-        results.append(direct_exe)
+        try:
+            shutil.copy2(candidate_exe, direct_exe)
+            print_success(f"Generated Standalone Windows Executable: {direct_exe.name} ({direct_exe.stat().st_size / 1024 / 1024:.1f} MB)")
+            results.append(direct_exe)
+        except Exception as copy_err:
+            print_warning(f"Could not copy to {direct_exe.name} (may be in use): {copy_err}")
+            results.append(candidate_exe)
 
         # 2. Also package clean zip containing only UniversalDownloader.exe and documentation
         pkg_name = f"UniversalDownloader-v{version}-windows-x64"
@@ -277,6 +306,8 @@ def package_windows_release(version: str) -> List[Path]:
 
         print_success(f"Created {zip_path.name} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)")
         results.append(zip_path)
+    else:
+        print_warning("No compiled Windows executable found to package.")
 
     return results
 
@@ -284,15 +315,30 @@ def package_windows_release(version: str) -> List[Path]:
 def package_tar_release(platform_name: str, rid: str, version: str) -> List[Path]:
     """Create Linux or macOS GUI distribution package and standalone binary."""
     print_step(f"Packaging {platform_name} ({rid}) GUI Distribution")
+    RELEASES_DIR.mkdir(parents=True, exist_ok=True)
+    BUILD_TMP_DIR.mkdir(parents=True, exist_ok=True)
+
     pkg_name = f"UniversalDownloader-v{version}-{platform_name}"
     staging = BUILD_TMP_DIR / pkg_name
     staging.mkdir(parents=True, exist_ok=True)
 
     rid_dir = BUILD_TMP_DIR / rid
-    candidate_bin = None
-    for name in ["UniversalDownloader", "UniversalDownloader.Avalonia"]:
-        if (rid_dir / name).exists():
-            candidate_bin = rid_dir / name
+    candidate_bin: Optional[Path] = None
+    search_dirs = [
+        rid_dir,
+        ROOT_DIR / "src" / "UniversalDownloader.Avalonia" / "bin" / "Release" / "net9.0" / rid / "publish",
+        ROOT_DIR / "src" / "UniversalDownloader.Avalonia" / "bin" / "Release" / "net9.0" / rid,
+    ]
+
+    for sdir in search_dirs:
+        if not sdir.exists():
+            continue
+        for name in ["UniversalDownloader", "UniversalDownloader.Avalonia"]:
+            target = sdir / name
+            if target.exists() and target.is_file():
+                candidate_bin = target
+                break
+        if candidate_bin:
             break
 
     results: List[Path] = []
@@ -306,19 +352,20 @@ def package_tar_release(platform_name: str, rid: str, version: str) -> List[Path
             pass
 
         # Also copy runtime dependencies / dylibs if present
-        for item in rid_dir.glob("*.dylib"):
+        for item in (candidate_bin.parent).glob("*.dylib"):
             shutil.copy2(item, staging / item.name)
 
         # Standalone binary for Linux
         if "linux" in rid:
             direct_bin = RELEASES_DIR / "UniversalDownloader-linux-x64"
-            shutil.copy2(candidate_bin, direct_bin)
             try:
+                shutil.copy2(candidate_bin, direct_bin)
                 direct_bin.chmod(0o755)
-            except Exception:
-                pass
-            print_success(f"Generated Standalone Linux Executable: {direct_bin.name} ({direct_bin.stat().st_size / 1024 / 1024:.1f} MB)")
-            results.append(direct_bin)
+                print_success(f"Generated Standalone Linux Executable: {direct_bin.name} ({direct_bin.stat().st_size / 1024 / 1024:.1f} MB)")
+                results.append(direct_bin)
+            except Exception as copy_err:
+                print_warning(f"Could not copy standalone Linux binary: {copy_err}")
+                results.append(candidate_bin)
 
     # Launcher script on Linux
     if "linux" in rid:
@@ -330,25 +377,31 @@ def package_tar_release(platform_name: str, rid: str, version: str) -> List[Path
     if (ROOT_DIR / "assets").exists():
         shutil.copytree(ROOT_DIR / "assets", staging / "assets", dirs_exist_ok=True)
 
-    # Create tar.gz
-    tar_path = RELEASES_DIR / f"{pkg_name}.tar.gz"
-    with tarfile.open(tar_path, "w:gz") as tar:
-        tar.add(staging, arcname=pkg_name)
+    # Create tar.gz if files are present in staging
+    if any(staging.iterdir()):
+        tar_path = RELEASES_DIR / f"{pkg_name}.tar.gz"
+        with tarfile.open(tar_path, "w:gz") as tar:
+            tar.add(staging, arcname=pkg_name)
 
-    print_success(f"Created {tar_path.name} ({tar_path.stat().st_size / 1024 / 1024:.1f} MB)")
-    results.append(tar_path)
+        print_success(f"Created {tar_path.name} ({tar_path.stat().st_size / 1024 / 1024:.1f} MB)")
+        results.append(tar_path)
+    else:
+        print_warning(f"No binaries found to package for {platform_name} ({rid}).")
+
     return results
 
 
 def generate_checksums(archives: List[Path]) -> Path:
     """Generate SHA256SUMS.txt file."""
     print_step("Generating SHA-256 Checksums")
+    RELEASES_DIR.mkdir(parents=True, exist_ok=True)
     checksum_file = RELEASES_DIR / "SHA256SUMS.txt"
     lines = []
     for archive in archives:
-        h = compute_sha256(archive)
-        lines.append(f"{h}  {archive.name}")
-        print(f"  {h[:16]}...  {archive.name}")
+        if archive.exists() and archive.is_file():
+            h = compute_sha256(archive)
+            lines.append(f"{h}  {archive.name}")
+            print(f"  {h[:16]}...  {archive.name}")
 
     checksum_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print_success(f"Wrote checksums to: {checksum_file}")

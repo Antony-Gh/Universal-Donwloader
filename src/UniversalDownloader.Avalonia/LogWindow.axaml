@@ -1,12 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:models="clr-namespace:UniversalDownloader.Core.Models;assembly=UniversalDownloader.Core"
-        x:Class="UniversalDownloader.Avalonia.LogWindow"
-        Title="Universal Downloader — Live Execution Logs"
-        Icon="/Assets/app-icon.ico"
-        Width="920" Height="580"
-        WindowStartupLocation="CenterOwner"
-        Background="#0D0D11">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="clr-namespace:UniversalDownloader.Core.Models;assembly=UniversalDownloader.Core" x:Class="UniversalDownloader.Avalonia.LogWindow" Title="Universal Downloader — Live Execution Logs" Icon="/Assets/app-icon.ico" Width="920" Height="580" WindowStartupLocation="CenterOwner" Background="#0D0D11">
 
     <Window.Resources>
         <!-- Standard Vector SVG Paths -->
@@ -57,12 +51,7 @@
                 </ListBox.Styles>
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="models:LogMessage">
-                        <SelectableTextBlock Text="{Binding FormattedText}"
-                                             Foreground="{Binding ColorHex}"
-                                             FontFamily="Cascadia Code, Consolas, Courier New, monospace"
-                                             FontSize="12"
-                                             TextWrapping="Wrap"
-                                             SelectionBrush="#4F46E5"/>
+                        <SelectableTextBlock Text="{Binding FormattedText}" Foreground="{Binding ColorHex}" FontFamily="Cascadia Code, Consolas, Courier New, monospace" FontSize="12" TextWrapping="Wrap" SelectionBrush="#4F46E5"/>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
@@ -71,7 +60,7 @@
         <!-- Status Footer -->
         <Grid Grid.Row="2" Margin="0,8,0,0" ColumnDefinitions="*,Auto">
             <TextBlock x:Name="LogCountLabel" Grid.Column="0" Text="0 lines" Foreground="#9CA3AF" FontSize="11" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" Text="Universal Downloader v1.1.0" Foreground="#6B7280" FontSize="11" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="Universal Downloader v1.4.0" Foreground="#6B7280" FontSize="11" VerticalAlignment="Center"/>
         </Grid>
     </Grid>
 </Window>

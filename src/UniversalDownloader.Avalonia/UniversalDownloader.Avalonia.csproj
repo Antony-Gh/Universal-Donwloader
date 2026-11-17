@@ -9,7 +9,7 @@
     <ApplicationTitle>Universal Media Downloader (Avalonia)</ApplicationTitle>
     <AssemblyName>UniversalDownloader</AssemblyName>
     <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
-    <Version>1.1.0</Version>
+    <Version>1.4.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
