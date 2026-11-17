@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from universal_downloader import __app_name__, __version__
 from universal_downloader.batch import print_batch_summary, read_batch_file, run_batch
@@ -24,7 +24,7 @@ from universal_downloader.exceptions import (
 from universal_downloader.formats import parse_format, print_formats, unique_video_heights
 from universal_downloader.history import clear_history, get_db_path, get_history
 from universal_downloader.logging_utils import configure_logging, format_download_error
-from universal_downloader.models import ContentType, DetectedTarget
+from universal_downloader.models import ContentType, DetectedTarget, Platform
 from universal_downloader.notify import send_notification
 from universal_downloader.profile import USERNAME_PLATFORM_PREFIXES
 from universal_downloader.protocol import clean_protocol_url, register_protocol, unregister_protocol
@@ -508,6 +508,73 @@ def interactive_mode(engine: DownloadEngine) -> int:
             failure(str(exc), config)
 
 
+def _pick_thumbnail(item: dict[str, Any], platform: Platform) -> Optional[str]:
+    thumb = item.get("thumbnail")
+    if thumb:
+        return str(thumb)
+    thumbs = item.get("thumbnails")
+    if isinstance(thumbs, list):
+        valid = [t for t in thumbs if isinstance(t, dict) and t.get("url")]
+        if valid:
+            return str(valid[-1]["url"])
+    video_id = item.get("id")
+    if platform == Platform.YOUTUBE and video_id and len(str(video_id)) == 11:
+        return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+    return None
+
+
+def _extract_supported_qualities(info: dict[str, Any]) -> list[str]:
+    formats = parse_format(info)
+    if not formats:
+        return []
+    heights = [h for h in unique_video_heights(formats) if h >= 144]
+    qualities = [f"{h}p" for h in heights]
+    if any(fmt.has_audio for fmt in formats):
+        qualities.append("Audio")
+    return qualities
+
+
+def _build_playlist_entries(
+    raw_entries: list[dict[str, Any]],
+    platform: Platform,
+    default_uploader: str,
+) -> list[dict[str, Any]]:
+    unavailable_titles = {"[private video]", "[deleted video]", "[unavailable video]"}
+    result: list[dict[str, Any]] = []
+    for entry in raw_entries:
+        raw_title = (entry.get("title") or "").strip()
+        if raw_title.lower() in unavailable_titles and not entry.get("duration"):
+            continue
+
+        video_id = str(entry.get("id") or "").strip()
+        entry_url = str(entry.get("webpage_url") or entry.get("url") or "").strip()
+        if entry_url and not entry_url.startswith(("http://", "https://")):
+            if platform == Platform.YOUTUBE and video_id:
+                entry_url = f"https://www.youtube.com/watch?v={video_id}"
+        elif not entry_url and platform == Platform.YOUTUBE and video_id:
+            entry_url = f"https://www.youtube.com/watch?v={video_id}"
+
+        if not entry_url:
+            continue
+
+        idx = len(result) + 1
+        result.append(
+            {
+                "index": idx,
+                "id": video_id,
+                "url": entry_url,
+                "title": raw_title or f"Video #{idx}",
+                "uploader": entry.get("uploader") or entry.get("channel") or entry.get("creator") or default_uploader,
+                "duration": entry.get("duration"),
+                "duration_string": entry.get("duration_string"),
+                "thumbnail": _pick_thumbnail(entry, platform),
+                "view_count": entry.get("view_count"),
+                "qualities": _extract_supported_qualities(entry),
+            }
+        )
+    return result
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -613,33 +680,34 @@ def main() -> int:
                     flat_playlist=is_pl,
                 )
                 entries = [e for e in (info_data.get("entries") or []) if isinstance(e, dict)]
+                uploader = (
+                    info_data.get("uploader")
+                    or info_data.get("channel")
+                    or info_data.get("creator")
+                    or "Unknown Creator"
+                )
+                playlist_entries = _build_playlist_entries(entries, target.platform, uploader) if entries else []
+                is_playlist_result = bool(playlist_entries) and (is_pl or len(playlist_entries) > 1)
                 title = info_data.get("title") or "Unknown Title"
-                if is_pl and entries:
-                    title = f"{title} ({len(entries)} videos)"
 
-                thumb = info_data.get("thumbnail")
-                if not thumb and info_data.get("thumbnails"):
-                    thumbs = [t for t in info_data["thumbnails"] if isinstance(t, dict) and t.get("url")]
-                    if thumbs:
-                        thumb = thumbs[-1]["url"]
-                if not thumb and entries:
-                    first_entry = entries[0]
-                    thumb = first_entry.get("thumbnail")
-                    if not thumb and first_entry.get("thumbnails"):
-                        e_thumbs = [t for t in first_entry["thumbnails"] if isinstance(t, dict) and t.get("url")]
-                        if e_thumbs:
-                            thumb = e_thumbs[-1]["url"]
+                thumb = _pick_thumbnail(info_data, target.platform)
+                if not thumb and playlist_entries:
+                    thumb = playlist_entries[0].get("thumbnail")
 
                 payload = {
                     "url": target.normalized_url,
                     "platform": target.platform.value,
                     "title": title,
-                    "uploader": info_data.get("uploader") or info_data.get("channel") or info_data.get("creator") or "Unknown Creator",
+                    "uploader": uploader,
                     "duration": info_data.get("duration"),
                     "duration_string": info_data.get("duration_string"),
                     "thumbnail": thumb,
                     "description": (info_data.get("description") or "")[:500],
                     "view_count": info_data.get("view_count"),
+                    "is_playlist": is_playlist_result,
+                    "playlist_count": len(playlist_entries),
+                    "qualities": _extract_supported_qualities(info_data),
+                    "entries": playlist_entries if is_playlist_result else [],
                 }
                 if config.json_output or config.json_stream:
                     print(json.dumps(payload, indent=2))

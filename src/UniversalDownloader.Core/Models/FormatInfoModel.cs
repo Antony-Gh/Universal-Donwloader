@@ -48,6 +48,35 @@ public record FormatInfoModel
         : (HasAudio ? "Audio Only" : "Stream");
 
     public string DisplayText => $"{Resolution} ({Extension}) {(Fps.HasValue ? Fps + "fps" : "")} - {FormatNote}".Trim();
+
+    /// <summary>
+    /// Extracts clean, descending unique video quality labels (e.g. 2160p, 1080p, 720p) plus Audio when available.
+    /// </summary>
+    public static List<string> ExtractSupportedQualities(IEnumerable<FormatInfoModel> formats)
+    {
+        var list = formats?.ToList() ?? new List<FormatInfoModel>();
+        if (list.Count == 0) return new List<string>();
+
+        var heights = list
+            .Where(f => f.HasVideo && f.Height.HasValue && f.Height.Value >= 144)
+            .Select(f => f.Height!.Value)
+            .Distinct()
+            .OrderByDescending(h => h)
+            .Select(h => $"{h}p")
+            .ToList();
+
+        if (heights.Count == 0 && list.Any(f => f.HasVideo))
+        {
+            heights.Add("Best");
+        }
+
+        if (list.Any(f => f.HasAudio))
+        {
+            heights.Add("Audio");
+        }
+
+        return heights;
+    }
 }
 
 public record HistoryRecordModel

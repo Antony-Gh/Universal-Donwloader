@@ -19,6 +19,7 @@ namespace UniversalDownloader.Avalonia;
 public partial class MainWindow : Window
 {
     private const int MaxLogCapacity = 5000;
+    private const int AutoInspectPlaylistQualityLimit = 25;
     private readonly DownloaderClient _client;
     private readonly object _allLogsLock = new();
     private readonly List<LogMessage> _allLogs = new();
@@ -26,7 +27,9 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<LogMessage> _quickLogs = new();
     private readonly ObservableCollection<LogMessage> _filteredMainLogs = new();
     private readonly ObservableCollection<QueueItemModel> _queueItems = new();
+    private readonly ObservableCollection<PlaylistVideoCardModel> _playlistCards = new();
     private CancellationTokenSource? _queueCts;
+    private CancellationTokenSource? _playlistQualityCts;
     private bool _isQueueRunning;
     private readonly DispatcherTimer _logBatchTimer;
     private long _lastProgressUpdateMs = 0;
@@ -56,6 +59,7 @@ public partial class MainWindow : Window
         QuickLogListBox.ItemsSource = _quickLogs;
         MainLogListBox.ItemsSource = _filteredMainLogs;
         QueueListBox.ItemsSource = _queueItems;
+        PlaylistCardsItemsControl.ItemsSource = _playlistCards;
 
         // Background batch timer prevents UI thread saturation and keeps window 100% responsive
         _logBatchTimer = new DispatcherTimer(
@@ -79,7 +83,11 @@ public partial class MainWindow : Window
             await CheckClipboardForMediaUrlAsync();
         };
         Activated += async (s, e) => await CheckClipboardForMediaUrlAsync();
-        Closing += (s, e) => SaveUserSettings();
+        Closing += (s, e) =>
+        {
+            _playlistQualityCts?.Cancel();
+            SaveUserSettings();
+        };
     }
 
     private async Task CheckClipboardForMediaUrlAsync()
@@ -213,10 +221,14 @@ public partial class MainWindow : Window
         QuickCopyText.Text = T("CopyOutput");
 
         QueueHeaderLabel.Text = T("QueueHeader");
+        QueueParallelLabel.Text = T("QueueParallel");
         QueueAddBatchButton.Content = T("QueueAddUrls");
         StartQueueButton.Content = T("StartQueue");
         StopQueueButton.Content = T("Stop");
         ClearQueueButton.Content = T("ClearCompleted");
+        QueueAllPlaylistButton.Content = T("AddAllToQueue");
+        LoadAllQualitiesButton.Content = T("LoadAllQualities");
+        SupportedQualitiesLabel.Text = T("SupportedQualities");
 
         RefreshStreamsButtonText.Text = T("RefreshStreams");
         BackendLogsHeader.Text = T("BackendLogs");
@@ -694,10 +706,12 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(url)) return;
 
         SaveUserSettings();
-        var title = MetadataCard.IsVisible && !string.IsNullOrWhiteSpace(VideoTitleLabel.Text) &&
-                    !VideoTitleLabel.Text.StartsWith("Fetching", StringComparison.OrdinalIgnoreCase)
-            ? VideoTitleLabel.Text
-            : url;
+        var title = PlaylistCardsPanel.IsVisible && !string.IsNullOrWhiteSpace(PlaylistTitleLabel.Text)
+            ? PlaylistTitleLabel.Text
+            : MetadataCard.IsVisible && !string.IsNullOrWhiteSpace(VideoTitleLabel.Text) &&
+              !VideoTitleLabel.Text.StartsWith("Fetching", StringComparison.OrdinalIgnoreCase)
+                ? VideoTitleLabel.Text
+                : url;
 
         _queueItems.Add(new QueueItemModel
         {
@@ -1000,6 +1014,7 @@ public partial class MainWindow : Window
         var rawUrl = UrlTextBox.Text?.Trim()?.Trim('"', '\'');
         if (string.IsNullOrWhiteSpace(rawUrl))
         {
+            ClearPlaylistCards();
             MetadataCard.IsVisible = false;
             _lastInspectedMetadataUrl = null;
             return;
@@ -1011,6 +1026,7 @@ public partial class MainWindow : Window
         {
             if (rawUrl != _lastInspectedMetadataUrl)
             {
+                ClearPlaylistCards();
                 MetadataCard.IsVisible = false;
             }
             return;
@@ -1055,6 +1071,9 @@ public partial class MainWindow : Window
             _ => "MEDIA"
         };
 
+        ClearPlaylistCards();
+        SingleVideoQualitiesPanel.IsVisible = false;
+        SingleVideoQualitiesItems.ItemsSource = null;
         PlatformBadge.Text = platformDisplay;
         VideoTitleLabel.Text = "Fetching media details...";
         UploaderLabel.Text = uri.Host;
@@ -1076,7 +1095,12 @@ public partial class MainWindow : Window
             var meta = await _client.GetMetadataAsync(rawUrl, token, cookiesFromBrowser: cookiesBrowser, cookiesFile: cookiesFile);
             if (token.IsCancellationRequested) return;
 
-            if (meta != null && !string.IsNullOrWhiteSpace(meta.Title))
+            if (meta != null && meta.IsPlaylist && meta.Entries.Count > 0)
+            {
+                DisplayPlaylistCards(meta, uri, cookiesBrowser, cookiesFile);
+                GlobalStatusText.Text = $"Loaded playlist ({meta.Entries.Count} videos): {meta.Title}";
+            }
+            else if (meta != null && !string.IsNullOrWhiteSpace(meta.Title))
             {
                 MetadataLoadingText.IsVisible = false;
                 MetadataHeaderSpinner.IsVisible = false;
@@ -1099,6 +1123,12 @@ public partial class MainWindow : Window
                 }
 
                 ViewsLabel.Text = meta.ViewCountFormatted;
+
+                if (meta.Qualities.Count > 0)
+                {
+                    SingleVideoQualitiesItems.ItemsSource = meta.Qualities;
+                    SingleVideoQualitiesPanel.IsVisible = true;
+                }
 
                 if (!string.IsNullOrWhiteSpace(meta.Thumbnail))
                 {
@@ -1154,6 +1184,314 @@ public partial class MainWindow : Window
         {
             // Thumbnail failed or cancelled - keep default empty thumbnail
         }
+    }
+
+    private void ClearPlaylistCards()
+    {
+        _playlistQualityCts?.Cancel();
+        _playlistQualityCts?.Dispose();
+        _playlistQualityCts = null;
+        _playlistCards.Clear();
+        PlaylistCardsPanel.IsVisible = false;
+        PlaylistScanSpinner.IsVisible = false;
+        PlaylistScanStatusLabel.Text = string.Empty;
+        LoadAllQualitiesButton.IsVisible = false;
+    }
+
+    private void DisplayPlaylistCards(MediaMetadataModel meta, Uri uri, string? cookiesBrowser, string? cookiesFile)
+    {
+        MetadataCard.IsVisible = false;
+        _playlistCards.Clear();
+
+        PlaylistPlatformBadge.Text = !string.IsNullOrWhiteSpace(meta.Platform)
+            ? $"{meta.Platform.ToUpperInvariant()} PLAYLIST"
+            : "PLAYLIST";
+        PlaylistCountBadge.Text = meta.Entries.Count == 1 ? "1 video" : $"{meta.Entries.Count} videos";
+        PlaylistTitleLabel.Text = meta.Title;
+        PlaylistUploaderLabel.Text = !string.IsNullOrWhiteSpace(meta.Uploader) ? meta.Uploader : uri.Host;
+
+        var autoInspectCards = new List<PlaylistVideoCardModel>();
+        var manualCards = 0;
+
+        for (int i = 0; i < meta.Entries.Count; i++)
+        {
+            var card = PlaylistVideoCardModel.FromEntry(meta.Entries[i]);
+            if (!card.HasQualities)
+            {
+                if (autoInspectCards.Count < AutoInspectPlaylistQualityLimit)
+                {
+                    card.IsLoadingQualities = true;
+                    autoInspectCards.Add(card);
+                }
+                else
+                {
+                    card.NeedsManualQualityLoad = true;
+                    manualCards++;
+                }
+            }
+            _playlistCards.Add(card);
+        }
+
+        LoadAllQualitiesButton.IsVisible = manualCards > 0;
+        PlaylistCardsPanel.IsVisible = true;
+
+        _playlistQualityCts = new CancellationTokenSource();
+        var ct = _playlistQualityCts.Token;
+
+        _ = LoadPlaylistThumbnailsAsync(_playlistCards.ToList(), ct);
+        if (autoInspectCards.Count > 0)
+        {
+            _ = LoadPlaylistCardQualitiesAsync(autoInspectCards, cookiesBrowser, cookiesFile, ct);
+        }
+    }
+
+    private async Task LoadPlaylistThumbnailsAsync(List<PlaylistVideoCardModel> cards, CancellationToken token)
+    {
+        using var semaphore = new SemaphoreSlim(4, 4);
+        var tasks = cards.Select(async card =>
+        {
+            if (string.IsNullOrWhiteSpace(card.ThumbnailUrl))
+            {
+                Dispatcher.UIThread.Post(() => card.IsThumbnailLoading = false);
+                return;
+            }
+
+            try
+            {
+                await semaphore.WaitAsync(token);
+                try
+                {
+                    var bytes = await _httpClient.GetByteArrayAsync(card.ThumbnailUrl, token);
+                    if (token.IsCancellationRequested || bytes == null || bytes.Length == 0) return;
+
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        using var ms = new MemoryStream(bytes);
+                        card.ThumbnailBitmap = new Bitmap(ms);
+                        card.IsThumbnailLoading = false;
+                    });
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            }
+            catch
+            {
+                if (!token.IsCancellationRequested)
+                {
+                    Dispatcher.UIThread.Post(() => card.IsThumbnailLoading = false);
+                }
+            }
+        }).ToList();
+
+        try { await Task.WhenAll(tasks); } catch { }
+    }
+
+    private async Task LoadPlaylistCardQualitiesAsync(
+        List<PlaylistVideoCardModel> cards,
+        string? cookiesBrowser,
+        string? cookiesFile,
+        CancellationToken token)
+    {
+        int total = cards.Count;
+        int completed = 0;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            PlaylistScanSpinner.IsVisible = true;
+            PlaylistScanStatusLabel.Text = $"Loading supported qualities (0/{total})...";
+        });
+
+        using var semaphore = new SemaphoreSlim(3, 3);
+        var tasks = cards.Select(async card =>
+        {
+            try
+            {
+                await semaphore.WaitAsync(token);
+                try
+                {
+                    if (token.IsCancellationRequested) return;
+                    await LoadSingleCardQualitiesAsync(card, cookiesBrowser, cookiesFile, token);
+                }
+                finally
+                {
+                    semaphore.Release();
+                    var done = Interlocked.Increment(ref completed);
+                    if (!token.IsCancellationRequested)
+                    {
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            PlaylistScanStatusLabel.Text = done < total
+                                ? $"Loading supported qualities ({done}/{total})..."
+                                : $"Supported qualities loaded ({total}/{total})";
+                        });
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+        }).ToList();
+
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    PlaylistScanSpinner.IsVisible = false;
+                    LoadAllQualitiesButton.IsVisible = _playlistCards.Any(c => c.NeedsManualQualityLoad);
+                });
+            }
+        }
+    }
+
+    private static async Task LoadSingleCardQualitiesAsync(
+        PlaylistVideoCardModel card,
+        string? cookiesBrowser,
+        string? cookiesFile,
+        CancellationToken token)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            card.NeedsManualQualityLoad = false;
+            card.IsLoadingQualities = true;
+        });
+
+        try
+        {
+            var worker = new DownloaderClient();
+            var formats = await worker.GetFormatsAsync(card.Url, token, cookiesFromBrowser: cookiesBrowser, cookiesFile: cookiesFile);
+            if (token.IsCancellationRequested) return;
+
+            var qualities = FormatInfoModel.ExtractSupportedQualities(formats);
+            Dispatcher.UIThread.Post(() => card.SetQualities(qualities));
+        }
+        catch (OperationCanceledException) { }
+        catch
+        {
+            if (!token.IsCancellationRequested)
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    card.IsLoadingQualities = false;
+                    card.QualityStatusText = "Best available (default)";
+                });
+            }
+        }
+    }
+
+    private DownloadOptions BuildOptionsForPlaylistCard(PlaylistVideoCardModel card)
+    {
+        var options = BuildOptionsFromUi();
+        options.PlaylistItems = null; // Target this individual video directly
+
+        var q = card.SelectedQualityValue;
+        if (string.Equals(q, "audio", StringComparison.OrdinalIgnoreCase))
+        {
+            options.Quality = "audio";
+            options.AudioOnly = true;
+            options.AudioFormat = "mp3";
+            options.AudioQuality = "320k";
+        }
+        else
+        {
+            options.AudioOnly = false;
+            options.Quality = string.IsNullOrWhiteSpace(q) ? "best" : q;
+        }
+
+        return options;
+    }
+
+    private void PlaylistQualityChip_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is QualityOptionChip chip)
+        {
+            chip.Owner?.SelectQuality(chip);
+        }
+    }
+
+    private async void DownloadPlaylistCard_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is PlaylistVideoCardModel card)
+        {
+            SaveUserSettings();
+            var options = BuildOptionsForPlaylistCard(card);
+            await StartDownloadWithUrl(card.Url, options);
+        }
+    }
+
+    private void QueuePlaylistCard_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is PlaylistVideoCardModel card)
+        {
+            SaveUserSettings();
+            _queueItems.Add(new QueueItemModel
+            {
+                Url = card.Url,
+                Title = card.Title,
+                Options = BuildOptionsForPlaylistCard(card),
+                StatusDetail = "Waiting in queue",
+            });
+            card.IsQueued = true;
+            UpdateQueueSummary();
+            GlobalStatusText.Text = $"Added '{card.Title}' to queue ({_queueItems.Count} total).";
+        }
+    }
+
+    private void QueueAllPlaylistButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_playlistCards.Count == 0) return;
+
+        SaveUserSettings();
+        int added = 0;
+        foreach (var card in _playlistCards)
+        {
+            _queueItems.Add(new QueueItemModel
+            {
+                Url = card.Url,
+                Title = card.Title,
+                Options = BuildOptionsForPlaylistCard(card),
+                StatusDetail = "Waiting in queue",
+            });
+            card.IsQueued = true;
+            added++;
+        }
+
+        UpdateQueueSummary();
+        GlobalStatusText.Text = $"Added {added} playlist video(s) to queue ({_queueItems.Count} total).";
+    }
+
+    private async void LoadCardQualities_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is PlaylistVideoCardModel card)
+        {
+            var cookiesFile = GetSelectedCookiesFile();
+            var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
+            var ct = _playlistQualityCts?.Token ?? CancellationToken.None;
+            await LoadSingleCardQualitiesAsync(card, cookiesBrowser, cookiesFile, ct);
+            LoadAllQualitiesButton.IsVisible = _playlistCards.Any(c => c.NeedsManualQualityLoad);
+        }
+    }
+
+    private void LoadAllQualitiesButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var remaining = _playlistCards.Where(c => c.NeedsManualQualityLoad).ToList();
+        if (remaining.Count == 0)
+        {
+            LoadAllQualitiesButton.IsVisible = false;
+            return;
+        }
+
+        LoadAllQualitiesButton.IsVisible = false;
+        var cookiesFile = GetSelectedCookiesFile();
+        var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
+        var ct = _playlistQualityCts?.Token ?? CancellationToken.None;
+        _ = LoadPlaylistCardQualitiesAsync(remaining, cookiesBrowser, cookiesFile, ct);
     }
 
     private async Task LoadHistoryAsync(string? search = null)

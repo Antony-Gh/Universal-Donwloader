@@ -7,7 +7,11 @@ import pytest
 
 import downloader
 from universal_downloader.batch import read_batch_file
-from universal_downloader.cli import validate_url_option
+from universal_downloader.cli import (
+    _build_playlist_entries,
+    _extract_supported_qualities,
+    validate_url_option,
+)
 from universal_downloader.engine import DownloadEngine
 from universal_downloader.exceptions import ConfigurationError, ProfileError
 from universal_downloader.extractor import parse_rate_limit
@@ -107,3 +111,40 @@ def test_backward_compatibility_exports():
     assert hasattr(downloader, "sanitize_filename")
     assert hasattr(downloader, "normalize_url")
     assert hasattr(downloader, "main")
+
+
+def test_build_playlist_entries_skips_private_and_builds_youtube_urls():
+    raw = [
+        {"id": "PmZdQ4MiqwQ", "title": "First Video", "duration": 215, "uploader": "Creator A"},
+        {"id": "deleted1234", "title": "[Private video]", "duration": None},
+        {
+            "id": "vXL-E4JLPj8",
+            "url": "https://www.youtube.com/watch?v=vXL-E4JLPj8",
+            "title": "Second Video",
+            "duration": 90,
+            "thumbnails": [{"url": "https://example.com/small.jpg"}, {"url": "https://example.com/large.jpg"}],
+        },
+    ]
+    entries = _build_playlist_entries(raw, Platform.YOUTUBE, "Fallback Creator")
+    assert len(entries) == 2
+    assert entries[0]["index"] == 1
+    assert entries[0]["url"] == "https://www.youtube.com/watch?v=PmZdQ4MiqwQ"
+    assert entries[0]["thumbnail"] == "https://i.ytimg.com/vi/PmZdQ4MiqwQ/hqdefault.jpg"
+    assert entries[0]["uploader"] == "Creator A"
+    assert entries[1]["index"] == 2
+    assert entries[1]["thumbnail"] == "https://example.com/large.jpg"
+    assert entries[1]["uploader"] == "Fallback Creator"
+
+
+def test_extract_supported_qualities_sorts_descending_and_includes_audio():
+    info = {
+        "formats": [
+            {"format_id": "137", "vcodec": "avc1", "acodec": "none", "height": 1080, "ext": "mp4"},
+            {"format_id": "248", "vcodec": "vp9", "acodec": "none", "height": 1080, "ext": "webm"},
+            {"format_id": "22", "vcodec": "avc1", "acodec": "mp4a", "height": 720, "ext": "mp4"},
+            {"format_id": "135", "vcodec": "avc1", "acodec": "none", "height": 480, "ext": "mp4"},
+            {"format_id": "sb0", "vcodec": "none", "acodec": "none", "height": 45, "ext": "mhtml"},
+            {"format_id": "140", "vcodec": "none", "acodec": "mp4a", "ext": "m4a"},
+        ]
+    }
+    assert _extract_supported_qualities(info) == ["1080p", "720p", "480p", "Audio"]

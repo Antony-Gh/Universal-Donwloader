@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:UniversalDownloader.Core.Models;assembly=UniversalDownloader.Core"
+        xmlns:local="clr-namespace:UniversalDownloader.Avalonia"
         x:Class="UniversalDownloader.Avalonia.MainWindow"
         Title="Universal Media Downloader"
         Icon="/Assets/app-icon.ico"
@@ -73,7 +74,7 @@
                 <Image Source="/Assets/app-icon.png" Width="36" Height="36"/>
                 <TextBlock x:Name="AppTitleText" Text="Universal Media Downloader" FontSize="20" FontWeight="Bold" Foreground="#F4F4F8" VerticalAlignment="Center"/>
                 <Border Background="#27272A" CornerRadius="6" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock x:Name="AppVersionBadge" Text="v2.1.0" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8"/>
+                    <TextBlock x:Name="AppVersionBadge" Text="v2.2.0" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8"/>
                 </Border>
             </StackPanel>
 
@@ -191,9 +192,133 @@
                                                 <TextBlock x:Name="ViewsLabel" Text="" FontSize="12" Foreground="#64748B" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </StackPanel>
+
+                                        <!-- Single-video Supported Qualities Pills -->
+                                        <StackPanel x:Name="SingleVideoQualitiesPanel" IsVisible="False" Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
+                                            <TextBlock x:Name="SupportedQualitiesLabel" Text="Qualities:" FontSize="11" Foreground="#64748B" VerticalAlignment="Center"/>
+                                            <ItemsControl x:Name="SingleVideoQualitiesItems">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel Orientation="Horizontal"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="x:String">
+                                                        <Border Background="#27272A" BorderBrush="#3F3F46" BorderThickness="1" CornerRadius="4" Padding="6,1" Margin="0,0,5,3">
+                                                            <TextBlock Text="{Binding}" Foreground="#A7F3D0" FontSize="10" FontWeight="SemiBold"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
                                     </StackPanel>
                                 </Grid>
                                 <ProgressBar x:Name="MetadataProgressBar" IsIndeterminate="True" Height="3" Foreground="#38BDF8" IsVisible="False"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Playlist Per-Video Cards Panel (Shown when URL is a playlist) -->
+                        <Border x:Name="PlaylistCardsPanel" IsVisible="False" Background="#181820" CornerRadius="10" Padding="14" BorderBrush="#6366F1" BorderThickness="1">
+                            <StackPanel Spacing="10">
+                                <!-- Playlist Header -->
+                                <Grid ColumnDefinitions="*,Auto,Auto">
+                                    <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,12,0" ClipToBounds="True">
+                                        <Grid ColumnDefinitions="Auto,Auto,*">
+                                            <Border Grid.Column="0" Background="#6366F1" CornerRadius="4" Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="PlaylistPlatformBadge" Text="PLAYLIST" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                            </Border>
+                                            <Border Grid.Column="1" Background="#27272A" CornerRadius="4" Padding="6,2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="PlaylistCountBadge" Text="0 videos" Foreground="#A5B4FC" FontSize="10" FontWeight="SemiBold"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="2" x:Name="PlaylistTitleLabel" Text="Playlist Title" FontSize="15" FontWeight="Bold" Foreground="#F4F4F8" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <TextBlock x:Name="PlaylistUploaderLabel" Text="" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                            <PathIcon x:Name="PlaylistScanSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="12" Height="12" Foreground="#38BDF8" VerticalAlignment="Center" IsVisible="False"/>
+                                            <TextBlock x:Name="PlaylistScanStatusLabel" Text="" FontSize="11" Foreground="#38BDF8" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <Button x:Name="LoadAllQualitiesButton" Grid.Column="1" IsVisible="False" Margin="0,0,8,0" Padding="10,6" Background="#27272A" Foreground="#38BDF8" FontSize="11" FontWeight="SemiBold" Content="Load All Qualities" VerticalAlignment="Center" Click="LoadAllQualitiesButton_Click"/>
+                                    <Button x:Name="QueueAllPlaylistButton" Grid.Column="2" Padding="12,6" Background="#4F46E5" Foreground="White" FontSize="12" FontWeight="SemiBold" Content="+ Add All to Queue" VerticalAlignment="Center" Click="QueueAllPlaylistButton_Click"/>
+                                </Grid>
+
+                                <!-- Scrollable List of Per-Video Cards -->
+                                <ScrollViewer MaxHeight="440" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl x:Name="PlaylistCardsItemsControl">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="local:PlaylistVideoCardModel">
+                                                <Border Background="#121218" BorderBrush="#27272A" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,4,8">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <!-- Thumbnail with index & duration overlays -->
+                                                        <Border Grid.Column="0" Width="132" Height="74" CornerRadius="6" ClipToBounds="True" Background="#090A0F" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                            <Panel>
+                                                                <Image Source="{Binding ThumbnailBitmap}" Stretch="UniformToFill"/>
+                                                                <PathIcon Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="20" Height="20" Foreground="#38BDF8" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding IsThumbnailLoading}"/>
+                                                                <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4" Background="#CC000000" CornerRadius="4" Padding="5,1">
+                                                                    <TextBlock Text="{Binding IndexBadge}" Foreground="#E2E8F0" FontSize="10" FontWeight="Bold"/>
+                                                                </Border>
+                                                                <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="4" Background="#DD000000" CornerRadius="4" Padding="5,1" IsVisible="{Binding HasDuration}">
+                                                                    <TextBlock Text="{Binding DurationFormatted}" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                                                </Border>
+                                                            </Panel>
+                                                        </Border>
+
+                                                        <!-- Video Details & Supported Qualities -->
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4" Margin="0,0,12,0" ClipToBounds="True">
+                                                            <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="#F4F4F8" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}"/>
+                                                            <TextBlock Text="{Binding Uploader}" FontSize="11" Foreground="#94A3B8" TextTrimming="CharacterEllipsis"/>
+
+                                                            <!-- Loading supported qualities indicator -->
+                                                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0" IsVisible="{Binding IsLoadingQualities}">
+                                                                <PathIcon Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="11" Height="11" Foreground="#38BDF8" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="Loading supported qualities..." FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+
+                                                            <!-- Clickable supported quality pills -->
+                                                            <ItemsControl ItemsSource="{Binding Qualities}" Margin="0,2,0,0" IsVisible="{Binding HasQualities}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <WrapPanel Orientation="Horizontal"/>
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate x:DataType="local:QualityOptionChip">
+                                                                        <Button Padding="7,2" Margin="0,0,5,4" CornerRadius="4"
+                                                                                Background="{Binding BackgroundHex}"
+                                                                                BorderBrush="{Binding BorderHex}"
+                                                                                BorderThickness="1"
+                                                                                Foreground="{Binding ForegroundHex}"
+                                                                                FontSize="11" FontWeight="SemiBold"
+                                                                                Content="{Binding Label}"
+                                                                                Click="PlaylistQualityChip_Click"/>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+
+                                                            <!-- On-demand load button for large playlists -->
+                                                            <Button IsVisible="{Binding NeedsManualQualityLoad}" Padding="8,2" Margin="0,2,0,0" HorizontalAlignment="Left" Background="#27272A" Foreground="#38BDF8" FontSize="11" Content="Load Supported Qualities" Click="LoadCardQualities_Click"/>
+
+                                                            <!-- Fallback text when qualities unavailable -->
+                                                            <TextBlock Text="{Binding QualityStatusText}" IsVisible="{Binding ShowQualityStatusText}" FontSize="11" Foreground="#64748B" Margin="0,2,0,0"/>
+                                                        </StackPanel>
+
+                                                        <!-- Per-Video Actions -->
+                                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="6" Width="96">
+                                                            <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="8,5" Background="#6366F1" Foreground="White" FontSize="11" FontWeight="SemiBold" Click="DownloadPlaylistCard_Click">
+                                                                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                                                    <PathIcon Data="{StaticResource DownloadArrowIcon}" Width="11" Height="11" Foreground="White"/>
+                                                                    <TextBlock Text="Download" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                            </Button>
+                                                            <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="8,5" Background="#27272A" Foreground="#E2E8F0" FontSize="11" Content="{Binding QueueButtonText}" Click="QueuePlaylistCard_Click"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
                             </StackPanel>
                         </Border>
 
@@ -441,7 +566,7 @@
             <!-- DOWNLOAD QUEUE TAB -->
             <TabItem x:Name="QueueTab" Header="Queue">
                 <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
-                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                    <Grid RowDefinitions="Auto,Auto,*">
                         <!-- Batch URL Input -->
                         <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,12">
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -450,7 +575,7 @@
                                           ToolTip.Tip="Paste one or more media URLs (one per line) to enqueue them with your current Download Options and run them automatically in parallel."/>
                             </StackPanel>
                             <Grid ColumnDefinitions="*,Auto">
-                                <TextBox x:Name="QueueBatchUrlsBox" Grid.Column="0" AcceptsReturn="True" Height="62" Watermark="Paste multiple URLs here (one per line) to add to the queue..."/>
+                                <TextBox x:Name="QueueBatchUrlsBox" Grid.Column="0" FlowDirection="LeftToRight" AcceptsReturn="True" Height="62" Watermark="Paste multiple URLs here (one per line) to add to the queue..."/>
                                 <Button x:Name="QueueAddBatchButton" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Stretch" Padding="14,6" Background="#374151" Foreground="White" FontWeight="SemiBold" Content="+ Add URLs" Click="QueueAddBatchButton_Click"/>
                             </Grid>
                         </StackPanel>
@@ -458,37 +583,55 @@
                         <!-- Queue Controls -->
                         <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="0,0,0,12">
                             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <TextBlock Text="Parallel Downloads:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="QueueParallelLabel" Text="Parallel:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
                                 <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                           ToolTip.Tip="Number of queued downloads executed simultaneously (1 to 3)."/>
                             </StackPanel>
-                            <NumericUpDown x:Name="QueueConcurrencyNumeric" Grid.Column="1" Value="2" Minimum="1" Maximum="3" Width="90" Margin="8,0,0,0"/>
-                            <TextBlock x:Name="QueueSummaryLabel" Grid.Column="2" Text="0 items in queue" Foreground="#94A3B8" FontSize="12" VerticalAlignment="Center" Margin="14,0"/>
+                            <NumericUpDown x:Name="QueueConcurrencyNumeric" Grid.Column="1" Value="2" Minimum="1" Maximum="3" Width="96" Margin="8,0,0,0"/>
+                            <TextBlock x:Name="QueueSummaryLabel" Grid.Column="2" Text="0 items in queue" Foreground="#94A3B8" FontSize="12" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis"/>
                             <Button x:Name="StartQueueButton" Grid.Column="3" Margin="0,0,8,0" Padding="12,6" Background="#6366F1" Foreground="White" FontWeight="Bold" Content="Start Queue" Click="StartQueueButton_Click"/>
                             <Button x:Name="StopQueueButton" Grid.Column="4" Margin="0,0,8,0" Padding="12,6" Background="#EF4444" Foreground="White" IsEnabled="False" Content="Stop" Click="StopQueueButton_Click"/>
                             <Button x:Name="ClearQueueButton" Grid.Column="5" Padding="10,6" Background="#374151" Foreground="White" Content="Clear Completed" Click="ClearQueueButton_Click"/>
                         </Grid>
 
                         <!-- Queue Items -->
-                        <ListBox x:Name="QueueListBox" Grid.Row="2" MaxHeight="360" Background="#18181B">
+                        <ListBox x:Name="QueueListBox" Grid.Row="2" Background="#14141A" CornerRadius="6" Padding="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Padding" Value="4,3"/>
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                                <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                                <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                </Style>
+                            </ListBox.Styles>
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="models:QueueItemModel">
-                                    <Grid ColumnDefinitions="*,140,Auto" Margin="6,6">
-                                        <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,12,0">
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <Border Background="#27272A" CornerRadius="4" Padding="6,2">
-                                                    <TextBlock Text="{Binding StatusBadgeText}" Foreground="{Binding StatusColorHex}" FontSize="10" FontWeight="Bold"/>
-                                                </Border>
-                                                <TextBlock Text="{Binding Title}" Foreground="#F4F4F8" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                    <Border Background="#1E1E24" BorderBrush="#27272A" BorderThickness="1" CornerRadius="6" Padding="10,8">
+                                        <Grid ColumnDefinitions="*,130,Auto">
+                                            <Grid Grid.Column="0" RowDefinitions="Auto,Auto" Margin="0,0,12,0" ClipToBounds="True">
+                                                <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*" Margin="0,0,0,4">
+                                                    <Border Grid.Column="0" Background="#27272A" CornerRadius="4" Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding StatusBadgeText}" Foreground="{Binding StatusColorHex}" FontSize="10" FontWeight="Bold"/>
+                                                    </Border>
+                                                    <Border Grid.Column="1" Background="#1E1B4B" BorderBrush="#4F46E5" BorderThickness="1" CornerRadius="4" Padding="5,1" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding QualityBadgeText}" Foreground="#A5B4FC" FontSize="10" FontWeight="SemiBold"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Title}" Foreground="#F4F4F8" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}"/>
+                                                </Grid>
+                                                <TextBlock Grid.Row="1" Text="{Binding StatusDetail}" Foreground="#94A3B8" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding StatusDetail}"/>
+                                            </Grid>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4" Margin="0,0,10,0">
+                                                <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}" Height="6" Foreground="#6366F1"/>
+                                                <TextBlock Text="{Binding ProgressText}" Foreground="#9CA3AF" FontSize="10" HorizontalAlignment="Right"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding StatusDetail}" Foreground="#94A3B8" FontSize="11" TextTrimming="CharacterEllipsis"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3" Margin="0,0,10,0">
-                                            <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}" Height="6" Foreground="#6366F1"/>
-                                            <TextBlock Text="{Binding ProgressText}" Foreground="#9CA3AF" FontSize="10" HorizontalAlignment="Right"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="2" Padding="8,4" Background="#27272A" Foreground="#EF4444" FontSize="11" Content="✕" Click="RemoveQueueItem_Click"/>
-                                    </Grid>
+                                            <Button Grid.Column="2" VerticalAlignment="Center" Padding="8,4" Background="#27272A" Foreground="#EF4444" FontSize="11" Content="✕" Click="RemoveQueueItem_Click"/>
+                                        </Grid>
+                                    </Border>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
@@ -526,7 +669,12 @@
                             </StackPanel>
                         </Border>
 
-                        <ListBox x:Name="StreamsListBox" MaxHeight="450" Background="#18181B">
+                        <ListBox x:Name="StreamsListBox" MaxHeight="450" Background="#18181B" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                </Style>
+                            </ListBox.Styles>
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="models:FormatInfoModel">
                                     <Grid ColumnDefinitions="220,*,120,Auto" Margin="6,4">
@@ -585,7 +733,12 @@
                             </Button>
                         </Grid>
                         <ProgressBar x:Name="HistoryLoadingBar" IsIndeterminate="True" Height="3" Foreground="#38BDF8" IsVisible="False"/>
-                        <ListBox x:Name="HistoryListBox" MaxHeight="450" Background="#18181B">
+                        <ListBox x:Name="HistoryListBox" MaxHeight="450" Background="#18181B" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                </Style>
+                            </ListBox.Styles>
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="models:HistoryRecordModel">
                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="4">

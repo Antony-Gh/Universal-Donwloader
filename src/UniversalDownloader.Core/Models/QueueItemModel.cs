@@ -66,6 +66,9 @@ public class QueueItemModel : INotifyPropertyChanged
     }
 
     public string StatusBadgeText => Status.ToString().ToUpperInvariant();
+    public string QualityBadgeText => Options.AudioOnly
+        ? "MP3"
+        : (string.IsNullOrWhiteSpace(Options.Quality) ? "BEST" : Options.Quality.ToUpperInvariant());
     public string ProgressText => $"{Progress:F1}%";
 
     public string StatusColorHex => Status switch

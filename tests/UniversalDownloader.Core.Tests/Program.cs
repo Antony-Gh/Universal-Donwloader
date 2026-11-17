@@ -153,6 +153,45 @@ RunTest("QueueItemModel updates status badge and progress clamping", () =>
     item.Status = QueueItemStatus.Completed;
     AssertEqual("COMPLETED", item.StatusBadgeText);
     AssertEqual("#10B981", item.StatusColorHex);
+    AssertEqual("BEST", item.QualityBadgeText);
+});
+
+RunTest("DownloaderJsonContext deserializes playlist MediaMetadataModel with entries", () =>
+{
+    var json = """
+    {
+      "url": "https://youtube.com/playlist?list=PL123",
+      "platform": "youtube",
+      "title": "My Playlist",
+      "uploader": "Channel",
+      "is_playlist": true,
+      "playlist_count": 2,
+      "entries": [
+        {"index": 1, "id": "abc12345678", "url": "https://www.youtube.com/watch?v=abc12345678", "title": "Track 1", "duration": 185, "qualities": ["1080p", "720p", "Audio"]},
+        {"index": 2, "id": "xyz98765432", "url": "https://www.youtube.com/watch?v=xyz98765432", "title": "Track 2", "duration": 62, "qualities": []}
+      ]
+    }
+    """;
+    var meta = JsonSerializer.Deserialize(json, DownloaderJsonContext.Default.MediaMetadataModel);
+    AssertTrue(meta != null && meta.IsPlaylist, "is_playlist true");
+    AssertEqual(2, meta!.Entries.Count);
+    AssertEqual("Track 1", meta.Entries[0].Title);
+    AssertEqual("3:05", meta.Entries[0].DurationFormatted);
+    AssertEqual(3, meta.Entries[0].Qualities.Count);
+});
+
+RunTest("FormatInfoModel.ExtractSupportedQualities sorts descending and appends Audio", () =>
+{
+    var formats = new List<FormatInfoModel>
+    {
+        new() { FormatId = "1", VCodec = "avc1", ACodec = "none", Height = 720 },
+        new() { FormatId = "2", VCodec = "vp9", ACodec = "none", Height = 1080 },
+        new() { FormatId = "3", VCodec = "avc1", ACodec = "none", Height = 1080 },
+        new() { FormatId = "4", VCodec = "none", ACodec = "mp4a", Height = null },
+        new() { FormatId = "5", VCodec = "none", ACodec = "none", Height = 45 },
+    };
+    var qualities = FormatInfoModel.ExtractSupportedQualities(formats);
+    AssertEqual("1080p,720p,Audio", string.Join(",", qualities));
 });
 
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
