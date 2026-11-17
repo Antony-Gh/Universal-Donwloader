@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from universal_downloader.exceptions import DependencyError, DownloadError, ExtractionError
@@ -98,8 +99,14 @@ class YTDLPLogger:
         "SSAP (server-side ads) experiment",
         "Missing required Visitor Data",
         "android client https formats require a GVS PO Token",
+        "No GVS PO Token provided",
+        "This client will be deprioritized",
         "Some web client https formats have been skipped",
         "formats have been skipped as they are missing a url",
+        "General metadata extraction failed",
+        "unable to extract shared data",
+        "unable to extract additional data",
+        "Main webpage is locked behind the login page",
     )
 
     def __init__(self, config: AppConfig) -> None:
@@ -166,12 +173,12 @@ class YTDLPExtractor:
             options["ffmpeg_location"] = str(ffmpeg_bin.parent)
 
         # Configure YouTube client and format extraction:
-        # 1. Use 'missing_pot' so Android formats are never skipped when GVS PO token is missing.
-        # 2. 'android' client avoids desktop SSAP server-side ads and 'page needs to be reloaded'.
-        # 3. Webpage is NOT skipped so visitor data and JavaScript n-sig decryption are available.
+        # 1. 'ios' and 'android_vr' avoid desktop SSAP server-side ads and GVS PO Token warnings.
+        # 2. 'missing_pot' ensures formats remain selectable when PO tokens are absent.
+        # 3. Webpage is NOT skipped so visitor data and JavaScript n-sig decryption stay available.
         options["extractor_args"] = {
             "youtube": {
-                "player_client": ["android", "web"],
+                "player_client": ["ios", "android_vr", "web"],
                 "formats": ["missing_pot"],
             }
         }
@@ -224,7 +231,7 @@ class YTDLPExtractor:
         platform: Platform,
         attempt: int = 1,
     ) -> dict[str, Any]:
-        if platform == Platform.TIKTOK:
+        if platform in (Platform.TIKTOK, Platform.INSTAGRAM):
             return {
                 "extractor_retries": 2,
                 "sleep_interval_requests": 1,
@@ -232,13 +239,13 @@ class YTDLPExtractor:
         if platform == Platform.YOUTUBE:
             # Rotate client signatures across attempts to bypass bot checks & SSAP reload gates
             if attempt == 2:
-                clients = ["web", "android"]
-            elif attempt == 3:
-                clients = ["tv_embedded", "android", "web"]
-            elif attempt >= 4:
-                clients = ["android", "tv_embedded"]
-            else:
                 clients = ["android", "web"]
+            elif attempt == 3:
+                clients = ["tv_embedded", "ios", "web"]
+            elif attempt >= 4:
+                clients = ["visionos", "web"]
+            else:
+                clients = ["ios", "android_vr", "web"]
 
             return {
                 "extractor_args": {

@@ -407,15 +407,44 @@ public class DownloaderClient
             );
             Directory.CreateDirectory(cacheDir);
             var targetFile = Path.Combine(cacheDir, binaryName);
+            var hashFile = targetFile + ".sha256";
 
-            if (File.Exists(targetFile) && new FileInfo(targetFile).Length == resourceStream.Length)
+            // Compute embedded resource SHA-256 so stale cached binaries are always refreshed
+            string embeddedHash;
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                embeddedHash = Convert.ToHexString(sha.ComputeHash(resourceStream));
+            }
+            resourceStream.Position = 0;
+
+            if (File.Exists(targetFile) &&
+                new FileInfo(targetFile).Length == resourceStream.Length &&
+                File.Exists(hashFile) &&
+                string.Equals(File.ReadAllText(hashFile).Trim(), embeddedHash, StringComparison.OrdinalIgnoreCase))
             {
                 return targetFile;
             }
 
-            using (var fileStream = File.Create(targetFile))
+            try
             {
-                resourceStream.CopyTo(fileStream);
+                using (var fileStream = File.Create(targetFile))
+                {
+                    resourceStream.CopyTo(fileStream);
+                }
+                File.WriteAllText(hashFile, embeddedHash);
+            }
+            catch (IOException)
+            {
+                // Fallback to hash-tagged binary if previous instance holds a lock
+                var ext = Path.GetExtension(binaryName);
+                var stem = Path.GetFileNameWithoutExtension(binaryName);
+                targetFile = Path.Combine(cacheDir, $"{stem}_{embeddedHash[..8]}{ext}");
+                if (!File.Exists(targetFile))
+                {
+                    resourceStream.Position = 0;
+                    using var fileStream = File.Create(targetFile);
+                    resourceStream.CopyTo(fileStream);
+                }
             }
 
             if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())

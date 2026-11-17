@@ -125,7 +125,7 @@ def build_python_backend() -> Optional[Path]:
     if not spec_file.exists():
         raise FileNotFoundError(f"Missing spec file: {spec_file}")
 
-    run_command(["pyinstaller", "downloader.spec", "--noconfirm"])
+    run_command([sys.executable, "-m", "PyInstaller", "downloader.spec", "--noconfirm", "--clean"])
 
     exe_name = "downloader.exe" if sys.platform.startswith("win") else "downloader"
     dist_bin = ROOT_DIR / "dist" / exe_name

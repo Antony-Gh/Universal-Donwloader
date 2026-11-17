@@ -112,6 +112,7 @@ PLATFORM_DOMAINS: dict[Platform, tuple[str, ...]] = {
 
 TIKTOK_SHORT_DOMAINS = frozenset({"vt.tiktok.com", "vm.tiktok.com"})
 TIKTOK_VIDEO_PATH_RE = re.compile(r"/video/\d+", re.IGNORECASE)
+INSTAGRAM_MEDIA_PATH_RE = re.compile(r"/(?:reel|reels|p|tv)/[^/]+", re.IGNORECASE)
 
 
 def normalize_url(value: str) -> str:
@@ -193,6 +194,27 @@ def normalize_tiktok_url(url: str, timeout: int = 30) -> str:
                 parsed.scheme.lower(),
                 parsed.netloc.lower(),
                 parsed.path,
+                parsed.params,
+                "",
+                "",
+            )
+        )
+
+    return url
+
+
+def normalize_instagram_url(url: str) -> str:
+    """Strip noisy tracking parameters (utm_source, igsh, srtk) from Instagram media URLs."""
+    url = normalize_url(url)
+    parsed = urllib.parse.urlparse(url)
+
+    if INSTAGRAM_MEDIA_PATH_RE.search(parsed.path) and (parsed.query or parsed.fragment):
+        path = parsed.path if parsed.path.endswith("/") else parsed.path + "/"
+        url = urllib.parse.urlunparse(
+            (
+                parsed.scheme.lower(),
+                parsed.netloc.lower(),
+                path,
                 parsed.params,
                 "",
                 "",
@@ -312,6 +334,8 @@ def detect_target(url: str, timeout: int = 30) -> DetectedTarget:
 
     if platform == Platform.TIKTOK:
         normalized = normalize_tiktok_url(normalized, timeout=timeout)
+    elif platform == Platform.INSTAGRAM:
+        normalized = normalize_instagram_url(normalized)
 
     content_type = detect_content_type(normalized, platform)
 

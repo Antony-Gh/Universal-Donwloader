@@ -5,9 +5,21 @@ Compiles downloader.py and the universal_downloader package into a
 standalone, single-file Windows executable (downloader.exe).
 """
 
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_all, collect_submodules, collect_data_files
 
 block_cipher = None
+
+# Collect curl_cffi for yt-dlp browser TLS impersonation (Instagram, TikTok, etc.)
+extra_binaries = []
+extra_datas = []
+extra_hidden = []
+try:
+    _c_datas, _c_bins, _c_hidden = collect_all("curl_cffi")
+    extra_datas.extend(_c_datas)
+    extra_binaries.extend(_c_bins)
+    extra_hidden.extend(_c_hidden)
+except Exception:
+    pass
 
 # Collect all submodules from yt_dlp and universal_downloader
 hidden_imports = [
@@ -36,16 +48,16 @@ hidden_imports = [
     "urllib",
     "mutagen",
     "certifi",
-] + collect_submodules("yt_dlp")
+] + collect_submodules("yt_dlp") + extra_hidden
 
 datas = [
     ("universal_downloader", "universal_downloader"),
-] + collect_data_files("certifi")
+] + collect_data_files("certifi") + extra_datas
 
 a = Analysis(
     ["downloader.py"],
     pathex=["."],
-    binaries=[],
+    binaries=extra_binaries,
     datas=datas,
     hiddenimports=hidden_imports,
     hookspath=[],

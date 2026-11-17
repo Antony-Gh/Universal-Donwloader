@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _metadataCts;
     private string? _lastInspectedMetadataUrl;
+    private int _activeTaskCount = 0;
     private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(12) };
 
     public MainWindow()
@@ -132,6 +133,41 @@ public partial class MainWindow : Window
         UpdateMainLogCount();
     }
 
+    private void BeginGlobalActivity(string? statusText = null)
+    {
+        var count = Interlocked.Increment(ref _activeTaskCount);
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (count > 0)
+            {
+                GlobalSpinner.IsVisible = true;
+                GlobalActivityBar.IsVisible = true;
+            }
+            if (!string.IsNullOrWhiteSpace(statusText))
+            {
+                GlobalStatusText.Text = statusText;
+            }
+        });
+    }
+
+    private void EndGlobalActivity()
+    {
+        var count = Interlocked.Decrement(ref _activeTaskCount);
+        if (count < 0)
+        {
+            Interlocked.Exchange(ref _activeTaskCount, 0);
+            count = 0;
+        }
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (count == 0)
+            {
+                GlobalSpinner.IsVisible = false;
+                GlobalActivityBar.IsVisible = false;
+            }
+        });
+    }
+
     private void OnProgressChanged(object? sender, DownloadProgressEvent e)
     {
         var now = Environment.TickCount64;
@@ -140,6 +176,7 @@ public partial class MainWindow : Window
             _lastProgressUpdateMs = now;
             Dispatcher.UIThread.Post(() =>
             {
+                DownloadProgressBar.IsIndeterminate = false;
                 DownloadProgressBar.Value = Math.Clamp(e.Percent, 0, 100);
                 PercentLabel.Text = $"{e.Percent:F1}%";
                 DetailsLabel.Text = $"{e.DownloadedFormatted} / {e.TotalFormatted} • {e.SpeedFormatted}";
@@ -155,6 +192,11 @@ public partial class MainWindow : Window
         {
             StatusLabel.Text = status;
             GlobalStatusText.Text = status;
+            if (status.Contains("Processing", StringComparison.OrdinalIgnoreCase) ||
+                status.Contains("Merging", StringComparison.OrdinalIgnoreCase))
+            {
+                DownloadProgressBar.IsIndeterminate = true;
+            }
         });
     }
 
@@ -162,6 +204,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.UIThread.Post(async () =>
         {
+            DownloadProgressBar.IsIndeterminate = false;
             DownloadProgressBar.Value = 100;
             PercentLabel.Text = "100%";
             StatusLabel.Text = "Download finished!";
@@ -175,6 +218,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.UIThread.Post(() =>
         {
+            DownloadProgressBar.IsIndeterminate = false;
             StatusLabel.Text = "Download failed";
             GlobalStatusText.Text = $"Failed: {e.Error}";
             SetDownloading(false);
@@ -236,9 +280,13 @@ public partial class MainWindow : Window
     {
         SetDownloading(true);
         ProgressCard.IsVisible = true;
+        DownloadProgressBar.IsIndeterminate = true;
         DownloadProgressBar.Value = 0;
         PercentLabel.Text = "0.0%";
+        DetailsLabel.Text = "Connecting & resolving stream...";
+        EtaLabel.Text = "ETA: --:--";
         StatusLabel.Text = "Starting download...";
+        BeginGlobalActivity("Resolving media streams & starting download...");
 
         _cts = new CancellationTokenSource();
         try
@@ -248,12 +296,19 @@ public partial class MainWindow : Window
         catch (OperationCanceledException)
         {
             StatusLabel.Text = "Download canceled.";
+            GlobalStatusText.Text = "Download canceled.";
             SetDownloading(false);
         }
         catch (Exception ex)
         {
             StatusLabel.Text = $"Error: {ex.Message}";
+            GlobalStatusText.Text = $"Error: {ex.Message}";
             SetDownloading(false);
+        }
+        finally
+        {
+            DownloadProgressBar.IsIndeterminate = false;
+            EndGlobalActivity();
         }
     }
 
@@ -269,20 +324,48 @@ public partial class MainWindow : Window
         var url = UrlTextBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(url)) return;
 
-        GlobalStatusText.Text = "Inspecting stream formats...";
+        // Show loading state across Download button, Streams button, Streams tab, and global footer
+        InspectButton.IsEnabled = false;
+        RefreshStreamsButton.IsEnabled = false;
+        InspectIconPath.IsVisible = false;
+        InspectSpinner.IsVisible = true;
+        InspectButtonText.Text = "Inspecting...";
+        RefreshStreamsIconPath.IsVisible = false;
+        RefreshStreamsSpinner.IsVisible = true;
+        RefreshStreamsButtonText.Text = "Inspecting...";
+
+        MainTabControl.SelectedItem = StreamsTab;
+        StreamsLoadingLabel.Text = "Inspecting available video & audio streams...";
+        StreamsLoadingPanel.IsVisible = true;
+        StreamsListBox.IsVisible = false;
         StreamsStatusHeader.Text = $"Inspecting available streams for: {url}...";
+        BeginGlobalActivity("Inspecting stream formats...");
+
         try
         {
             var formats = await _client.GetFormatsAsync(url);
             StreamsListBox.ItemsSource = formats;
             StreamsStatusHeader.Text = $"Found {formats.Count} streams for: {url}";
             GlobalStatusText.Text = $"Found {formats.Count} streams available.";
-            MainTabControl.SelectedItem = StreamsTab;
         }
         catch (Exception ex)
         {
             StreamsStatusHeader.Text = $"Inspection failed: {ex.Message}";
             GlobalStatusText.Text = $"Inspection failed: {ex.Message}";
+        }
+        finally
+        {
+            StreamsLoadingPanel.IsVisible = false;
+            StreamsListBox.IsVisible = true;
+            InspectButton.IsEnabled = true;
+            RefreshStreamsButton.IsEnabled = true;
+            InspectIconPath.IsVisible = true;
+            InspectSpinner.IsVisible = false;
+            InspectButtonText.Text = "Inspect Streams";
+            RefreshStreamsIconPath.IsVisible = true;
+            RefreshStreamsSpinner.IsVisible = false;
+            RefreshStreamsButtonText.Text = "Refresh Streams";
+            EndGlobalActivity();
         }
     }
 
@@ -416,9 +499,13 @@ public partial class MainWindow : Window
         ViewsLabel.Text = "";
         DurationBadge.IsVisible = false;
         ThumbnailImage.Source = null;
+        ThumbnailSpinner.IsVisible = true;
+        MetadataHeaderSpinner.IsVisible = true;
+        MetadataProgressBar.IsVisible = true;
         MetadataLoadingText.Text = "Loading details...";
         MetadataLoadingText.IsVisible = true;
         MetadataCard.IsVisible = true;
+        BeginGlobalActivity("Fetching video metadata & thumbnail...");
 
         try
         {
@@ -428,6 +515,7 @@ public partial class MainWindow : Window
             if (meta != null && !string.IsNullOrWhiteSpace(meta.Title))
             {
                 MetadataLoadingText.IsVisible = false;
+                MetadataHeaderSpinner.IsVisible = false;
                 VideoTitleLabel.Text = meta.Title;
                 UploaderLabel.Text = !string.IsNullOrWhiteSpace(meta.Uploader) ? meta.Uploader : uri.Host;
 
@@ -452,10 +540,13 @@ public partial class MainWindow : Window
                 {
                     await LoadThumbnailAsync(meta.Thumbnail, token);
                 }
+
+                GlobalStatusText.Text = $"Loaded media preview: {meta.Title}";
             }
             else
             {
                 MetadataLoadingText.Text = "Ready to download";
+                GlobalStatusText.Text = "Ready";
             }
         }
         catch (OperationCanceledException)
@@ -467,7 +558,18 @@ public partial class MainWindow : Window
             if (!token.IsCancellationRequested)
             {
                 MetadataLoadingText.Text = "Ready to download";
+                GlobalStatusText.Text = "Ready";
             }
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                ThumbnailSpinner.IsVisible = false;
+                MetadataHeaderSpinner.IsVisible = false;
+                MetadataProgressBar.IsVisible = false;
+            }
+            EndGlobalActivity();
         }
     }
 
@@ -492,12 +594,20 @@ public partial class MainWindow : Window
 
     private async Task LoadHistoryAsync(string? search = null)
     {
+        HistoryLoadingBar.IsVisible = true;
+        BeginGlobalActivity("Loading download history...");
         try
         {
             var records = await _client.GetHistoryAsync(limit: 50, search: search);
             HistoryListBox.ItemsSource = records;
+            GlobalStatusText.Text = "Ready";
         }
         catch { }
+        finally
+        {
+            HistoryLoadingBar.IsVisible = false;
+            EndGlobalActivity();
+        }
     }
 
     private async void HistorySearchButton_Click(object? sender, RoutedEventArgs e)

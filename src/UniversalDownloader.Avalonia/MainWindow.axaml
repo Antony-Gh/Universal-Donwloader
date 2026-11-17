@@ -26,9 +26,23 @@
         <StreamGeometry x:Key="EyeIcon">M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z</StreamGeometry>
         <StreamGeometry x:Key="ClockIcon">M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z</StreamGeometry>
         <StreamGeometry x:Key="InfoCircleIcon">M11,7H13V9H11V7M11,11H13V17H11V11M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z</StreamGeometry>
+        <StreamGeometry x:Key="SpinnerIcon">M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z</StreamGeometry>
     </Window.Resources>
 
     <Window.Styles>
+        <Style Selector="PathIcon.spinner">
+            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+            <Style.Animations>
+                <Animation Duration="0:0:0.85" IterationCount="Infinite">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="RotateTransform.Angle" Value="0"/>
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="RotateTransform.Angle" Value="360"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
         <Style Selector="PathIcon.info-icon">
             <Setter Property="Width" Value="13"/>
             <Setter Property="Height" Value="13"/>
@@ -84,8 +98,9 @@
                                     </Button>
                                     <Button x:Name="InspectButton" Grid.Column="2" Margin="8,0,0,0" Padding="12,8" Background="#374151" Click="InspectButton_Click">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
-                                            <PathIcon Data="{StaticResource InspectIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
-                                            <TextBlock Text="Inspect Streams" VerticalAlignment="Center"/>
+                                            <PathIcon x:Name="InspectIconPath" Data="{StaticResource InspectIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
+                                            <PathIcon x:Name="InspectSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="13" Height="13" Foreground="#38BDF8" IsVisible="False"/>
+                                            <TextBlock x:Name="InspectButtonText" Text="Inspect Streams" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                 </Grid>
@@ -94,44 +109,49 @@
 
                         <!-- Media Metadata & Thumbnail Preview Card -->
                         <Border x:Name="MetadataCard" IsVisible="False" Background="#181820" CornerRadius="10" Padding="14" BorderBrush="#3B82F6" BorderThickness="1">
-                            <Grid ColumnDefinitions="Auto,*">
-                                <!-- Thumbnail Container -->
-                                <Border Grid.Column="0" Width="170" Height="96" CornerRadius="8" ClipToBounds="True" Background="#090A0F" Margin="0,0,16,0" VerticalAlignment="Center">
-                                    <Panel>
-                                        <Image x:Name="ThumbnailImage" Stretch="UniformToFill"/>
-                                        <!-- Duration Badge overlay at bottom right -->
-                                        <Border x:Name="DurationBadge" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="6" Background="#DD000000" CornerRadius="4" Padding="5,2" IsVisible="False">
-                                            <TextBlock x:Name="DurationLabel" Text="00:00" Foreground="White" FontSize="11" FontWeight="Bold"/>
-                                        </Border>
-                                    </Panel>
-                                </Border>
+                            <StackPanel Spacing="10">
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <!-- Thumbnail Container -->
+                                    <Border Grid.Column="0" Width="170" Height="96" CornerRadius="8" ClipToBounds="True" Background="#090A0F" Margin="0,0,16,0" VerticalAlignment="Center">
+                                        <Panel>
+                                            <Image x:Name="ThumbnailImage" Stretch="UniformToFill"/>
+                                            <PathIcon x:Name="ThumbnailSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="26" Height="26" Foreground="#38BDF8" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False"/>
+                                            <!-- Duration Badge overlay at bottom right -->
+                                            <Border x:Name="DurationBadge" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="6" Background="#DD000000" CornerRadius="4" Padding="5,2" IsVisible="False">
+                                                <TextBlock x:Name="DurationLabel" Text="00:00" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                                            </Border>
+                                        </Panel>
+                                    </Border>
 
-                                <!-- Metadata Details -->
-                                <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
-                                    <!-- Platform & Status Badges -->
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Border Background="#3B82F6" CornerRadius="4" Padding="6,2">
-                                            <TextBlock x:Name="PlatformBadge" Text="YOUTUBE" Foreground="White" FontSize="10" FontWeight="Bold"/>
-                                        </Border>
-                                        <TextBlock x:Name="MetadataLoadingText" Text="Loading media details..." Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" IsVisible="False"/>
-                                    </StackPanel>
-
-                                    <!-- Title -->
-                                    <TextBlock x:Name="VideoTitleLabel" Text="Video Title" FontSize="15" FontWeight="Bold" Foreground="#F4F4F8" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
-
-                                    <!-- Uploader / Channel & View Count -->
-                                    <StackPanel Orientation="Horizontal" Spacing="14">
-                                        <StackPanel Orientation="Horizontal" Spacing="5">
-                                            <PathIcon Data="{StaticResource UserIcon}" Width="12" Height="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
-                                            <TextBlock x:Name="UploaderLabel" Text="Channel Name" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                    <!-- Metadata Details -->
+                                    <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                        <!-- Platform & Status Badges -->
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border Background="#3B82F6" CornerRadius="4" Padding="6,2">
+                                                <TextBlock x:Name="PlatformBadge" Text="YOUTUBE" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                            </Border>
+                                            <PathIcon x:Name="MetadataHeaderSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="12" Height="12" Foreground="#38BDF8" VerticalAlignment="Center" IsVisible="False"/>
+                                            <TextBlock x:Name="MetadataLoadingText" Text="Loading media details..." Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" IsVisible="False"/>
                                         </StackPanel>
-                                        <StackPanel Orientation="Horizontal" Spacing="5">
-                                            <PathIcon Data="{StaticResource EyeIcon}" Width="12" Height="12" Foreground="#64748B" VerticalAlignment="Center"/>
-                                            <TextBlock x:Name="ViewsLabel" Text="" FontSize="12" Foreground="#64748B" VerticalAlignment="Center"/>
+
+                                        <!-- Title -->
+                                        <TextBlock x:Name="VideoTitleLabel" Text="Video Title" FontSize="15" FontWeight="Bold" Foreground="#F4F4F8" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+
+                                        <!-- Uploader / Channel & View Count -->
+                                        <StackPanel Orientation="Horizontal" Spacing="14">
+                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                <PathIcon Data="{StaticResource UserIcon}" Width="12" Height="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="UploaderLabel" Text="Channel Name" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                <PathIcon Data="{StaticResource EyeIcon}" Width="12" Height="12" Foreground="#64748B" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="ViewsLabel" Text="" FontSize="12" Foreground="#64748B" VerticalAlignment="Center"/>
+                                            </StackPanel>
                                         </StackPanel>
                                     </StackPanel>
-                                </StackPanel>
-                            </Grid>
+                                </Grid>
+                                <ProgressBar x:Name="MetadataProgressBar" IsIndeterminate="True" Height="3" Foreground="#38BDF8" IsVisible="False"/>
+                            </StackPanel>
                         </Border>
 
                         <!-- Options Card -->
@@ -309,11 +329,23 @@
                             </StackPanel>
                             <Button x:Name="RefreshStreamsButton" Grid.Column="1" Padding="10,6" Background="#374151" Foreground="White" Click="InspectButton_Click">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <PathIcon Data="{StaticResource RefreshIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
-                                    <TextBlock Text="Refresh Streams" VerticalAlignment="Center"/>
+                                    <PathIcon x:Name="RefreshStreamsIconPath" Data="{StaticResource RefreshIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
+                                    <PathIcon x:Name="RefreshStreamsSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="13" Height="13" Foreground="#38BDF8" IsVisible="False"/>
+                                    <TextBlock x:Name="RefreshStreamsButtonText" Text="Refresh Streams" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                         </Grid>
+
+                        <!-- Animated Loading State for Stream Inspection -->
+                        <Border x:Name="StreamsLoadingPanel" IsVisible="False" Background="#14141A" CornerRadius="8" Padding="24" BorderBrush="#27272A" BorderThickness="1">
+                            <StackPanel Spacing="12" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+                                    <PathIcon Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="20" Height="20" Foreground="#38BDF8"/>
+                                    <TextBlock x:Name="StreamsLoadingLabel" Text="Inspecting available video &amp; audio streams..." Foreground="#E2E8F0" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <ProgressBar IsIndeterminate="True" Width="280" Height="4" Foreground="#6366F1"/>
+                            </StackPanel>
+                        </Border>
 
                         <ListBox x:Name="StreamsListBox" MaxHeight="450" Background="#18181B">
                             <ListBox.ItemTemplate>
@@ -373,6 +405,7 @@
                                 </StackPanel>
                             </Button>
                         </Grid>
+                        <ProgressBar x:Name="HistoryLoadingBar" IsIndeterminate="True" Height="3" Foreground="#38BDF8" IsVisible="False"/>
                         <ListBox x:Name="HistoryListBox" MaxHeight="450" Background="#18181B">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
@@ -476,7 +509,11 @@
 
         <!-- Status Footer -->
         <Border Grid.Row="2" Background="#18181B" CornerRadius="6" Padding="10" Margin="0,12,0,0">
-            <TextBlock x:Name="GlobalStatusText" Text="Ready" Foreground="#9CA3AF" FontSize="12"/>
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <PathIcon x:Name="GlobalSpinner" Grid.Column="0" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="14" Height="14" Foreground="#38BDF8" Margin="0,0,8,0" VerticalAlignment="Center" IsVisible="False"/>
+                <TextBlock x:Name="GlobalStatusText" Grid.Column="1" Text="Ready" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <ProgressBar x:Name="GlobalActivityBar" Grid.Column="2" IsIndeterminate="True" Width="90" Height="4" Foreground="#6366F1" VerticalAlignment="Center" Margin="10,0,0,0" IsVisible="False"/>
+            </Grid>
         </Border>
     </Grid>
 </Window>
