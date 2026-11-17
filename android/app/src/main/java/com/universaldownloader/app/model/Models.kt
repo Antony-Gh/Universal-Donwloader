@@ -28,6 +28,10 @@ data class DownloadOptions(
     val embedSubs: Boolean = false,
     val writeThumbnail: Boolean = false,
     val cookiesFilePath: String? = null,
+    val startTime: String = "",
+    val endTime: String = "",
+    val playlistItems: String = "",
+    val sponsorBlockEnabled: Boolean = false,
     val explicitFormatId: String? = null,
 )
 

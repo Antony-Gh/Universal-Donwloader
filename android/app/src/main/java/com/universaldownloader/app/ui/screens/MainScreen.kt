@@ -893,6 +893,86 @@ private fun DownloadTab(
                         }
                     }
                 }
+
+                // Collapsible Clip Trimmer, Playlist Picker & SponsorBlock Section
+                var showAdvanced by remember { mutableStateOf(false) }
+                OutlinedButton(
+                    onClick = { showAdvanced = !showAdvanced },
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, BorderSubtle),
+                ) {
+                    Text(
+                        text = if (showAdvanced) "Hide Clip Trimmer, Playlist & SponsorBlock" else "Clip Trimmer, Playlist & SponsorBlock (Advanced)",
+                        color = AccentSky,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+                if (showAdvanced) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(SurfaceCardAlt)
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                InfoLabel(
+                                    title = "Start Time",
+                                    explanation = "Optional clip start timestamp (e.g. 00:00:30 or 30). Downloads starting from this timestamp.",
+                                )
+                                OutlinedTextField(
+                                    value = state.options.startTime,
+                                    onValueChange = viewModel::updateStartTime,
+                                    placeholder = { Text("00:00:30", color = TextMuted, fontSize = 12.sp) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                InfoLabel(
+                                    title = "End Time",
+                                    explanation = "Optional clip end timestamp (e.g. 00:02:15 or 135). Precisely trims the video at this point via FFmpeg.",
+                                )
+                                OutlinedTextField(
+                                    value = state.options.endTime,
+                                    onValueChange = viewModel::updateEndTime,
+                                    placeholder = { Text("00:02:15", color = TextMuted, fontSize = 12.sp) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            InfoLabel(
+                                title = "Playlist Items",
+                                explanation = "Select specific playlist items by index or range (e.g. 1,3,5-8). Leave blank to download the full item/playlist.",
+                            )
+                            OutlinedTextField(
+                                value = state.options.playlistItems,
+                                onValueChange = viewModel::updatePlaylistItems,
+                                placeholder = { Text("e.g. 1,2,5-8", color = TextMuted, fontSize = 12.sp) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+
+                        OptionSwitchRow(
+                            title = "SponsorBlock Skip",
+                            explanation = "Automatically removes sponsored segments, intros, outros, and self-promotions from YouTube videos.",
+                            checked = state.options.sponsorBlockEnabled,
+                            onCheckedChange = viewModel::updateSponsorBlock,
+                        )
+                    }
+                }
             }
         }
 

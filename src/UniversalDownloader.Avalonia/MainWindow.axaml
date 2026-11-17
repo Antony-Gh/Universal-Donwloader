@@ -321,6 +321,49 @@
                                                   ToolTip.Tip="Saves the original thumbnail image file (JPG/PNG/WebP) alongside the downloaded media in your destination folder."/>
                                     </StackPanel>
                                 </WrapPanel>
+
+                                <!-- Collapsible Clip Trimmer, Playlist Picker & SponsorBlock -->
+                                <Expander HorizontalAlignment="Stretch" Background="#16161C" BorderBrush="#27272A" BorderThickness="1" CornerRadius="6" Margin="0,6,0,0">
+                                    <Expander.Header>
+                                        <TextBlock Text="Clip Trimmer, Playlist Selection &amp; SponsorBlock (Advanced)" FontSize="12" FontWeight="SemiBold" Foreground="#CBD5E1"/>
+                                    </Expander.Header>
+                                    <StackPanel Spacing="10" Margin="4,8,4,4">
+                                        <Grid ColumnDefinitions="*,*,*">
+                                            <StackPanel Grid.Column="0" Margin="0,0,10,0" Spacing="5">
+                                                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                                    <TextBlock Text="Start Time" Foreground="#9CA3AF" FontSize="12"/>
+                                                    <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                              ToolTip.Tip="Optional clip start timestamp (e.g. 00:01:30 or 90). Only downloads from this point onward."/>
+                                                </StackPanel>
+                                                <TextBox x:Name="StartTimeBox" Watermark="e.g. 00:00:30"/>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="1" Margin="0,0,10,0" Spacing="5">
+                                                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                                    <TextBlock Text="End Time" Foreground="#9CA3AF" FontSize="12"/>
+                                                    <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                              ToolTip.Tip="Optional clip end timestamp (e.g. 00:03:15 or 195). Cuts the video precisely at this timestamp using FFmpeg."/>
+                                                </StackPanel>
+                                                <TextBox x:Name="EndTimeBox" Watermark="e.g. 00:02:15"/>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="2" Spacing="5">
+                                                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                                    <TextBlock Text="Playlist Items" Foreground="#9CA3AF" FontSize="12"/>
+                                                    <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                              ToolTip.Tip="Select specific items from a playlist by index or range (e.g. 1,3,5-8). Leave empty to download all."/>
+                                                </StackPanel>
+                                                <TextBox x:Name="PlaylistItemsBox" Watermark="e.g. 1,2,5-8"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <CheckBox x:Name="SponsorBlockCheck" Content="Remove SponsorBlock Segments (sponsor, intro, outro, selfpromo)" IsChecked="False"/>
+                                            <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                      ToolTip.Tip="Automatically cuts out crowd-sourced sponsored segments, intros, outros, and self-promotions from YouTube videos using SponsorBlock."/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Expander>
                             </StackPanel>
                         </Border>
 

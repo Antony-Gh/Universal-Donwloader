@@ -25,6 +25,8 @@ public class DownloadOptions
     public string? DownloadSections { get; set; }
     public string? StartTime { get; set; }
     public string? EndTime { get; set; }
+    public string? PlaylistItems { get; set; }
+    public string? SponsorBlockRemove { get; set; }
 
     public string? PreferCodec { get; set; }
     public int ConcurrentFragments { get; set; } = 4;
@@ -112,6 +114,18 @@ public class DownloadOptions
         {
             args.Add("--end-time");
             args.Add(EndTime);
+        }
+
+        if (!string.IsNullOrWhiteSpace(PlaylistItems))
+        {
+            args.Add("--playlist-items");
+            args.Add(PlaylistItems);
+        }
+
+        if (!string.IsNullOrWhiteSpace(SponsorBlockRemove))
+        {
+            args.Add("--sponsorblock-remove");
+            args.Add(SponsorBlockRemove);
         }
 
         if (!string.IsNullOrWhiteSpace(PreferCodec))

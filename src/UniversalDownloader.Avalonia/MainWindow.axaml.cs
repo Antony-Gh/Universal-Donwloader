@@ -145,6 +145,7 @@ public partial class MainWindow : Window
         EmbedThumbnailCheck.IsChecked = _settings.EmbedThumbnail;
         EmbedSubsCheck.IsChecked = _settings.EmbedSubs;
         WriteThumbnailCheck.IsChecked = _settings.WriteThumbnail;
+        SponsorBlockCheck.IsChecked = _settings.SponsorBlockEnabled;
     }
 
     private void SaveUserSettings()
@@ -159,6 +160,7 @@ public partial class MainWindow : Window
         _settings.EmbedThumbnail = EmbedThumbnailCheck.IsChecked ?? true;
         _settings.EmbedSubs = EmbedSubsCheck.IsChecked ?? false;
         _settings.WriteThumbnail = WriteThumbnailCheck.IsChecked ?? false;
+        _settings.SponsorBlockEnabled = SponsorBlockCheck.IsChecked ?? false;
         _settings.Save();
     }
 
@@ -493,6 +495,20 @@ public partial class MainWindow : Window
 
         options.CookiesFile = GetSelectedCookiesFile();
         options.CookiesFromBrowser = string.IsNullOrWhiteSpace(options.CookiesFile) ? GetSelectedCookiesBrowser() : null;
+
+        var startTime = StartTimeBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(startTime)) options.StartTime = startTime;
+
+        var endTime = EndTimeBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(endTime)) options.EndTime = endTime;
+
+        var playlistItems = PlaylistItemsBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(playlistItems)) options.PlaylistItems = playlistItems;
+
+        if (SponsorBlockCheck.IsChecked == true)
+        {
+            options.SponsorBlockRemove = "sponsor,intro,outro,selfpromo";
+        }
 
         if (QualityComboBox.SelectedIndex == 4)
         {

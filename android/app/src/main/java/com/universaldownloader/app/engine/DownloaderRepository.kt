@@ -260,6 +260,21 @@ class DownloaderRepository(private val appContext: Context) {
                 if (!cookiesPath.isNullOrBlank() && File(cookiesPath).exists()) {
                     addOption("--cookies", cookiesPath)
                 }
+                val startTrim = options.startTime.trim()
+                val endTrim = options.endTime.trim()
+                if (startTrim.isNotEmpty() || endTrim.isNotEmpty()) {
+                    val startPart = startTrim.ifEmpty { "0:00" }
+                    val endPart = endTrim.ifEmpty { "inf" }
+                    addOption("--download-sections", "*$startPart-$endPart")
+                    addOption("--force-keyframes-at-cuts")
+                }
+                val plItems = options.playlistItems.trim()
+                if (plItems.isNotEmpty()) {
+                    addOption("--playlist-items", plItems)
+                }
+                if (options.sponsorBlockEnabled) {
+                    addOption("--sponsorblock-remove", "sponsor,intro,outro,selfpromo")
+                }
             }
 
             onLog("Starting download to: ${outDir.absolutePath}")

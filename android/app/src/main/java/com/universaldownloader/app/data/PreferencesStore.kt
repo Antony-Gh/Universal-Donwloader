@@ -25,6 +25,7 @@ class PreferencesStore(context: Context) {
             embedSubs = prefs.getBoolean(KEY_EMBED_SUBS, false),
             writeThumbnail = prefs.getBoolean(KEY_WRITE_THUMBNAIL, false),
             cookiesFilePath = prefs.getString(KEY_COOKIES_PATH, null)?.takeIf { it.isNotBlank() },
+            sponsorBlockEnabled = prefs.getBoolean(KEY_SPONSORBLOCK, false),
         )
     }
 
@@ -38,6 +39,7 @@ class PreferencesStore(context: Context) {
             .putBoolean(KEY_EMBED_SUBS, options.embedSubs)
             .putBoolean(KEY_WRITE_THUMBNAIL, options.writeThumbnail)
             .putString(KEY_COOKIES_PATH, options.cookiesFilePath ?: "")
+            .putBoolean(KEY_SPONSORBLOCK, options.sponsorBlockEnabled)
             .apply()
     }
 
@@ -51,5 +53,6 @@ class PreferencesStore(context: Context) {
         private const val KEY_EMBED_SUBS = "embed_subs"
         private const val KEY_WRITE_THUMBNAIL = "write_thumbnail"
         private const val KEY_COOKIES_PATH = "cookies_path"
+        private const val KEY_SPONSORBLOCK = "sponsorblock"
     }
 }

@@ -425,6 +425,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateStartTime(value: String) {
+        _uiState.update { it.copy(options = it.options.copy(startTime = value)) }
+    }
+
+    fun updateEndTime(value: String) {
+        _uiState.update { it.copy(options = it.options.copy(endTime = value)) }
+    }
+
+    fun updatePlaylistItems(value: String) {
+        _uiState.update { it.copy(options = it.options.copy(playlistItems = value)) }
+    }
+
+    fun updateSponsorBlock(enabled: Boolean) {
+        updateAndPersistOptions { it.copy(sponsorBlockEnabled = enabled) }
+    }
+
     fun startDownload(explicitFormatId: String? = null) {
         val state = _uiState.value
         val cleaned = repo.normalizeUrl(state.urlInput)
