@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System;
@@ -7,6 +8,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using UniversalDownloader.Core;
@@ -27,6 +29,9 @@ public partial class MainWindow : Window
     private long _lastProgressUpdateMs = 0;
     private LogWindow? _logWindow;
     private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _metadataCts;
+    private string? _lastInspectedMetadataUrl;
+    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(12) };
 
     public MainWindow()
     {
@@ -337,6 +342,151 @@ public partial class MainWindow : Window
             {
                 UrlTextBox.Text = text.Trim();
             }
+        }
+    }
+
+    private async void UrlTextBox_TextChanged(object? sender, TextChangedEventArgs e)
+    {
+        _metadataCts?.Cancel();
+        _metadataCts?.Dispose();
+        _metadataCts = new CancellationTokenSource();
+        var token = _metadataCts.Token;
+
+        var rawUrl = UrlTextBox.Text?.Trim()?.Trim('"', '\'');
+        if (string.IsNullOrWhiteSpace(rawUrl))
+        {
+            MetadataCard.IsVisible = false;
+            _lastInspectedMetadataUrl = null;
+            return;
+        }
+
+        // Validate HTTP / HTTPS URL
+        if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            if (rawUrl != _lastInspectedMetadataUrl)
+            {
+                MetadataCard.IsVisible = false;
+            }
+            return;
+        }
+
+        if (rawUrl == _lastInspectedMetadataUrl)
+        {
+            return; // Already fetched
+        }
+
+        try
+        {
+            // Debounce for 400ms to avoid querying on rapid typing
+            await Task.Delay(400, token);
+            if (token.IsCancellationRequested) return;
+
+            await FetchAndDisplayMetadataAsync(rawUrl, uri, token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Ignored on cancellation
+        }
+    }
+
+    private async Task FetchAndDisplayMetadataAsync(string rawUrl, Uri uri, CancellationToken token)
+    {
+        _lastInspectedMetadataUrl = rawUrl;
+
+        // Immediately show the card in loading state with host-based platform badge
+        var host = uri.Host.ToLowerInvariant().Replace("www.", "").Replace("m.", "");
+        var platformDisplay = host switch
+        {
+            var h when h.Contains("youtube") || h.Contains("youtu.be") => "YOUTUBE",
+            var h when h.Contains("tiktok") => "TIKTOK",
+            var h when h.Contains("instagram") => "INSTAGRAM",
+            var h when h.Contains("facebook") || h.Contains("fb.watch") => "FACEBOOK",
+            var h when h.Contains("twitter") || h.Contains("x.com") => "X / TWITTER",
+            var h when h.Contains("soundcloud") => "SOUNDCLOUD",
+            var h when h.Contains("vimeo") => "VIMEO",
+            var h when h.Contains("reddit") => "REDDIT",
+            var h when h.Contains("twitch") => "TWITCH",
+            _ => "MEDIA"
+        };
+
+        PlatformBadge.Text = platformDisplay;
+        VideoTitleLabel.Text = "Fetching media details...";
+        UploaderLabel.Text = uri.Host;
+        ViewsLabel.Text = "";
+        DurationBadge.IsVisible = false;
+        ThumbnailImage.Source = null;
+        MetadataLoadingText.Text = "Loading details...";
+        MetadataLoadingText.IsVisible = true;
+        MetadataCard.IsVisible = true;
+
+        try
+        {
+            var meta = await _client.GetMetadataAsync(rawUrl, token);
+            if (token.IsCancellationRequested) return;
+
+            if (meta != null && !string.IsNullOrWhiteSpace(meta.Title))
+            {
+                MetadataLoadingText.IsVisible = false;
+                VideoTitleLabel.Text = meta.Title;
+                UploaderLabel.Text = !string.IsNullOrWhiteSpace(meta.Uploader) ? meta.Uploader : uri.Host;
+
+                if (!string.IsNullOrWhiteSpace(meta.Platform))
+                {
+                    PlatformBadge.Text = meta.Platform.ToUpperInvariant();
+                }
+
+                if (!string.IsNullOrWhiteSpace(meta.DurationFormatted))
+                {
+                    DurationLabel.Text = meta.DurationFormatted;
+                    DurationBadge.IsVisible = true;
+                }
+                else
+                {
+                    DurationBadge.IsVisible = false;
+                }
+
+                ViewsLabel.Text = meta.ViewCountFormatted;
+
+                if (!string.IsNullOrWhiteSpace(meta.Thumbnail))
+                {
+                    await LoadThumbnailAsync(meta.Thumbnail, token);
+                }
+            }
+            else
+            {
+                MetadataLoadingText.Text = "Ready to download";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Normal cancellation
+        }
+        catch (Exception)
+        {
+            if (!token.IsCancellationRequested)
+            {
+                MetadataLoadingText.Text = "Ready to download";
+            }
+        }
+    }
+
+    private async Task LoadThumbnailAsync(string thumbnailUrl, CancellationToken token)
+    {
+        try
+        {
+            var bytes = await _httpClient.GetByteArrayAsync(thumbnailUrl, token);
+            if (token.IsCancellationRequested || bytes == null || bytes.Length == 0) return;
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                using var ms = new MemoryStream(bytes);
+                ThumbnailImage.Source = new Bitmap(ms);
+            });
+        }
+        catch
+        {
+            // Thumbnail failed or cancelled - keep default empty thumbnail
         }
     }
 

@@ -97,51 +97,66 @@ public class DownloaderClient
         {
             if (string.IsNullOrWhiteSpace(line)) return;
 
-            RawOutputReceived?.Invoke(this, line);
-
             try
             {
                 using var doc = JsonDocument.Parse(line);
                 var root = doc.RootElement;
-                if (!root.TryGetProperty("event", out var eventProp)) return;
-
-                var eventName = eventProp.GetString();
-                switch (eventName)
+                if (root.TryGetProperty("event", out var eventProp))
                 {
-                    case "progress":
-                        var prog = JsonSerializer.Deserialize<DownloadProgressEvent>(line);
-                        if (prog != null)
-                        {
-                            ProgressChanged?.Invoke(this, prog);
-                        }
-                        break;
+                    var eventName = eventProp.GetString();
+                    switch (eventName)
+                    {
+                        case "progress":
+                            var prog = JsonSerializer.Deserialize<DownloadProgressEvent>(line);
+                            if (prog != null)
+                            {
+                                ProgressChanged?.Invoke(this, prog);
+                            }
+                            return; // Suppress raw high-frequency JSON progress events from terminal output
 
-                    case "postprocess":
-                        StatusChanged?.Invoke(this, "Processing media container...");
-                        break;
+                        case "postprocess":
+                            StatusChanged?.Invoke(this, "Processing media container...");
+                            RawOutputReceived?.Invoke(this, "[Processing] Merging audio and video tracks with FFmpeg...");
+                            return;
 
-                    case "complete":
-                        completedResult = JsonSerializer.Deserialize<DownloadCompleteEvent>(line);
-                        if (completedResult != null)
-                        {
-                            DownloadCompleted?.Invoke(this, completedResult);
-                        }
-                        break;
+                        case "complete":
+                            completedResult = JsonSerializer.Deserialize<DownloadCompleteEvent>(line);
+                            if (completedResult != null)
+                            {
+                                DownloadCompleted?.Invoke(this, completedResult);
+                                RawOutputReceived?.Invoke(this, $"[Complete] Download finished: {completedResult.Title ?? completedResult.Url}");
+                            }
+                            return;
 
-                    case "error":
-                        var errEvt = JsonSerializer.Deserialize<DownloadErrorEvent>(line);
-                        failureMessage = errEvt?.Error ?? "Unknown download error.";
-                        if (errEvt != null)
-                        {
-                            DownloadFailed?.Invoke(this, errEvt);
-                        }
-                        break;
+                        case "error":
+                            var errEvt = JsonSerializer.Deserialize<DownloadErrorEvent>(line);
+                            failureMessage = errEvt?.Error ?? "Unknown download error.";
+                            if (errEvt != null)
+                            {
+                                DownloadFailed?.Invoke(this, errEvt);
+                                RawOutputReceived?.Invoke(this, $"[Error] {failureMessage}");
+                            }
+                            return;
+                    }
+                }
+
+                if (root.TryGetProperty("success", out var successProp))
+                {
+                    if (!successProp.GetBoolean() && root.TryGetProperty("error", out var errProp))
+                    {
+                        var errMsg = errProp.GetString() ?? "Operation failed.";
+                        failureMessage ??= errMsg;
+                        RawOutputReceived?.Invoke(this, $"[Error] {errMsg}");
+                    }
+                    return; // Suppress raw JSON CLI summary from terminal
                 }
             }
             catch (JsonException)
             {
-                // Non-JSON standard line (e.g. logger outputs)
+                // Non-JSON standard line (e.g. logger outputs, engine notices, ffmpeg output)
             }
+
+            RawOutputReceived?.Invoke(this, line);
         }
 
         using var registration = cancellationToken.Register(() =>
@@ -163,6 +178,30 @@ public class DownloaderClient
         }
 
         throw new Exception(failureMessage ?? $"Download process exited with code {exitCode}.");
+    }
+
+    /// <summary>
+    /// Fetch media metadata, title, uploader, duration, and thumbnail URL for a URL without downloading.
+    /// </summary>
+    public async Task<MediaMetadataModel?> GetMetadataAsync(string url, CancellationToken cancellationToken = default)
+    {
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        arguments.Add("--metadata");
+        arguments.Add($"\"{url}\"");
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output)) return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<MediaMetadataModel>(output);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

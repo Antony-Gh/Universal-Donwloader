@@ -82,6 +82,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="List formats available for a URL without downloading.",
     )
 
+    parser.add_argument(
+        "--metadata",
+        metavar="URL",
+        help="Fetch media metadata and thumbnail without downloading.",
+    )
+
     # Audio options
     audio_group = parser.add_argument_group("Audio Options")
     audio_group.add_argument(
@@ -595,30 +601,72 @@ def main() -> int:
         if requested_url:
             requested_url = clean_protocol_url(requested_url)
 
+        # Metadata inspection mode
+        if getattr(args, "metadata", None):
+            meta_url = clean_protocol_url(args.metadata)
+            try:
+                target = detect_target(meta_url, timeout=config.timeout)
+                info_data = engine.inspect(
+                    target.normalized_url,
+                    platform=target.platform,
+                )
+                payload = {
+                    "url": target.normalized_url,
+                    "platform": target.platform.value,
+                    "title": info_data.get("title") or "Unknown Title",
+                    "uploader": info_data.get("uploader") or info_data.get("channel") or info_data.get("creator") or "Unknown Creator",
+                    "duration": info_data.get("duration"),
+                    "duration_string": info_data.get("duration_string"),
+                    "thumbnail": info_data.get("thumbnail"),
+                    "description": (info_data.get("description") or "")[:500],
+                    "view_count": info_data.get("view_count"),
+                }
+                if config.json_output or config.json_stream:
+                    print(json.dumps(payload, indent=2))
+                else:
+                    print(f"Title:     {payload['title']}")
+                    print(f"Uploader:  {payload['uploader']}")
+                    print(f"Duration:  {payload['duration_string']}")
+                    print(f"Thumbnail: {payload['thumbnail']}")
+                return 0
+            except Exception as exc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(exc)}))
+                else:
+                    failure(f"Failed to inspect metadata: {exc}", config)
+                return 1
+
         # Formats inspection mode
         if args.formats:
             fmt_url = clean_protocol_url(args.formats)
-            target = detect_target(fmt_url, timeout=config.timeout)
+            try:
+                target = detect_target(fmt_url, timeout=config.timeout)
 
-            if not config.json_output and not config.json_stream:
-                print_banner(config)
-                print(f"URL:      {target.normalized_url}")
-                print(f"Platform: {target.platform.value}")
-                print()
+                if not config.json_output and not config.json_stream:
+                    print_banner(config)
+                    print(f"URL:      {target.normalized_url}")
+                    print(f"Platform: {target.platform.value}")
+                    print()
 
-            info_data = engine.inspect(
-                target.normalized_url,
-                platform=target.platform,
-            )
+                info_data = engine.inspect(
+                    target.normalized_url,
+                    platform=target.platform,
+                )
 
-            if config.json_output or config.json_stream:
-                formats_data = [fmt.raw for fmt in parse_format(info_data)]
-                print(json.dumps({"url": target.normalized_url, "formats": formats_data}, indent=2))
-            else:
-                print(f"Title: {info_data.get('title') or 'unknown'}")
-                print_formats(info_data, config)
+                if config.json_output or config.json_stream:
+                    formats_data = [fmt.raw for fmt in parse_format(info_data)]
+                    print(json.dumps({"url": target.normalized_url, "formats": formats_data}, indent=2))
+                else:
+                    print(f"Title: {info_data.get('title') or 'unknown'}")
+                    print_formats(info_data, config)
 
-            return 0
+                return 0
+            except Exception as exc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"url": fmt_url, "formats": [], "error": str(exc)}))
+                else:
+                    failure(f"Failed to inspect formats: {exc}", config)
+                return 1
 
         # Profile picture resolution mode
         if args.profile:
