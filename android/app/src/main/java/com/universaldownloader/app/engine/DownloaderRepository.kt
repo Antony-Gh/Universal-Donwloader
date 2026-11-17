@@ -1,6 +1,7 @@
 package com.universaldownloader.app.engine
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaScannerConnection
 import android.net.Uri
@@ -146,7 +147,7 @@ class DownloaderRepository(private val appContext: Context) {
                 val verifiedImages = inspectProfilePictures(url, cookiesFilePath)
                 val formats = verifiedImages.mapIndexed { idx, img ->
                     StreamFormat(
-                        formatId = "img_$idx",
+                        formatId = if (img.enhanceHd) "img_hd_$idx" else "img_$idx",
                         extension = img.extension,
                         width = img.width,
                         height = img.height,
@@ -154,7 +155,7 @@ class DownloaderRepository(private val appContext: Context) {
                         vcodec = "image",
                         acodec = "none",
                         formatNote = img.label,
-                        filesizeBytes = img.filesizeBytes,
+                        filesizeBytes = img.filesizeBytes.takeIf { it > 0L },
                         directUrl = img.url,
                     )
                 }
@@ -540,8 +541,41 @@ class DownloaderRepository(private val appContext: Context) {
         val height: Int?,
         val filesizeBytes: Long,
         val extension: String,
+        val enhanceHd: Boolean = false,
     ) {
         val pixelArea: Long get() = if (width != null && height != null) width.toLong() * height.toLong() else 0L
+    }
+
+    private fun computeHdTargetDimensions(width: Int, height: Int, targetMinSide: Int = 960, maxScale: Float = 4f): Pair<Int, Int> {
+        val longest = maxOf(width, height)
+        if (longest <= 0 || longest >= targetMinSide) return width to height
+        val scale = minOf(maxScale, targetMinSide.toFloat() / longest.toFloat())
+        return maxOf(1, Math.round(width * scale)) to maxOf(1, Math.round(height * scale))
+    }
+
+    private fun enhanceImageBytesToHd(rawBytes: ByteArray): Pair<ByteArray, String>? {
+        val src = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size) ?: return null
+        val (targetW, targetH) = computeHdTargetDimensions(src.width, src.height)
+        var current: Bitmap = src
+        if (targetW > src.width || targetH > src.height) {
+            // Progressive 1.5x filtered scaling preserves cleaner contours than a single 4x jump
+            var curW = src.width
+            var curH = src.height
+            while (curW < targetW || curH < targetH) {
+                val nextW = minOf(targetW, maxOf(curW + 1, Math.round(curW * 1.5f)))
+                val nextH = minOf(targetH, maxOf(curH + 1, Math.round(curH * 1.5f)))
+                val scaled = Bitmap.createScaledBitmap(current, nextW, nextH, true)
+                if (current !== src) current.recycle()
+                current = scaled
+                curW = nextW
+                curH = nextH
+            }
+        }
+        val out = java.io.ByteArrayOutputStream()
+        current.compress(Bitmap.CompressFormat.PNG, 100, out)
+        if (current !== src) current.recycle()
+        src.recycle()
+        return out.toByteArray() to "png"
     }
 
     private fun extractOwnerProfileCandidates(htmlText: String, baseUrl: String): List<Triple<String, String, Boolean>> {
@@ -569,12 +603,14 @@ class DownloaderRepository(private val appContext: Context) {
         val ownerPatterns = listOf(
             Triple(Regex(""""profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (HD)", false),
             Triple(Regex(""""profile_pic_url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
-            Triple(Regex(""""profilePicLarge"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Large)", false),
-            Triple(Regex(""""profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
-            Triple(Regex(""""profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Medium)", false),
-            Triple(Regex(""""profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (160px)", false),
-            Triple(Regex(""""profile_photo"\s*:\s*\{[^\r\n]{0,500}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
-            Triple(Regex("""<svg[^>]+aria-label=[^>]*>[^<]{0,600}<image[^>]+(?:xlink:)?href=["'](https?://scontent[^"']+)["']""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)), "Profile Picture (Header)", false),
+            Triple(Regex(""""profilePicLarge"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Large)", false),
+            Triple(Regex(""""profilePic(?:Full|HD|High|Original|720|960|1080)[^"]*"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (HD)", false),
+            Triple(Regex(""""profile_picture(?:_for_sticky_bar|_url)?"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
+            Triple(Regex(""""profilePicMedium"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Medium)", false),
+            Triple(Regex(""""profilePic160"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (160px)", false),
+            Triple(Regex(""""profile_photo"\s*:\s*\{[^\r\n]{0,1200}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
+            Triple(Regex(""""viewer_image"\s*:\s*\{[^\r\n]{0,250}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Full)", false),
+            Triple(Regex("""<svg[^>]+aria-label=[^>]*>(?:(?!</svg>).){0,2500}?<image[^>]+(?:xlink:)?href=["'](https?://scontent[^"']+)["']""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)), "Profile Picture (Header)", false),
             Triple(Regex(""""avatarLarger"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Large)", false),
             Triple(Regex(""""avatarMedium"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Medium)", false),
             Triple(Regex(""""profile_image_url_https"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
@@ -698,13 +734,34 @@ class DownloaderRepository(private val appContext: Context) {
         )
 
         val seenSig = HashSet<String>()
-        return sorted.filter { seenSig.add("${it.isCover}_${it.width}_${it.height}_${it.filesizeBytes}") }
+        val deduped = sorted.filter { seenSig.add("${it.isCover}_${it.width}_${it.height}_${it.filesizeBytes}") }.toMutableList()
+        val bestAvatar = deduped.firstOrNull { !it.isCover && it.width != null && it.height != null }
+        if (bestAvatar != null && bestAvatar.width != null && bestAvatar.height != null && maxOf(bestAvatar.width, bestAvatar.height) < 720) {
+            val (hdW, hdH) = computeHdTargetDimensions(bestAvatar.width, bestAvatar.height)
+            if (hdW > bestAvatar.width || hdH > bestAvatar.height) {
+                deduped.add(
+                    0,
+                    ProbedProfileImage(
+                        url = bestAvatar.url,
+                        label = "Profile Picture (HD Enhanced from ${bestAvatar.width}x${bestAvatar.height})",
+                        isCover = false,
+                        width = hdW,
+                        height = hdH,
+                        filesizeBytes = 0L,
+                        extension = "png",
+                        enhanceHd = true,
+                    ),
+                )
+            }
+        }
+        return deduped
     }
 
     suspend fun downloadDirectImage(
         imageUrl: String,
         sourceProfileUrl: String?,
         cookiesFilePath: String? = null,
+        enhanceHd: Boolean = false,
         onLog: (String) -> Unit,
     ): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
@@ -713,9 +770,8 @@ class DownloaderRepository(private val appContext: Context) {
                 .replace(Regex("[^A-Za-z0-9._-]"), "_")
                 .ifBlank { "profile" }
             val imgHost = runCatching { URI(imageUrl).host.orEmpty() }.getOrDefault("")
-            val ext = URI(imageUrl).path.substringAfterLast('.', "").lowercase(Locale.US)
+            var ext = URI(imageUrl).path.substringAfterLast('.', "").lowercase(Locale.US)
                 .takeIf { it in setOf("jpg", "jpeg", "png", "webp", "gif") } ?: "jpg"
-            val dest = File(outDir, "${safeName}_${System.currentTimeMillis()}.$ext")
 
             val conn = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -728,16 +784,26 @@ class DownloaderRepository(private val appContext: Context) {
                 )
                 buildCookieHeaderForHost(cookiesFilePath, imgHost)?.let { setRequestProperty("Cookie", it) }
             }
-            try {
+            var rawBytes = try {
                 if (conn.responseCode !in 200..299) {
                     throw RuntimeException("Image download returned HTTP ${conn.responseCode}")
                 }
-                conn.inputStream.use { input ->
-                    dest.outputStream().use { output -> input.copyTo(output) }
-                }
+                conn.inputStream.use { it.readBytes() }
             } finally {
                 conn.disconnect()
             }
+
+            var suffix = ""
+            if (enhanceHd) {
+                enhanceImageBytesToHd(rawBytes)?.let { (hdBytes, hdExt) ->
+                    rawBytes = hdBytes
+                    ext = hdExt
+                    suffix = "_HD"
+                }
+            }
+
+            val dest = File(outDir, "${safeName}${suffix}_${System.currentTimeMillis()}.$ext")
+            dest.writeBytes(rawBytes)
             MediaScannerConnection.scanFile(appContext, arrayOf(dest.absolutePath), null, null)
             onLog("[Complete] Image saved: ${dest.name}")
             dest
@@ -773,7 +839,8 @@ class DownloaderRepository(private val appContext: Context) {
                 )
             }
 
-            downloadDirectImage(verified.first().url, profileUrl, cookiesFilePath, onLog).getOrThrow()
+            val best = verified.first()
+            downloadDirectImage(best.url, profileUrl, cookiesFilePath, enhanceHd = best.enhanceHd, onLog = onLog).getOrThrow()
         }
     }
 

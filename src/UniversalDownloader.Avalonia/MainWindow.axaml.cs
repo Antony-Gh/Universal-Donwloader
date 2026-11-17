@@ -1034,12 +1034,14 @@ public partial class MainWindow : Window
                     var cookiesFile = GetSelectedCookiesFile();
                     var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
 
+                    var enhanceHd = format.FormatId.StartsWith("img_hd_", StringComparison.OrdinalIgnoreCase);
                     var savedPath = await _client.DownloadDirectImageAsync(
                         format.DirectUrl,
                         sourceProfileUrl: url,
                         outputDirectory: string.IsNullOrWhiteSpace(customDir) ? null : customDir,
                         cookiesFromBrowser: cookiesBrowser,
-                        cookiesFile: cookiesFile);
+                        cookiesFile: cookiesFile,
+                        enhanceHd: enhanceHd);
 
                     OnRawOutputReceived(this, $"[Complete] Image saved: {savedPath}");
                     GlobalStatusText.Text = $"Image saved: {Path.GetFileName(savedPath)}";

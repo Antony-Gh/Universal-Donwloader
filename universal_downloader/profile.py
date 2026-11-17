@@ -308,6 +308,7 @@ class ProfileImageCandidate:
     filesize: Optional[int] = None
     ext: str = "jpg"
     verified: bool = False
+    enhance_hd: bool = False
 
     @property
     def pixel_area(self) -> int:
@@ -318,7 +319,7 @@ class ProfileImageCandidate:
     def to_format_dict(self, index: int) -> dict[str, Any]:
         resolution = f"{self.width}x{self.height}" if (self.width and self.height) else "Image"
         return {
-            "format_id": f"img_{index}",
+            "format_id": f"img_hd_{index}" if self.enhance_hd else f"img_{index}",
             "ext": self.ext.lstrip(".") or "jpg",
             "resolution": resolution,
             "width": self.width,
@@ -330,6 +331,77 @@ class ProfileImageCandidate:
             "format_note": self.label,
             "url": self.url,
         }
+
+
+def compute_hd_target_dimensions(width: int, height: int, target_min_side: int = 960, max_scale: float = 4.0) -> tuple[int, int]:
+    """Calculate aspect-preserving HD target dimensions (up to 4x, aiming for >=960px on the longest side)."""
+    longest = max(width, height)
+    if longest <= 0 or longest >= target_min_side:
+        return width, height
+    scale = min(max_scale, target_min_side / float(longest))
+    return max(1, int(round(width * scale))), max(1, int(round(height * scale)))
+
+
+def enhance_image_bytes_to_hd(
+    data: bytes,
+    target_min_side: int = 960,
+    output_format: str = "PNG",
+) -> tuple[bytes, int, int, str]:
+    """
+    Enhance a low-resolution profile image to crisp HD using progressive multi-step Lanczos3
+    resampling, light deblocking, and edge-preserving unsharp masking (thresholded so smooth
+    regions stay clean without noise or halos).
+    Returns (enhanced_bytes, new_width, new_height, ext_without_dot).
+    """
+    from PIL import Image, ImageEnhance, ImageFilter
+
+    with Image.open(io.BytesIO(data)) as raw_img:
+        has_alpha = raw_img.mode in ("RGBA", "LA") or (raw_img.mode == "P" and "transparency" in raw_img.info)
+        img = raw_img.convert("RGBA" if has_alpha else "RGB")
+        orig_w, orig_h = img.size
+        target_w, target_h = compute_hd_target_dimensions(orig_w, orig_h, target_min_side=target_min_side)
+
+        if target_w <= orig_w and target_h <= orig_h:
+            buf = io.BytesIO()
+            if has_alpha or output_format.upper() == "PNG":
+                img.save(buf, format="PNG", optimize=True)
+                return buf.getvalue(), orig_w, orig_h, "png"
+            img.save(buf, format="JPEG", quality=96, subsampling=0)
+            return buf.getvalue(), orig_w, orig_h, "jpg"
+
+        # 1. Light JPEG deblocking blend before upscaling (keeps details intact while softening 8x8 blocks)
+        smooth_base = img.filter(ImageFilter.SMOOTH)
+        work = Image.blend(img, smooth_base, alpha=0.14)
+
+        # 2. Progressive multi-step Lanczos3 upscaling (max 1.5x per pass prevents stair-stepping)
+        cur_w, cur_h = orig_w, orig_h
+        resampler = getattr(Image, "Resampling", Image).LANCZOS
+        while cur_w < target_w or cur_h < target_h:
+            next_w = min(target_w, max(cur_w + 1, int(round(cur_w * 1.5))))
+            next_h = min(target_h, max(cur_h + 1, int(round(cur_h * 1.5))))
+            work = work.resize((next_w, next_h), resampler)
+            cur_w, cur_h = next_w, next_h
+
+        # 3. Edge-preserving Unsharp Mask (threshold=4 sharpens real contours without amplifying flat-area noise)
+        if has_alpha:
+            rgb_part = work.convert("RGB")
+            alpha_ch = work.getchannel("A")
+            rgb_part = rgb_part.filter(ImageFilter.UnsharpMask(radius=1.35, percent=115, threshold=4))
+            rgb_part = ImageEnhance.Contrast(rgb_part).enhance(1.04)
+            rgb_part = ImageEnhance.Sharpness(rgb_part).enhance(1.06)
+            work = rgb_part.convert("RGBA")
+            work.putalpha(alpha_ch)
+        else:
+            work = work.filter(ImageFilter.UnsharpMask(radius=1.35, percent=115, threshold=4))
+            work = ImageEnhance.Contrast(work).enhance(1.04)
+            work = ImageEnhance.Sharpness(work).enhance(1.06)
+
+        buf = io.BytesIO()
+        if has_alpha or output_format.upper() == "PNG":
+            work.save(buf, format="PNG", optimize=True)
+            return buf.getvalue(), cur_w, cur_h, "png"
+        work.save(buf, format="JPEG", quality=96, subsampling=0)
+        return buf.getvalue(), cur_w, cur_h, "jpg"
 
 
 def extract_public_profile_candidates(html_text: str, base_url: str = "") -> list[ProfileImageCandidate]:
@@ -363,15 +435,17 @@ def extract_public_profile_candidates(html_text: str, base_url: str = "") -> lis
         # Instagram / Threads
         (re.compile(r'"profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (HD)", False),
         (re.compile(r'"profile_pic_url"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
-        # Facebook owner profile avatar fields
-        (re.compile(r'"profilePicLarge"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Large)", False),
-        (re.compile(r'"profile_picture"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
-        (re.compile(r'"profilePicMedium"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Medium)", False),
-        (re.compile(r'"profilePic160"\s*:\s*\{[^{}]*?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (160px)", False),
-        (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,500}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
-        (re.compile(r'"profilePhoto"\s*:\s*\{[^\r\n]{0,500}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
-        # Facebook profile header SVG avatar (scoped to aria-label profile photo SVG)
-        (re.compile(r'<svg[^>]+aria-label=[^>]*>[^<]{0,600}<image[^>]+(?:xlink:)?href=["\'](https?://scontent[^"\']+)["\']', re.I | re.S), "Profile Picture (Header)", False),
+        # Facebook owner profile avatar fields (flat and nested SSR objects)
+        (re.compile(r'"profilePicLarge"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Large)", False),
+        (re.compile(r'"profilePic(?:Full|HD|High|Original|720|960|1080)[^"]*"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (HD)", False),
+        (re.compile(r'"profile_picture(?:_for_sticky_bar|_url)?"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        (re.compile(r'"profilePicMedium"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Medium)", False),
+        (re.compile(r'"profilePic160"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (160px)", False),
+        (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,1200}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        (re.compile(r'"profilePhoto"\s*:\s*\{[^\r\n]{0,1200}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        (re.compile(r'"viewer_image"\s*:\s*\{[^\r\n]{0,250}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"', re.I), "Profile Picture (Full)", False),
+        # Facebook profile header SVG avatar (allows nested <mask>/<g> inside <svg aria-label=...>)
+        (re.compile(r'<svg[^>]+aria-label=[^>]*>(?:(?!</svg>).){0,2500}?<image[^>]+(?:xlink:)?href=["\'](https?://scontent[^"\']+)["\']', re.I | re.S), "Profile Picture (Header)", False),
         # TikTok
         (re.compile(r'"avatarLarger"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Large)", False),
         (re.compile(r'"avatarMedium"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Medium)", False),
@@ -636,6 +710,27 @@ def inspect_profile_images(
             seen_sig.add(sig)
             deduped.append(item)
 
+    # If the highest-resolution owner profile picture is below HD (< 720px),
+    # offer a detail-preserving HD Enhanced rendition at the top of Inspect Streams.
+    best_avatar = next((c for c in deduped if not c.is_cover and c.width and c.height), None)
+    if best_avatar is not None and best_avatar.width and best_avatar.height and max(best_avatar.width, best_avatar.height) < 720:
+        hd_w, hd_h = compute_hd_target_dimensions(best_avatar.width, best_avatar.height)
+        if hd_w > best_avatar.width or hd_h > best_avatar.height:
+            deduped.insert(
+                0,
+                ProfileImageCandidate(
+                    url=best_avatar.url,
+                    label=f"Profile Picture (HD Enhanced from {best_avatar.width}x{best_avatar.height})",
+                    is_cover=False,
+                    width=hd_w,
+                    height=hd_h,
+                    filesize=None,
+                    ext="png",
+                    verified=True,
+                    enhance_hd=True,
+                ),
+            )
+
     return deduped
 
 
@@ -643,6 +738,7 @@ def download_direct_profile_image(
     image_url: str,
     config: AppConfig,
     source_profile_url: Optional[str] = None,
+    enhance_hd: bool = False,
 ) -> Path:
     """Download a specific discovered profile/cover image URL directly into output_dir/<platform>/profile_pictures/."""
     cookie_jar = load_cookie_jar(config)
@@ -661,23 +757,32 @@ def download_direct_profile_image(
         raise ProfileError("The selected image URL did not return a valid image.")
 
     ext = image_extension_from_url(image_url)
-    try:
-        from PIL import Image
+    suffix_tag = ""
+    if enhance_hd:
+        try:
+            data, hd_w, hd_h, hd_ext = enhance_image_bytes_to_hd(data)
+            ext = f".{hd_ext}"
+            suffix_tag = f"_HD_{hd_w}x{hd_h}"
+        except Exception as exc:
+            LOGGER.warning("HD image enhancement failed, saving original: %s", exc)
+    else:
+        try:
+            from PIL import Image
 
-        with Image.open(io.BytesIO(data)) as img:
-            fmt = (img.format or "").lower()
-            if fmt == "jpeg":
-                ext = ".jpg"
-            elif fmt in {"png", "webp", "gif", "avif"}:
-                ext = f".{fmt}"
-    except Exception:
-        pass
+            with Image.open(io.BytesIO(data)) as img:
+                fmt = (img.format or "").lower()
+                if fmt == "jpeg":
+                    ext = ".jpg"
+                elif fmt in {"png", "webp", "gif", "avif"}:
+                    ext = f".{fmt}"
+        except Exception:
+            pass
 
     destination_dir = config.output_dir / platform_directory(platform) / "profile_pictures"
     destination_dir.mkdir(parents=True, exist_ok=True)
     destination = ensure_inside_directory(
         config.output_dir,
-        unique_path(destination_dir / (sanitize_filename(username, "profile") + ext)),
+        unique_path(destination_dir / (sanitize_filename(username, "profile") + suffix_tag + ext)),
     )
     destination.write_bytes(data)
     return destination
@@ -897,6 +1002,18 @@ class ProfilePhotoResolver:
         )
 
         best = verified[0]
+        if best.enhance_hd:
+            info(
+                f"Source profile picture is below HD; enhancing cleanly to {best.width}x{best.height} HD...",
+                self.config,
+            )
+            return download_direct_profile_image(
+                best.url,
+                self.config,
+                source_profile_url=target.normalized_url,
+                enhance_hd=True,
+            )
+
         filename = sanitize_filename(username, "profile") + "." + (best.ext.lstrip(".") or "jpg")
         destination_dir = (
             self.config.output_dir

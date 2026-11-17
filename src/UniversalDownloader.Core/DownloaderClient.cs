@@ -376,6 +376,7 @@ public class DownloaderClient
         string? outputDirectory = null,
         string? cookiesFromBrowser = null,
         string? cookiesFile = null,
+        bool enhanceHd = false,
         CancellationToken cancellationToken = default)
     {
         var arguments = new List<string>();
@@ -399,6 +400,10 @@ public class DownloaderClient
         {
             arguments.Add("--profile-source-url");
             arguments.Add($"\"{sourceProfileUrl}\"");
+        }
+        if (enhanceHd)
+        {
+            arguments.Add("--enhance-hd");
         }
         arguments.Add("--profile-image-url");
         arguments.Add($"\"{imageUrl}\"");

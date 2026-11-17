@@ -716,6 +716,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 imageUrl = imageUrl,
                 sourceProfileUrl = sourceUrl,
                 cookiesFilePath = _uiState.value.options.cookiesFilePath,
+                enhanceHd = format.formatId.startsWith("img_hd_", ignoreCase = true),
                 onLog = { line -> appendLog(line) },
             )
             result.fold(

@@ -98,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--enhance-hd",
+        action="store_true",
+        help="Apply detail-preserving HD upscaling/enhancement when downloading --profile-image-url.",
+    )
+
+    parser.add_argument(
         "--formats",
         metavar="URL",
         help="List formats available for a URL without downloading.",
@@ -797,8 +803,14 @@ def main() -> int:
         if getattr(args, "profile_image_url", None):
             img_url = clean_protocol_url(args.profile_image_url)
             src_url = getattr(args, "profile_source_url", None)
+            enhance_hd = bool(getattr(args, "enhance_hd", False))
             try:
-                saved = download_direct_profile_image(img_url, config, source_profile_url=src_url)
+                saved = download_direct_profile_image(
+                    img_url,
+                    config,
+                    source_profile_url=src_url,
+                    enhance_hd=enhance_hd,
+                )
                 if config.json_output or config.json_stream:
                     print(json.dumps({"success": True, "saved_profile": str(saved)}))
                 else:

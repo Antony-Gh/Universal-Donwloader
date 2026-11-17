@@ -18,6 +18,8 @@ from universal_downloader.extractor import parse_rate_limit
 from universal_downloader.models import AppConfig, ContentType, DetectedTarget, Platform
 from universal_downloader.profile import (
     ProfileImageCandidate,
+    compute_hd_target_dimensions,
+    enhance_image_bytes_to_hd,
     extract_public_profile_candidates,
     extract_public_profile_images,
     extract_username_from_profile_url,
@@ -151,6 +153,28 @@ def test_extract_public_profile_images_parses_ssr_jsonld_and_og():
     assert fmt_dict["resolution"] == "877x858"
     assert fmt_dict["vcodec"] == "image"
     assert fmt_dict["filesize"] == 145000
+
+    # Verify nested Facebook SVG header avatar with <mask> is extracted
+    svg_html = '<svg aria-label="Profile"><mask id="m"><circle/></mask><g><image xlink:href="https://scontent.xx.fbcdn.net/v/t39.30808-1/header_hd.jpg"/></g></svg>'
+    assert "https://scontent.xx.fbcdn.net/v/t39.30808-1/header_hd.jpg" in extract_public_profile_images(svg_html)
+
+
+def test_enhance_image_bytes_to_hd_upscales_low_res_cleanly():
+    import io
+    from PIL import Image
+
+    assert compute_hd_target_dimensions(245, 240) == (960, 940)
+    assert compute_hd_target_dimensions(1080, 1080) == (1080, 1080)
+
+    src = Image.new("RGB", (245, 240), color=(40, 110, 190))
+    buf = io.BytesIO()
+    src.save(buf, format="JPEG", quality=85)
+
+    enhanced_bytes, new_w, new_h, ext = enhance_image_bytes_to_hd(buf.getvalue())
+    assert ext == "png"
+    assert (new_w, new_h) == (960, 940)
+    with Image.open(io.BytesIO(enhanced_bytes)) as out_img:
+        assert out_img.size == (960, 940)
 
     # Verify X/Twitter _normal and YouTube =s88 upgrade to high-resolution renditions first
     social_small = r'''
