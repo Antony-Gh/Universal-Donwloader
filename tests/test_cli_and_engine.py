@@ -328,13 +328,15 @@ def test_extract_supported_qualities_sorts_descending_and_includes_audio():
 
 
 def test_upscaler_both_ycbcr_paths_and_rgba():
+    import importlib.util
     import io
     from PIL import Image
 
     rgb = Image.new("RGB", (240, 240), color=(90, 140, 200))
-    out_np = _enhance_rgb_ycbcr_numpy(rgb, 960, 960)
-    assert out_np.size == (960, 960)
-    assert out_np.mode == "RGB"
+    if importlib.util.find_spec("numpy") is not None:
+        out_np = _enhance_rgb_ycbcr_numpy(rgb, 960, 960)
+        assert out_np.size == (960, 960)
+        assert out_np.mode == "RGB"
 
     out_pil = _enhance_rgb_ycbcr_pillow(rgb, 960, 960)
     assert out_pil.size == (960, 960)

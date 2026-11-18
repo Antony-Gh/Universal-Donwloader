@@ -23,11 +23,16 @@ classifiers = [
 dependencies = [
     "yt-dlp>=2026.8.19",
     "curl-cffi>=0.10.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
 audio = [
     "mutagen>=1.48.1",
+]
+ai = [
+    "numpy>=1.26.0",
+    "onnxruntime>=1.18.0",
 ]
 dev = [
     "pytest>=8.0.0",

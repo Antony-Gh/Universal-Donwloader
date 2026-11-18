@@ -6,9 +6,10 @@ import io
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from PIL import Image, ImageChops, ImageEnhance, ImageFilter
+if TYPE_CHECKING:
+    from PIL import Image
 
 LOGGER = logging.getLogger("universal_downloader")
 
@@ -68,6 +69,7 @@ def _run_onnx_tiled_super_resolution(
     """
     import numpy as np
     import onnxruntime as ort
+    from PIL import Image
 
     sess = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
     input_meta = sess.get_inputs()[0]
@@ -144,6 +146,7 @@ def _enhance_rgb_ycbcr_numpy(
 ) -> Image.Image:
     """Luminance-only YCbCr Sobel edge-masked multi-scale detail reconstruction (numpy path)."""
     import numpy as np
+    from PIL import Image, ImageEnhance, ImageFilter
 
     def sobel_edge_mask(luma: np.ndarray) -> np.ndarray:
         padded = np.pad(luma, 1, mode="edge")
@@ -215,6 +218,8 @@ def _enhance_rgb_ycbcr_pillow(
     Zero numpy dependency so bundled standalone executables stay lean while delivering
     halo-free luminance sharpening and adaptive flat-area JPEG deblocking.
     """
+    from PIL import Image, ImageEnhance, ImageFilter
+
     resampler = getattr(Image, "Resampling", Image).LANCZOS
     orig_w, orig_h = rgb_img.size
 
@@ -274,6 +279,8 @@ def enhance_image_bytes_to_hd(
     and otherwise runs the multi-scale YCbCr edge-masked detail reconstruction pipeline.
     Returns (enhanced_bytes, new_width, new_height, ext_without_dot).
     """
+    from PIL import Image
+
     resampler = getattr(Image, "Resampling", Image).LANCZOS
 
     with Image.open(io.BytesIO(data)) as raw_img:
