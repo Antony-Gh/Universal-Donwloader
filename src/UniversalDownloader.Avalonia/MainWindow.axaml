@@ -174,6 +174,9 @@
                                             <Border Background="#3B82F6" CornerRadius="4" Padding="6,2">
                                                 <TextBlock x:Name="PlatformBadge" Text="YOUTUBE" Foreground="White" FontSize="10" FontWeight="Bold"/>
                                             </Border>
+                                            <Button x:Name="ProfileIdButton" IsVisible="False" Padding="7,2" Background="#1E293B" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="4" Click="ProfileIdButton_Click" ToolTip.Tip="Click to copy Facebook Profile ID">
+                                                <TextBlock x:Name="ProfileIdLabel" Text="ID: " Foreground="#7DD3FC" FontSize="10" FontWeight="SemiBold"/>
+                                            </Button>
                                             <Border x:Name="ProfileLockedBadge" IsVisible="False" Background="#451A03" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="4" Padding="6,2">
                                                 <TextBlock Text="LOCKED PROFILE" Foreground="#FCD34D" FontSize="10" FontWeight="Bold"/>
                                             </Border>

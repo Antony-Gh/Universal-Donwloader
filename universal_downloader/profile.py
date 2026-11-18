@@ -446,11 +446,45 @@ class ProfileImageCandidate:
 
 @dataclass
 class ProfileInspectionResult:
-    """Structured result of profile picture inspection including platform lock notices."""
+    """Structured result of profile picture inspection including platform lock notices and profile ID."""
     images: list[ProfileImageCandidate]
     profile_locked: bool = False
     profile_notice: Optional[str] = None
     title: Optional[str] = None
+    profile_id: Optional[str] = None
+
+
+def extract_facebook_user_id(profile_url: str, html_text: str = "") -> Optional[str]:
+    """
+    Extract the target Facebook profile/page numeric ID from a profile URL or standard page HTML.
+    Uses owner-scoped fields (and case-sensitive 'userID') to avoid confusing with the logged-in viewer's 'USER_ID'.
+    """
+    if profile_url:
+        parsed = urllib.parse.urlparse(profile_url)
+        if parsed.path.rstrip("/").lower().endswith("/profile.php"):
+            qs = urllib.parse.parse_qs(parsed.query)
+            raw_id = (qs.get("id") or [None])[0]
+            if raw_id and raw_id.isdigit() and len(raw_id) >= 5:
+                return raw_id
+
+    if not html_text:
+        return None
+
+    # Order from most specific profile-owner fields to general page metadata
+    patterns = (
+        re.compile(r'fb://(?:profile|page)/(\d{5,})', re.I),
+        re.compile(r'"profile_owner"\s*:\s*\{[^\r\n]{0,160}?"id"\s*:\s*"(\d{5,})"'),
+        re.compile(r'"userID"\s*:\s*"(\d{5,})"'),
+        re.compile(r'"profile_header_renderer"\s*:\s*\{[^\r\n]{0,400}?"id"\s*:\s*"(\d{5,})"'),
+        re.compile(r'"entity_id"\s*:\s*"(\d{5,})"'),
+        re.compile(r'"delegate_page_id"\s*:\s*"(\d{5,})"'),
+    )
+    for pattern in patterns:
+        match = pattern.search(html_text)
+        if match:
+            return match.group(1)
+
+    return None
 
 
 def detect_facebook_profile_locked(html_text: str) -> bool:
@@ -813,6 +847,9 @@ def inspect_profile_images_detailed(
     seen_urls: set[str] = set()
     profile_locked = False
     resolved_title: Optional[str] = None
+    resolved_profile_id: Optional[str] = (
+        extract_facebook_user_id(target.normalized_url) if platform == Platform.FACEBOOK else None
+    )
     had_profile_viewer_hd = False
 
     def add_raw(item: ProfileImageCandidate) -> None:
@@ -830,7 +867,7 @@ def inspect_profile_images_detailed(
     }
 
     def collect_from_html() -> None:
-        nonlocal profile_locked, resolved_title, had_profile_viewer_hd
+        nonlocal profile_locked, resolved_title, resolved_profile_id, had_profile_viewer_hd
 
         if platform == Platform.BLUESKY:
             bsky_imgs, bsky_title = _fetch_bluesky_public_profile(target.normalized_url, config.timeout)
@@ -844,8 +881,11 @@ def inspect_profile_images_detailed(
             if not resolved_title:
                 resolved_title = extract_profile_title(page)
 
-            if platform == Platform.FACEBOOK and detect_facebook_profile_locked(page):
-                profile_locked = True
+            if platform == Platform.FACEBOOK:
+                if not resolved_profile_id:
+                    resolved_profile_id = extract_facebook_user_id(target.normalized_url, page)
+                if detect_facebook_profile_locked(page):
+                    profile_locked = True
 
             for item in extract_public_profile_candidates(page, base_url=target.normalized_url):
                 add_raw(item)
@@ -911,6 +951,7 @@ def inspect_profile_images_detailed(
             profile_locked=profile_locked,
             profile_notice=notice,
             title=resolved_title,
+            profile_id=resolved_profile_id,
         )
 
     # Prioritize authorized Native HD viewer candidates and highest estimated resolution before probing
@@ -983,6 +1024,7 @@ def inspect_profile_images_detailed(
         profile_locked=profile_locked and not had_profile_viewer_hd,
         profile_notice=profile_notice,
         title=resolved_title,
+        profile_id=resolved_profile_id,
     )
 
 

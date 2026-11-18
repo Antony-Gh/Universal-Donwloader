@@ -117,11 +117,13 @@ RunTest("UserSettings saves and reloads cleanly via source-generated JSON", () =
 
 RunTest("DownloaderJsonContext deserializes MediaMetadataModel and DownloadProgressEvent", () =>
 {
-    var metaJson = """{"url":"https://youtu.be/abc","platform":"youtube","title":"Demo Video","uploader":"Tester","duration":125,"view_count":1500000}""";
+    var metaJson = """{"url":"https://youtu.be/abc","platform":"youtube","title":"Demo Video","uploader":"Tester","duration":125,"view_count":1500000,"profile_id":"1000123456789","profile_locked":true}""";
     var meta = JsonSerializer.Deserialize(metaJson, DownloaderJsonContext.Default.MediaMetadataModel);
     AssertTrue(meta != null, "meta deserialized");
     AssertEqual("Demo Video", meta!.Title);
     AssertEqual("2:05", meta.DurationFormatted);
+    AssertEqual("1000123456789", meta.ProfileId ?? "");
+    AssertEqual(true, meta.ProfileLocked);
 
     var progJson = """{"event":"progress","status":"downloading","downloaded_bytes":5242880,"total_bytes":10485760,"percent":50.0,"speed":1048576,"eta":5}""";
     var prog = JsonSerializer.Deserialize(progJson, DownloaderJsonContext.Default.DownloadProgressEvent);

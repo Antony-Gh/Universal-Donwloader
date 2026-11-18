@@ -735,6 +735,7 @@ def main() -> int:
                         "entries": [],
                         "profile_locked": inspection.profile_locked,
                         "profile_notice": inspection.profile_notice,
+                        "profile_id": inspection.profile_id,
                     }
                     if config.json_output or config.json_stream:
                         print(json.dumps(payload, indent=2))
@@ -846,6 +847,7 @@ def main() -> int:
                                     "formats": formats_data,
                                     "profile_locked": inspection.profile_locked,
                                     "profile_notice": inspection.profile_notice,
+                                    "profile_id": inspection.profile_id,
                                 },
                                 indent=2,
                             )

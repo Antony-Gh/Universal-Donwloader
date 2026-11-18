@@ -98,6 +98,9 @@ public record MediaMetadataModel
     [JsonPropertyName("profile_notice")]
     public string? ProfileNotice { get; init; }
 
+    [JsonPropertyName("profile_id")]
+    public string? ProfileId { get; init; }
+
     public string DurationFormatted
     {
         get

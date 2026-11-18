@@ -23,6 +23,7 @@ from universal_downloader.profile import (
     detect_facebook_profile_locked,
     enhance_image_bytes_to_hd,
     extract_facebook_photo_viewer_links,
+    extract_facebook_user_id,
     extract_photo_viewer_images,
     extract_public_profile_candidates,
     extract_public_profile_images,
@@ -378,4 +379,20 @@ def test_detect_facebook_profile_locked_and_multiplatform_extractors():
     ]
     fw_html = r'{"full_width_image":{"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-6\/fw.jpg"}}'
     assert extract_photo_viewer_images(fw_html)[0].url == "https://scontent.xx.fbcdn.net/v/t39.30808-6/fw.jpg"
+
+    # Facebook profile numeric ID extraction (must ignore viewer's uppercase USER_ID)
+    assert extract_facebook_user_id("https://www.facebook.com/profile.php?id=1000123456789") == "1000123456789"
+    assert extract_facebook_user_id(
+        "https://www.facebook.com/tina.merzik",
+        '<meta property="al:ios:url" content="fb://profile/1000987654321" />',
+    ) == "1000987654321"
+    assert extract_facebook_user_id(
+        "https://www.facebook.com/tina.merzik",
+        '{"USER_ID":"999999999","profile_owner":{"id":"1000555555555"}}',
+    ) == "1000555555555"
+    assert extract_facebook_user_id(
+        "https://www.facebook.com/tina.merzik",
+        '{"CurrentUserInitialData":{"USER_ID":"999999999"},"props":{"userID":"1000444444444"}}',
+    ) == "1000444444444"
+
 

@@ -270,12 +270,16 @@ public class DownloaderClient
             var profileNotice = root.TryGetProperty("profile_notice", out var noticeProp) && noticeProp.ValueKind == JsonValueKind.String
                 ? noticeProp.GetString()
                 : null;
+            var profileId = root.TryGetProperty("profile_id", out var idProp) && idProp.ValueKind == JsonValueKind.String
+                ? idProp.GetString()
+                : null;
 
             return new FormatInspectionResult
             {
                 Formats = formats,
                 ProfileLocked = profileLocked,
                 ProfileNotice = profileNotice,
+                ProfileId = profileId,
             };
         }
         catch (JsonException ex)

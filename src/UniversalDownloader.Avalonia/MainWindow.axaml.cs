@@ -38,6 +38,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _metadataCts;
     private string? _lastInspectedMetadataUrl;
+    private string? _currentProfileId;
     private int _activeTaskCount = 0;
     private AppUpdateInfo? _latestUpdateInfo;
     private UserSettings _settings = new();
@@ -1042,10 +1043,14 @@ public partial class MainWindow : Window
                 StreamsNoticeBanner.IsVisible = true;
             }
 
-            // Sync Download tab preview card qualities & lock badge with refreshed stream list
+            // Sync Download tab preview card qualities, lock badge & profile ID with refreshed stream list
             if (MetadataCard.IsVisible)
             {
                 ProfileLockedBadge.IsVisible = inspection.ProfileLocked;
+                if (!string.IsNullOrWhiteSpace(inspection.ProfileId))
+                {
+                    SetProfileIdBadge(inspection.ProfileId);
+                }
                 var syncedQualities = isImageList
                     ? formats.Where(f => !string.IsNullOrWhiteSpace(f.Resolution)).Select(f => f.Resolution).Distinct().ToList()
                     : FormatInfoModel.ExtractSupportedQualities(formats);
@@ -1325,6 +1330,7 @@ public partial class MainWindow : Window
         SingleVideoQualitiesPanel.IsVisible = false;
         SingleVideoQualitiesItems.ItemsSource = null;
         ProfileLockedBadge.IsVisible = false;
+        SetProfileIdBadge(TryExtractFacebookIdFromUri(uri));
         PlatformBadge.Text = platformDisplay;
         VideoTitleLabel.Text = "Fetching media details...";
         UploaderLabel.Text = uri.Host;
@@ -1364,6 +1370,10 @@ public partial class MainWindow : Window
                 }
 
                 ProfileLockedBadge.IsVisible = meta.ProfileLocked;
+                if (!string.IsNullOrWhiteSpace(meta.ProfileId))
+                {
+                    SetProfileIdBadge(meta.ProfileId);
+                }
 
                 if (!string.IsNullOrWhiteSpace(meta.DurationFormatted))
                 {
@@ -1437,6 +1447,67 @@ public partial class MainWindow : Window
         {
             // Thumbnail failed or cancelled - keep default empty thumbnail
         }
+    }
+
+    private void SetProfileIdBadge(string? profileId)
+    {
+        var cleaned = profileId?.Trim();
+        if (!string.IsNullOrWhiteSpace(cleaned))
+        {
+            _currentProfileId = cleaned;
+            ProfileIdLabel.Text = $"ID: {cleaned}";
+            ProfileIdButton.IsVisible = true;
+        }
+        else
+        {
+            _currentProfileId = null;
+            ProfileIdLabel.Text = string.Empty;
+            ProfileIdButton.IsVisible = false;
+        }
+    }
+
+    private async void ProfileIdButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var id = _currentProfileId;
+        if (string.IsNullOrWhiteSpace(id)) return;
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard != null)
+        {
+            await clipboard.SetTextAsync(id);
+            ProfileIdLabel.Text = $"Copied: {id}";
+            GlobalStatusText.Text = $"Copied Facebook Profile ID: {id}";
+            DispatcherTimer.RunOnce(() =>
+            {
+                if (_currentProfileId == id)
+                {
+                    ProfileIdLabel.Text = $"ID: {id}";
+                }
+            }, TimeSpan.FromSeconds(2));
+        }
+    }
+
+    private static string? TryExtractFacebookIdFromUri(Uri uri)
+    {
+        var host = uri.Host.ToLowerInvariant();
+        if (!host.Contains("facebook.com") && !host.Contains("fb.com")) return null;
+        if (!uri.AbsolutePath.TrimEnd('/').EndsWith("/profile.php", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var pair in query)
+        {
+            var idx = pair.IndexOf('=');
+            if (idx <= 0) continue;
+            var key = Uri.UnescapeDataString(pair[..idx]);
+            if (key.Equals("id", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = Uri.UnescapeDataString(pair[(idx + 1)..]).Trim();
+                if (val.Length >= 5 && val.All(char.IsDigit))
+                {
+                    return val;
+                }
+            }
+        }
+        return null;
     }
 
     private void ClearPlaylistCards()
