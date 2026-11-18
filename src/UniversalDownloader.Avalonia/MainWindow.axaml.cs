@@ -650,10 +650,10 @@ public partial class MainWindow : Window
             }
         };
 
-        var customDir = OutputDirBox.Text?.Trim();
-        if (!string.IsNullOrWhiteSpace(customDir))
+        var effectiveDir = GetEffectiveOutputDirectory();
+        if (!string.IsNullOrWhiteSpace(effectiveDir))
         {
-            options.OutputDirectory = customDir;
+            options.OutputDirectory = effectiveDir;
         }
 
         options.CookiesFile = GetSelectedCookiesFile();
@@ -681,6 +681,17 @@ public partial class MainWindow : Window
         }
 
         return options;
+    }
+
+    private string GetEffectiveOutputDirectory()
+    {
+        var customDir = OutputDirBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(customDir)) return customDir;
+        var defaultDownloads = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Downloads"
+        );
+        return Directory.Exists(defaultDownloads) ? defaultDownloads : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
     private async void DownloadButton_Click(object? sender, RoutedEventArgs e)
@@ -711,13 +722,13 @@ public partial class MainWindow : Window
 
         try
         {
-            var customDir = OutputDirBox.Text?.Trim();
+            var effectiveDir = GetEffectiveOutputDirectory();
             var cookiesFile = GetSelectedCookiesFile();
             var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
 
             var savedPath = await _client.DownloadProfilePictureAsync(
                 input,
-                outputDirectory: string.IsNullOrWhiteSpace(customDir) ? null : customDir,
+                outputDirectory: effectiveDir,
                 cookiesFromBrowser: cookiesBrowser,
                 cookiesFile: cookiesFile);
 
@@ -1168,7 +1179,7 @@ public partial class MainWindow : Window
                 OnRawOutputReceived(this, $"[Profile] Downloading selected image ({format.ResolutionFormatted}, {format.FormatNote})...");
                 try
                 {
-                    var customDir = OutputDirBox.Text?.Trim();
+                    var effectiveDir = GetEffectiveOutputDirectory();
                     var cookiesFile = GetSelectedCookiesFile();
                     var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
 
@@ -1176,7 +1187,7 @@ public partial class MainWindow : Window
                     var savedPath = await _client.DownloadDirectImageAsync(
                         format.DirectUrl,
                         sourceProfileUrl: url,
-                        outputDirectory: string.IsNullOrWhiteSpace(customDir) ? null : customDir,
+                        outputDirectory: effectiveDir,
                         cookiesFromBrowser: cookiesBrowser,
                         cookiesFile: cookiesFile,
                         enhanceHd: enhanceHd);

@@ -7,6 +7,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
+from universal_downloader.paths import get_default_log_dir
+
 
 class Platform(Enum):
     YOUTUBE = "youtube"
@@ -46,7 +48,7 @@ class ContentType(Enum):
 @dataclass
 class AppConfig:
     output_dir: Path = Path("downloads")
-    log_dir: Path = Path("logs")
+    log_dir: Path = field(default_factory=get_default_log_dir)
     retries: int = 3
     timeout: int = 30
     quality: str = "best"

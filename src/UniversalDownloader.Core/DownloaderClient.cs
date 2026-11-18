@@ -495,6 +495,16 @@ public class DownloaderClient
         Action<string> onOutputLine,
         CancellationToken cancellationToken)
     {
+        var localAppDataDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "UniversalDownloader"
+        );
+        try
+        {
+            Directory.CreateDirectory(localAppDataDir);
+        }
+        catch { }
+
         var psi = new ProcessStartInfo
         {
             FileName = _executableOrPython,
@@ -503,13 +513,14 @@ public class DownloaderClient
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+            WorkingDirectory = Directory.Exists(localAppDataDir) ? localAppDataDir : Path.GetTempPath(),
         };
 
-        var localBin = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "UniversalDownloader",
-            "bin"
-        );
+        var logsDir = Path.Combine(localAppDataDir, "logs");
+        try { Directory.CreateDirectory(logsDir); } catch { }
+        psi.EnvironmentVariables["LOG_DIR"] = logsDir;
+
+        var localBin = Path.Combine(localAppDataDir, "bin");
         if (Directory.Exists(localBin))
         {
             var curPath = psi.EnvironmentVariables.ContainsKey("PATH") ? psi.EnvironmentVariables["PATH"] : Environment.GetEnvironmentVariable("PATH") ?? "";

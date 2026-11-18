@@ -21,6 +21,7 @@ from universal_downloader.console import info
 from universal_downloader.exceptions import ExtractionError, ProfileError
 from universal_downloader.extractor import YTDLPExtractor
 from universal_downloader.models import AppConfig, Platform
+from universal_downloader.paths import get_default_download_dir
 from universal_downloader.upscaler import (
     compute_hd_target_dimensions,
     enhance_image_bytes_to_hd,
@@ -1481,8 +1482,13 @@ def download_direct_profile_image(
         except Exception:
             pass
 
-    destination_dir = config.output_dir / platform_directory(platform) / "profile_pictures"
-    destination_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        destination_dir = config.output_dir / platform_directory(platform) / "profile_pictures"
+        destination_dir.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError):
+        config.output_dir = get_default_download_dir()
+        destination_dir = config.output_dir / platform_directory(platform) / "profile_pictures"
+        destination_dir.mkdir(parents=True, exist_ok=True)
     destination = ensure_inside_directory(
         config.output_dir,
         unique_path(destination_dir / (sanitize_filename(username, "profile") + suffix_tag + ext)),
@@ -1628,7 +1634,13 @@ def download_public_image(
         },
     )
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError):
+        fallback_root = get_default_download_dir()
+        destination = fallback_root / destination.name
+        base_dir = fallback_root
+        destination.parent.mkdir(parents=True, exist_ok=True)
     destination = unique_path(destination)
     destination = ensure_inside_directory(base_dir, destination)
     temp_path = destination.with_suffix(destination.suffix + ".part")
@@ -1722,12 +1734,21 @@ class ProfilePhotoResolver:
             )
 
         filename = sanitize_filename(username, "profile") + "." + (best.ext.lstrip(".") or "jpg")
-        destination_dir = (
-            self.config.output_dir
-            / platform_directory(platform)
-            / "profile_pictures"
-        )
-        destination_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            destination_dir = (
+                self.config.output_dir
+                / platform_directory(platform)
+                / "profile_pictures"
+            )
+            destination_dir.mkdir(parents=True, exist_ok=True)
+        except (PermissionError, OSError):
+            self.config.output_dir = get_default_download_dir()
+            destination_dir = (
+                self.config.output_dir
+                / platform_directory(platform)
+                / "profile_pictures"
+            )
+            destination_dir.mkdir(parents=True, exist_ok=True)
         destination = ensure_inside_directory(self.config.output_dir, destination_dir / filename)
 
         for item in verified:

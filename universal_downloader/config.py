@@ -10,6 +10,13 @@ from typing import Any, Optional
 
 from universal_downloader.exceptions import ConfigurationError
 from universal_downloader.models import AppConfig
+from universal_downloader.paths import (
+    get_default_data_dir,
+    get_default_download_dir,
+    get_default_log_dir,
+    is_directory_writable,
+    is_system_or_program_dir,
+)
 
 
 def parse_dotenv(path: Path) -> dict[str, str]:
@@ -109,12 +116,19 @@ def build_config(args: argparse.Namespace) -> AppConfig:
     dotenv = parse_dotenv(Path(".env"))
     json_config = load_json_config(Path("config.json"))
 
-    output_value = (
+    output_raw = (
         getattr(args, "output", None)
         or env_value(dotenv, "DOWNLOAD_DIR")
         or json_config.get("download_dir")
-        or "downloads"
     )
+    if output_raw:
+        output_dir = Path(output_raw).expanduser()
+    else:
+        cwd = Path.cwd()
+        if not is_system_or_program_dir(cwd) and is_directory_writable(cwd):
+            output_dir = Path("downloads")
+        else:
+            output_dir = get_default_download_dir()
 
     retries_value = (
         args.retries
@@ -311,13 +325,23 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         or json_config.get("cookies_from_browser")
     )
 
+    log_raw = env_value(dotenv, "LOG_DIR") or json_config.get("log_dir")
+    if log_raw:
+        log_dir = Path(log_raw).expanduser()
+    else:
+        local_logs = Path("logs")
+        if (
+            local_logs.is_dir()
+            and not is_system_or_program_dir(Path.cwd())
+            and is_directory_writable(local_logs)
+        ):
+            log_dir = local_logs
+        else:
+            log_dir = get_default_log_dir()
+
     config = AppConfig(
-        output_dir=Path(output_value).expanduser(),
-        log_dir=Path(
-            env_value(dotenv, "LOG_DIR")
-            or json_config.get("log_dir")
-            or "logs"
-        ).expanduser(),
+        output_dir=output_dir,
+        log_dir=log_dir,
         retries=max(0, retries_value),
         timeout=max(1, timeout_value),
         quality=quality,

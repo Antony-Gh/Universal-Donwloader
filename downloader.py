@@ -101,6 +101,13 @@ from universal_downloader.models import (
     Platform,
 )
 from universal_downloader.notify import send_notification
+from universal_downloader.paths import (
+    get_default_data_dir,
+    get_default_download_dir,
+    get_default_log_dir,
+    is_directory_writable,
+    is_system_or_program_dir,
+)
 from universal_downloader.profile import (
     USERNAME_PLATFORM_PREFIXES,
     ProfilePhotoResolver,
@@ -270,6 +277,11 @@ __all__ = [
     "update_ytdlp",
     "get_windows_clipboard_text",
     "watch_clipboard",
+    "get_default_log_dir",
+    "get_default_data_dir",
+    "get_default_download_dir",
+    "is_directory_writable",
+    "is_system_or_program_dir",
 ]
 
 if __name__ == "__main__":

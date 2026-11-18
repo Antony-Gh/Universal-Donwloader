@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-import random
-import time
 from pathlib import Path
+import random
+import tempfile
+import time
 from typing import Any, Optional
 
 from universal_downloader.console import info, warning
@@ -34,6 +35,7 @@ from universal_downloader.models import (
     Platform,
 )
 from universal_downloader.notify import send_notification
+from universal_downloader.paths import get_default_download_dir
 from universal_downloader.profile import (
     ProfilePhotoResolver,
     extract_username_from_profile_url,
@@ -57,8 +59,24 @@ class DownloadEngine:
         self.profile_resolver = ProfilePhotoResolver(config, self.extractor)
 
     def choose_output_template(self, target: DetectedTarget) -> str:
-        base = self.config.output_dir / platform_directory(target.platform)
-        base.mkdir(parents=True, exist_ok=True)
+        try:
+            base = self.config.output_dir / platform_directory(target.platform)
+            base.mkdir(parents=True, exist_ok=True)
+        except (PermissionError, OSError):
+            LOGGER.warning(
+                "Configured output directory '%s' is not writable; falling back to Downloads folder",
+                self.config.output_dir,
+            )
+            self.config.output_dir = get_default_download_dir()
+            try:
+                base = self.config.output_dir / platform_directory(target.platform)
+                base.mkdir(parents=True, exist_ok=True)
+            except (PermissionError, OSError):
+                temp_dir = Path(tempfile.gettempdir()) / "UniversalDownloader" / "downloads"
+                temp_dir.mkdir(parents=True, exist_ok=True)
+                self.config.output_dir = temp_dir
+                base = temp_dir / platform_directory(target.platform)
+                base.mkdir(parents=True, exist_ok=True)
 
         if self.config.output_template:
             # If the template is already an absolute path, respect it; otherwise nest in base

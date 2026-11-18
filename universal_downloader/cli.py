@@ -605,9 +605,13 @@ def main() -> int:
 
     # Starter config generation
     if getattr(args, "init_config", False):
-        json_f, env_f = generate_default_config(Path.cwd())
-        print(f"✓ Configuration templates generated:\n  • {json_f}\n  • {env_f}")
-        return 0
+        try:
+            json_f, env_f = generate_default_config(Path.cwd())
+            print(f"✓ Configuration templates generated:\n  • {json_f}\n  • {env_f}")
+            return 0
+        except (PermissionError, OSError) as exc:
+            print(f"✗ Failed to generate config templates in current directory: {exc}", file=sys.stderr)
+            return 1
 
     # Self-updater
     if getattr(args, "update", False):

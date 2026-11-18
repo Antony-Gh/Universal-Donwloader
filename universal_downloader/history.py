@@ -5,16 +5,39 @@ from __future__ import annotations
 import datetime
 import json
 import logging
-import sqlite3
 from pathlib import Path
+import sqlite3
+import tempfile
 from typing import Any, Optional
+
+from universal_downloader.paths import get_default_data_dir, is_directory_writable
 
 LOGGER = logging.getLogger("universal_downloader")
 
 
-def get_db_path(output_dir: Path) -> Path:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir / "downloads.db"
+def get_db_path(output_dir: Optional[Path] = None) -> Path:
+    if output_dir is not None:
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            if is_directory_writable(output_dir):
+                return output_dir / "downloads.db"
+        except (PermissionError, OSError):
+            LOGGER.warning(
+                "Output directory '%s' is not writable; using user data directory for history database",
+                output_dir,
+            )
+
+    fallback_dir = get_default_data_dir()
+    try:
+        fallback_dir.mkdir(parents=True, exist_ok=True)
+        return fallback_dir / "downloads.db"
+    except (PermissionError, OSError):
+        temp_dir = Path(tempfile.gettempdir()) / "UniversalDownloader"
+        try:
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            return temp_dir / "downloads.db"
+        except (PermissionError, OSError):
+            return Path("downloads.db")
 
 
 def init_db(db_path: Path) -> sqlite3.Connection:

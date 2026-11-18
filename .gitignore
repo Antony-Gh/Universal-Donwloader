@@ -30,6 +30,7 @@
 
 # Releases & distribution binaries
 downloader.exe
+UniversalDownloader.exe
 releases/
 test_dist/
 *.msi

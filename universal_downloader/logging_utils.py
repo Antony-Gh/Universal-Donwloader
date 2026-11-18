@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 import re
 import sys
+import tempfile
 from typing import Optional
 
 from universal_downloader.models import AppConfig, Platform
+from universal_downloader.paths import get_default_log_dir
 
 LOGGER = logging.getLogger("universal_downloader")
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -34,8 +37,6 @@ class SecretFilter(logging.Filter):
 
 
 def configure_logging(config: AppConfig) -> None:
-    config.log_dir.mkdir(parents=True, exist_ok=True)
-
     level = logging.DEBUG if config.debug else (
         logging.INFO if config.verbose else logging.WARNING
     )
@@ -47,21 +48,45 @@ def configure_logging(config: AppConfig) -> None:
         "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     )
 
-    file_handler = logging.FileHandler(
-        config.log_dir / "downloader.log",
-        encoding="utf-8",
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(formatter)
-    file_handler.addFilter(SecretFilter())
-
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
     console_handler.addFilter(SecretFilter())
-
-    LOGGER.addHandler(file_handler)
     LOGGER.addHandler(console_handler)
+
+    # Candidate directories in priority order:
+    # 1. Configured log directory
+    # 2. Standard user LocalAppData / state log directory
+    # 3. System temp directory
+    candidate_dirs: list[Path] = [config.log_dir]
+    default_log = get_default_log_dir()
+    if default_log != config.log_dir:
+        candidate_dirs.append(default_log)
+    temp_log = Path(tempfile.gettempdir()) / "UniversalDownloader" / "logs"
+    if temp_log not in candidate_dirs:
+        candidate_dirs.append(temp_log)
+
+    file_configured = False
+    for candidate in candidate_dirs:
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            log_file = candidate / "downloader.log"
+            file_handler = logging.FileHandler(
+                log_file,
+                encoding="utf-8",
+            )
+            file_handler.setLevel(logging.DEBUG)
+            file_handler.setFormatter(formatter)
+            file_handler.addFilter(SecretFilter())
+            LOGGER.addHandler(file_handler)
+            config.log_dir = candidate
+            file_configured = True
+            break
+        except (PermissionError, OSError):
+            continue
+
+    if not file_configured:
+        LOGGER.warning("Could not initialize file logging; running in console-only mode")
 
 
 def clean_error_message(message: str) -> str:

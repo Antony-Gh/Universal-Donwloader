@@ -225,11 +225,22 @@ public partial class MainWindow : Window
         }
     }
 
+    private string GetEffectiveOutputDirectory()
+    {
+        var customDir = DownloadDirBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(customDir)) return customDir;
+        var defaultDownloads = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Downloads"
+        );
+        return System.IO.Directory.Exists(defaultDownloads) ? defaultDownloads : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+    }
+
     private DownloadOptions BuildOptionsFromUI()
     {
         var options = new DownloadOptions
         {
-            OutputDirectory = DownloadDirBox.Text.Trim(),
+            OutputDirectory = GetEffectiveOutputDirectory(),
             EmbedMetadata = EmbedMetadataCheck.IsChecked ?? true,
             EmbedThumbnail = EmbedThumbnailCheck.IsChecked ?? true,
             EmbedSubs = EmbedSubsCheck.IsChecked ?? false,
@@ -380,11 +391,18 @@ public partial class MainWindow : Window
     {
         try
         {
-            var res = Process.Start(new ProcessStartInfo("python", "downloader.py --register-protocol")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            });
+            var binary = PlatformUtils.GetBinaryName("downloader");
+            var localAppDataDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "UniversalDownloader"
+            );
+            var psi = System.IO.File.Exists(binary)
+                ? new ProcessStartInfo(binary, "--register-protocol")
+                : new ProcessStartInfo(PlatformUtils.ResolvePythonExecutable(), "downloader.py --register-protocol");
+            psi.UseShellExecute = false;
+            psi.CreateNoWindow = true;
+            psi.WorkingDirectory = System.IO.Directory.Exists(localAppDataDir) ? localAppDataDir : AppDomain.CurrentDomain.BaseDirectory;
+            var res = Process.Start(psi);
             res?.WaitForExit();
             MessageBox.Show("Successfully registered downloader:// protocol in Windows Registry!\nYou can now trigger downloads directly from browser bookmarklets.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
         }
