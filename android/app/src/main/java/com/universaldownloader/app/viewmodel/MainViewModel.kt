@@ -98,6 +98,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var activeProcessId: String? = null
     private var lastFetchedUrl: String? = null
     private var dismissedClipboardUrl: String? = null
+    private var autoUpdateAttemptedForDownload: Boolean = false
 
     private val supportedClipboardHosts = listOf(
         "youtube.com", "youtu.be", "instagram.com", "tiktok.com", "facebook.com", "fb.watch",
@@ -244,14 +245,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val result = repo.initEngine()
             result.fold(
                 onSuccess = {
+                    val currentVer = repo.getEngineVersion()
+                    val verSuffix = if (!currentVer.isNullOrBlank()) " v$currentVer" else ""
                     _uiState.update {
                         it.copy(
                             engineStatus = EngineStatus.READY,
-                            engineStatusMessage = "Engine ready (yt-dlp + FFmpeg)",
+                            engineStatusMessage = "Engine ready (yt-dlp$verSuffix + FFmpeg)",
                             globalStatus = "Ready",
                         )
                     }
-                    appendLog("[Success] Embedded yt-dlp & FFmpeg runtime ready.")
+                    appendLog("[Success] Embedded yt-dlp$verSuffix & FFmpeg runtime ready.")
+
+                    // Auto-update check: if bundled version is from 2025 or missing, silently update in background
+                    if (currentVer == null || currentVer.startsWith("2025")) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            appendLog("Checking for yt-dlp engine updates in background...")
+                            repo.updateEngine().fold(
+                                onSuccess = { msg ->
+                                    appendLog("[Engine] $msg")
+                                    val newVer = repo.getEngineVersion()
+                                    val newVerSuffix = if (!newVer.isNullOrBlank()) " v$newVer" else ""
+                                    _uiState.update {
+                                        it.copy(
+                                            engineStatusMessage = "Engine ready (yt-dlp$newVerSuffix + FFmpeg)",
+                                        )
+                                    }
+                                },
+                                onFailure = {
+                                    // Offline / transient network error during startup check
+                                }
+                            )
+                        }
+                    }
+
                     // If a URL was already shared while engine was starting, fetch metadata now
                     val pendingUrl = _uiState.value.urlInput
                     if (pendingUrl.isNotBlank()) {
@@ -287,9 +313,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             result.fold(
                 onSuccess = { message ->
                     appendLog("[Success] $message")
+                    val newVer = repo.getEngineVersion()
+                    val newVerSuffix = if (!newVer.isNullOrBlank()) " v$newVer" else ""
                     _uiState.update {
                         it.copy(
                             engineStatus = EngineStatus.READY,
+                            engineStatusMessage = "Engine ready (yt-dlp$newVerSuffix + FFmpeg)",
                             globalStatus = message,
                         )
                     }
@@ -558,7 +587,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updateAndPersistOptions { it.copy(sponsorBlockEnabled = enabled) }
     }
 
-    fun startDownload(explicitFormatId: String? = null) {
+    fun startDownload(explicitFormatId: String? = null, isAutoRetry: Boolean = false) {
+        if (!isAutoRetry) {
+            autoUpdateAttemptedForDownload = false
+        }
         val state = _uiState.value
         val matchedImage = explicitFormatId?.let { id ->
             state.streams.firstOrNull { it.formatId == id && it.isImage && !it.directUrl.isNullOrBlank() }
@@ -584,7 +616,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isDownloading = true,
                 isIndeterminateProgress = true,
                 downloadProgress = 0f,
-                downloadStatusText = "Resolving streams & starting download...",
+                downloadStatusText = if (isAutoRetry) "Retrying download with updated extractor..." else "Resolving streams & starting download...",
                 downloadEtaText = "ETA: --:--",
                 globalStatus = "Starting download...",
             )
@@ -667,6 +699,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 },
                 onFailure = { err ->
                     val errMsg = err.message ?: "Download failed"
+                    val isExtractorOutdated = errMsg.contains("Unable to extract", ignoreCase = true)
+                        || errMsg.contains("yt-dlp-U", ignoreCase = true)
+                        || errMsg.contains("older than", ignoreCase = true)
+                        || errMsg.contains("impersonat", ignoreCase = true)
+
+                    if (isExtractorOutdated && !autoUpdateAttemptedForDownload) {
+                        autoUpdateAttemptedForDownload = true
+                        appendLog("[Auto-Update] Platform extractor issue detected. Updating yt-dlp engine to latest release...")
+                        _uiState.update {
+                            it.copy(
+                                downloadStatusText = "Updating yt-dlp engine & retrying...",
+                                globalStatus = "Updating engine...",
+                            )
+                        }
+                        viewModelScope.launch {
+                            val updateRes = repo.updateEngine()
+                            if (updateRes.isSuccess) {
+                                appendLog("[Auto-Update] ${updateRes.getOrNull()} Retrying download...")
+                                val newVer = repo.getEngineVersion()
+                                val newVerSuffix = if (!newVer.isNullOrBlank()) " v$newVer" else ""
+                                _uiState.update {
+                                    it.copy(engineStatusMessage = "Engine ready (yt-dlp$newVerSuffix + FFmpeg)")
+                                }
+                                startDownload(explicitFormatId, isAutoRetry = true)
+                            } else {
+                                appendLog("[Auto-Update] Engine update attempt failed: ${updateRes.exceptionOrNull()?.message}")
+                                DownloadForegroundService.stop(app, "Download failed")
+                                _uiState.update {
+                                    it.copy(
+                                        isDownloading = false,
+                                        isIndeterminateProgress = false,
+                                        downloadStatusText = "Failed: $errMsg",
+                                        globalStatus = "Download failed",
+                                    )
+                                }
+                            }
+                        }
+                        return@launch
+                    }
+
                     appendLog("[Error] $errMsg")
                     DownloadForegroundService.stop(app, "Download failed")
                     _uiState.update {

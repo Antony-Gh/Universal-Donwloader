@@ -1267,6 +1267,32 @@ private fun DownloadTab(
                     if (state.downloadEtaText.isNotEmpty()) {
                         Text(state.downloadEtaText, color = TextSecondary, fontSize = 12.sp)
                     }
+
+                    val showUpdateEngineBtn = (state.downloadStatusText.contains("Update yt-dlp", ignoreCase = true) ||
+                        state.downloadStatusText.contains("extractor", ignoreCase = true) ||
+                        state.downloadStatusText.contains("older than", ignoreCase = true)) && !state.isDownloading
+                    if (showUpdateEngineBtn) {
+                        Button(
+                            onClick = { viewModel.updateYtDlpEngine() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = strings.updateYtDlpEngine,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
                 }
             }
         }

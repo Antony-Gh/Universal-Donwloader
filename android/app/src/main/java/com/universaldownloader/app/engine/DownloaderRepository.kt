@@ -37,7 +37,23 @@ class DownloaderRepository(private val appContext: Context) {
         "formats have been skipped as they are missing a url",
         "unavailable video is hidden",
         "unavailable videos are hidden",
+        "Your yt-dlp version",
+        "is older than 90 days",
+        "yt-dlp-update",
+        "yt-dlp -U",
+        "yt-dlp-U",
+        "To suppress this warning",
+        "The extractor is attempting impersonation",
+        "no impersonate target is available",
     )
+
+    fun getEngineVersion(): String? {
+        return try {
+            YoutubeDL.getInstance().version(appContext)
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     suspend fun initEngine(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
@@ -52,10 +68,11 @@ class DownloaderRepository(private val appContext: Context) {
                 appContext,
                 YoutubeDL.UpdateChannel.STABLE,
             )
+            val currentVersion = getEngineVersion() ?: ""
             when (status) {
-                YoutubeDL.UpdateStatus.DONE -> "yt-dlp engine updated to latest release!"
-                YoutubeDL.UpdateStatus.ALREADY_UP_TO_DATE -> "yt-dlp engine is already up to date."
-                else -> "Update check completed."
+                YoutubeDL.UpdateStatus.DONE -> "yt-dlp engine updated to latest release ($currentVersion)!"
+                YoutubeDL.UpdateStatus.ALREADY_UP_TO_DATE -> "yt-dlp engine is up to date ($currentVersion)."
+                else -> "Update check completed ($currentVersion)."
             }
         }
     }
@@ -172,12 +189,21 @@ class DownloaderRepository(private val appContext: Context) {
                 )
             }
 
+            val isTikTok = detectPlatformLabel(url) == "TIKTOK"
             val request = YoutubeDLRequest(url).apply {
                 addOption("--dump-single-json")
                 addOption("--no-playlist")
                 addOption("--no-warnings")
-                addOption("--extractor-args", "youtube:player_client=android_vr,tv_embedded,web;formats=missing_pot")
+                addOption("--no-update")
+                addOption("--no-check-certificates")
                 addOption("--socket-timeout", "25")
+                addOption("--retries", "3")
+                addOption("--extractor-retries", "3")
+                addOption("--extractor-args", "youtube:player_client=android_vr,tv_embedded,web;formats=missing_pot")
+                if (isTikTok) {
+                    addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+                    addOption("--referer", "https://www.tiktok.com/")
+                }
                 if (!cookiesFilePath.isNullOrBlank() && File(cookiesFilePath).exists()) {
                     addOption("--cookies", cookiesFilePath)
                 }
@@ -187,7 +213,8 @@ class DownloaderRepository(private val appContext: Context) {
             val rawOut = response.out.trim()
             val jsonStart = rawOut.indexOf('{')
             if (jsonStart < 0) {
-                throw RuntimeException(response.err.ifBlank { "No metadata returned by extractor." })
+                val errDetail = response.err.ifBlank { "No metadata returned by extractor." }
+                throw RuntimeException(formatDownloadError(errDetail.trim(), detectPlatformLabel(url)))
             }
             val root = JSONObject(rawOut.substring(jsonStart))
 
@@ -286,13 +313,23 @@ class DownloaderRepository(private val appContext: Context) {
             val outDir = getOutputDirectory(isAudioOnly)
             val beforeFiles = outDir.listFiles()?.map { it.absolutePath }?.toSet() ?: emptySet()
 
+            val isTikTok = detectPlatformLabel(url) == "TIKTOK"
             val request = YoutubeDLRequest(url).apply {
                 addOption("-o", "${outDir.absolutePath}/%(title).120B [%(id)s].%(ext)s")
                 addOption("--concurrent-fragments", options.concurrentFragments.coerceIn(1, 16).toString())
                 addOption("--extractor-args", "youtube:player_client=android_vr,tv_embedded,web;formats=missing_pot")
+                addOption("--no-warnings")
+                addOption("--no-update")
+                addOption("--no-check-certificates")
+                addOption("--socket-timeout", "30")
                 addOption("--retries", "3")
-                addOption("--fragment-retries", "3")
+                addOption("--fragment-retries", "5")
+                addOption("--extractor-retries", "3")
                 addOption("--newline")
+                if (isTikTok) {
+                    addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+                    addOption("--referer", "https://www.tiktok.com/")
+                }
                 if (url.contains("list=", ignoreCase = true) || url.contains("/playlist", ignoreCase = true)) {
                     addOption("--ignore-errors")
                 }
@@ -358,7 +395,7 @@ class DownloaderRepository(private val appContext: Context) {
 
             if (response.exitCode != 0) {
                 val errDetail = response.err.ifBlank { "Download exited with code ${response.exitCode}" }
-                throw RuntimeException(errDetail.trim())
+                throw RuntimeException(formatDownloadError(errDetail.trim(), detectPlatformLabel(url)))
             }
 
             val createdFile = outDir.listFiles()
@@ -934,6 +971,32 @@ class DownloaderRepository(private val appContext: Context) {
 
     private fun isIgnoredLine(line: String): Boolean {
         return ignoredLogPatterns.any { line.contains(it, ignoreCase = true) }
+    }
+
+    fun cleanErrorMessage(rawError: String): String {
+        val lines = rawError.lines()
+            .map { it.trim() }
+            .filter { line ->
+                line.isNotEmpty() &&
+                !line.startsWith("WARNING:", ignoreCase = true) &&
+                !isIgnoredLine(line)
+            }
+        val errorLines = lines.filter { it.startsWith("ERROR:", ignoreCase = true) }
+        val primary = if (errorLines.isNotEmpty()) errorLines.joinToString("\n") else lines.joinToString("\n")
+        return primary.replace(Regex("""^ERROR:\s*""", RegexOption.IGNORE_CASE), "").trim()
+            .ifBlank { rawError.trim() }
+    }
+
+    fun formatDownloadError(rawError: String, platform: String): String {
+        val cleaned = cleanErrorMessage(rawError)
+        val lower = cleaned.lowercase(Locale.US)
+        if (platform == "TIKTOK" && (lower.contains("unable to extract webpage video data") || lower.contains("unable to extract universal data"))) {
+            return "$cleaned\n\nTikTok may be temporarily rate-limiting requests or requires an updated extractor.\n• Update yt-dlp engine via the 3-dot menu\n• Or use 'Web Login' / cookies.txt to authorize extraction."
+        }
+        if (lower.contains("confirm you are on the latest version using yt-dlp -u") || lower.contains("confirm you are on the latest version using yt-dlp-u")) {
+            return "$cleaned\n\nSuggestion: Update the yt-dlp engine from the top menu to download with latest platform extractors."
+        }
+        return cleaned
     }
 
     private fun buildFormatSelector(quality: QualityOption, codec: CodecOption): String {
