@@ -211,5 +211,28 @@ RunTest("UpdateChecker.ExtractVersionFromReleaseUrl parses GitHub redirect tag U
     AssertEqual("", UpdateChecker.ExtractVersionFromReleaseUrl("https://github.com/Antony-Gh/Universal-Donwloader/releases"));
 });
 
+RunTest("NetscapeCookieHelper converts Cookie headers and merges per domain", () =>
+{
+    var tmpPath = Path.Combine(Path.GetTempPath(), $"ud_cookies_test_{Guid.NewGuid():N}.txt");
+    try
+    {
+        var count1 = NetscapeCookieHelper.MergeIntoCookiesFile(tmpPath, "cookie: c_user=12345; xs=token_abc; datr=xyz", "facebook.com");
+        AssertEqual(3, count1);
+
+        var count2 = NetscapeCookieHelper.MergeIntoCookiesFile(tmpPath, "sessionid=ig_999; csrftoken=csrf_1", "instagram.com");
+        AssertEqual(2, count2);
+
+        var content = File.ReadAllText(tmpPath);
+        AssertTrue(content.Contains(".facebook.com\tTRUE\t/\tTRUE\t"), "facebook domain preserved");
+        AssertTrue(content.Contains(".instagram.com\tTRUE\t/\tTRUE\t"), "instagram domain merged");
+        AssertTrue(content.Contains("c_user\t12345"), "c_user present");
+        AssertTrue(content.Contains("sessionid\tig_999"), "sessionid present");
+    }
+    finally
+    {
+        if (File.Exists(tmpPath)) File.Delete(tmpPath);
+    }
+});
+
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

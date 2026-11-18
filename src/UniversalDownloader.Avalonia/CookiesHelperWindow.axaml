@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="UniversalDownloader.Avalonia.CookiesHelperWindow"
+        Title="Paste Browser Cookies"
+        Width="620" Height="470"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True"
+        Background="#0E0E12">
+
+    <Grid Margin="18" RowDefinitions="Auto,Auto,Auto,*,Auto">
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,12">
+            <TextBlock Text="Paste Session Cookies (Works Even While Chrome Is Open)" FontSize="16" FontWeight="Bold" Foreground="#F4F4F8"/>
+            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#94A3B8"
+                       Text="On Windows, Chrome &amp; Edge lock their cookie database while running. Instead of closing your browser, copy your own 'cookie:' header from DevTools (F12 → Network → click any page request → Request Headers → cookie) OR paste Netscape cookies.txt lines below."/>
+        </StackPanel>
+
+        <!-- Target Platform / Domain -->
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,10">
+            <TextBlock Grid.Column="0" Text="Target Site:" Foreground="#CBD5E1" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <ComboBox x:Name="SiteComboBox" Grid.Column="1" SelectedIndex="0" HorizontalAlignment="Stretch" SelectionChanged="SiteComboBox_SelectionChanged">
+                <ComboBoxItem Content="facebook.com"/>
+                <ComboBoxItem Content="instagram.com"/>
+                <ComboBoxItem Content="youtube.com"/>
+                <ComboBoxItem Content="tiktok.com"/>
+                <ComboBoxItem Content="x.com"/>
+                <ComboBoxItem Content="Custom domain..."/>
+            </ComboBox>
+            <TextBox x:Name="CustomDomainBox" Grid.Column="2" IsVisible="False" Width="180" Margin="8,0,0,0" FlowDirection="LeftToRight" Watermark="e.g. threads.net"/>
+        </Grid>
+
+        <!-- Paste helper bar -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+            <TextBlock Grid.Column="0" Text="Cookie Header or Netscape cookies.txt Content:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+            <Button x:Name="PasteClipboardButton" Grid.Column="1" Padding="10,4" Background="#27272A" Foreground="#38BDF8" FontSize="11" FontWeight="SemiBold" Content="Paste from Clipboard" Click="PasteClipboardButton_Click"/>
+        </Grid>
+
+        <!-- Input TextBox -->
+        <TextBox x:Name="CookiesInputBox"
+                 Grid.Row="3"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 FlowDirection="LeftToRight"
+                 FontFamily="Cascadia Code, Consolas, monospace"
+                 FontSize="11"
+                 Background="#14141A"
+                 Foreground="#E2E8F0"
+                 Watermark="Paste raw Cookie header (e.g. c_user=...; xs=...; datr=...) or Netscape cookies.txt lines here..."/>
+
+        <!-- Status & Actions -->
+        <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,0">
+            <TextBlock x:Name="StatusText" Grid.Column="0" Text="Merged cookies are saved locally in AppData (never uploaded)." Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <Button Grid.Column="1" Margin="8,0,8,0" Padding="14,8" Background="#27272A" Foreground="#E2E8F0" Content="Cancel" Click="CancelButton_Click"/>
+            <Button x:Name="SaveButton" Grid.Column="2" Padding="16,8" Background="#6366F1" Foreground="White" FontWeight="Bold" Content="Save &amp; Apply Cookies" Click="SaveButton_Click"/>
+        </Grid>
+    </Grid>
+</Window>

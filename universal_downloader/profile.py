@@ -80,7 +80,17 @@ def load_cookie_jar(config: AppConfig) -> Optional[http.cookiejar.CookieJar]:
 
             return extract_cookies_from_browser(config.cookies_from_browser)
         except Exception as exc:
-            LOGGER.warning("Could not load cookies from browser '%s': %s", config.cookies_from_browser, exc)
+            err_text = str(exc)
+            lowered = err_text.lower()
+            if "could not copy" in lowered or "cookie database" in lowered or "dpapi" in lowered or "app-bound" in lowered:
+                LOGGER.warning(
+                    "Browser '%s' locks or encrypts its cookie database while running on Windows. "
+                    "Use the 'Paste Cookies' button (or import cookies.txt), switch to Firefox, or close '%s' completely and retry.",
+                    config.cookies_from_browser,
+                    config.cookies_from_browser,
+                )
+            else:
+                LOGGER.warning("Could not load cookies from browser '%s': %s", config.cookies_from_browser, err_text)
 
     return None
 

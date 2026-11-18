@@ -203,6 +203,7 @@ public partial class MainWindow : Window
         OpenDirText.Text = T("Open");
         BrowserCookiesHeader.Text = T("BrowserCookies");
         CookiesFileHeader.Text = T("CookiesFile");
+        PasteCookiesButton.Content = T("PasteCookies");
 
         EmbedMetadataCheck.Content = T("EmbedMetadata");
         EmbedThumbnailCheck.Content = T("EmbedCoverArt");
@@ -267,6 +268,20 @@ public partial class MainWindow : Window
     {
         var path = CookiesFileBox.Text?.Trim();
         return string.IsNullOrWhiteSpace(path) ? null : path;
+    }
+
+    private async void PasteCookiesButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new CookiesHelperWindow(UrlTextBox.Text?.Trim());
+        var saved = await dialog.ShowDialog<bool>(this);
+        if (saved && !string.IsNullOrWhiteSpace(dialog.SavedCookiesPath))
+        {
+            CookiesFileBox.Text = dialog.SavedCookiesPath;
+            CookiesBrowserComboBox.SelectedIndex = 0; // Avoid Windows browser DB lock when cookies.txt is set
+            SaveUserSettings();
+            OnRawOutputReceived(this, $"[Complete] Saved {dialog.SavedCookieCount} session cookie(s) to {dialog.SavedCookiesPath}");
+            GlobalStatusText.Text = $"Applied {dialog.SavedCookieCount} session cookie(s) — ready to inspect or download.";
+        }
     }
 
     private async void BrowseCookiesButton_Click(object? sender, RoutedEventArgs e)

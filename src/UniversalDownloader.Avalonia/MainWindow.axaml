@@ -416,10 +416,12 @@
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Optional Netscape-format cookies.txt file exported from your browser. Overrides Browser Cookies when set."/>
                                         </StackPanel>
-                                        <Grid ColumnDefinitions="*,Auto,Auto">
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                                             <TextBox x:Name="CookiesFileBox" Grid.Column="0" FlowDirection="LeftToRight" Watermark="Optional path to cookies.txt..."/>
-                                            <Button x:Name="BrowseCookiesButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,6" Content="Browse..." Click="BrowseCookiesButton_Click"/>
-                                            <Button x:Name="ClearCookiesButton" Grid.Column="2" Margin="6,0,0,0" Padding="8,6" Background="#374151" Content="✕" Click="ClearCookiesButton_Click"/>
+                                            <Button x:Name="PasteCookiesButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,6" Background="#1E293B" Foreground="#38BDF8" FontWeight="SemiBold" Content="Paste Cookies" Click="PasteCookiesButton_Click"
+                                                    ToolTip.Tip="Paste a raw Cookie header from Chrome/Edge DevTools or Netscape cookies.txt text — works even while Chrome is open!"/>
+                                            <Button x:Name="BrowseCookiesButton" Grid.Column="2" Margin="6,0,0,0" Padding="10,6" Content="Browse..." Click="BrowseCookiesButton_Click"/>
+                                            <Button x:Name="ClearCookiesButton" Grid.Column="3" Margin="6,0,0,0" Padding="8,6" Background="#374151" Content="✕" Click="ClearCookiesButton_Click"/>
                                         </Grid>
                                     </StackPanel>
                                 </Grid>

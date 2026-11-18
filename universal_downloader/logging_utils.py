@@ -93,14 +93,20 @@ def format_download_error(
             "  • Or export cookies to a Netscape file and pass: --cookies cookies.txt"
         )
 
-    if "dpapi" in lowered or "could not decrypt" in lowered or "app-bound" in lowered:
+    if (
+        "dpapi" in lowered
+        or "could not decrypt" in lowered
+        or "app-bound" in lowered
+        or "could not copy" in lowered
+        or "cookie database" in lowered
+    ):
         return (
             f"{message}\n\n"
-            "Note: Newer Chromium browsers (Chrome v127+) protect cookies with App-Bound Encryption.\n"
-            "If browser cookie extraction fails:\n"
-            "  • Export cookies with an extension (e.g. 'Get cookies.txt LOCALLY')\n"
-            "  • Supply the exported file via: --cookies cookies.txt\n"
-            "  • Or use Firefox cookies: --cookies-from-browser firefox"
+            "Note: On Windows, Chrome/Edge/Brave lock their cookie database while running and use App-Bound Encryption.\n"
+            "To fix this cleanly:\n"
+            "  • Click 'Paste Cookies' in the desktop app (or import a Netscape cookies.txt file via --cookies)\n"
+            "  • Or use Firefox cookies (--cookies-from-browser firefox)\n"
+            "  • Or close the Chromium browser completely (including system tray) before retrying"
         )
 
     if "sign in to confirm you're not a bot" in lowered or "bot detection" in lowered or "the page needs to be reloaded" in lowered or "ssap" in lowered:
