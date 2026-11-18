@@ -29,11 +29,8 @@ from universal_downloader.notify import send_notification
 from universal_downloader.profile import (
     USERNAME_PLATFORM_PREFIXES,
     download_direct_profile_image,
-    extract_profile_title,
     extract_username_from_profile_url,
-    fetch_public_html,
-    inspect_profile_images,
-    load_cookie_jar,
+    inspect_profile_images_detailed,
     resolve_profile_input,
 )
 from universal_downloader.protocol import clean_protocol_url, register_protocol, unregister_protocol
@@ -705,20 +702,16 @@ def main() -> int:
                     Platform.INSTAGRAM,
                     Platform.TWITTER,
                     Platform.THREADS,
+                    Platform.BLUESKY,
+                    Platform.REDDIT,
                 }:
-                    cookie_jar = load_cookie_jar(config)
-                    prof_title = None
-                    try:
-                        page = fetch_public_html(target.normalized_url, config.timeout, cookie_jar=cookie_jar)
-                        prof_title = extract_profile_title(page)
-                    except Exception:
-                        pass
-                    verified_imgs = inspect_profile_images(
+                    inspection = inspect_profile_images_detailed(
                         target.normalized_url,
                         platform=target.platform,
                         config=config,
                         extractor=engine.extractor,
                     )
+                    verified_imgs = inspection.images
                     username = extract_username_from_profile_url(target.normalized_url, target.platform) or "Profile"
                     qualities = [
                         f"{img.width}x{img.height}"
@@ -728,17 +721,20 @@ def main() -> int:
                     payload = {
                         "url": target.normalized_url,
                         "platform": target.platform.value,
-                        "title": prof_title or username,
+                        "title": inspection.title or username,
                         "uploader": username,
                         "duration": None,
                         "duration_string": None,
                         "thumbnail": verified_imgs[0].url if verified_imgs else None,
-                        "description": "Profile page — use 'Inspect Streams' to view all available picture resolutions or click 'Profile Pic'.",
+                        "description": inspection.profile_notice
+                        or "Profile page — use 'Inspect Streams' to view all available picture resolutions or click 'Profile Pic'.",
                         "view_count": None,
                         "is_playlist": False,
                         "playlist_count": 0,
                         "qualities": qualities,
                         "entries": [],
+                        "profile_locked": inspection.profile_locked,
+                        "profile_notice": inspection.profile_notice,
                     }
                     if config.json_output or config.json_stream:
                         print(json.dumps(payload, indent=2))
@@ -834,19 +830,32 @@ def main() -> int:
                 target = detect_target(fmt_url, timeout=config.timeout)
 
                 if target.content_type == ContentType.PROFILE:
-                    verified_imgs = inspect_profile_images(
+                    inspection = inspect_profile_images_detailed(
                         target.normalized_url,
                         platform=target.platform,
                         config=config,
                         extractor=engine.extractor,
                     )
+                    verified_imgs = inspection.images
                     formats_data = [img.to_format_dict(idx) for idx, img in enumerate(verified_imgs)]
                     if config.json_output or config.json_stream:
-                        print(json.dumps({"url": target.normalized_url, "formats": formats_data}, indent=2))
+                        print(
+                            json.dumps(
+                                {
+                                    "url": target.normalized_url,
+                                    "formats": formats_data,
+                                    "profile_locked": inspection.profile_locked,
+                                    "profile_notice": inspection.profile_notice,
+                                },
+                                indent=2,
+                            )
+                        )
                     else:
                         print_banner(config)
                         print(f"Profile:  {target.normalized_url}")
                         print(f"Pictures: {len(formats_data)} verified image(s)")
+                        if inspection.profile_notice:
+                            print(f"Notice:   {inspection.profile_notice}")
                         for item in formats_data:
                             print(f"  - {item['format_id']}: {item['resolution']} ({item['ext']}) - {item['format_note']}")
                     return 0

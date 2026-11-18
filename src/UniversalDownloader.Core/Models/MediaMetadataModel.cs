@@ -92,6 +92,12 @@ public record MediaMetadataModel
     [JsonPropertyName("entries")]
     public List<PlaylistEntryModel> Entries { get; init; } = new();
 
+    [JsonPropertyName("profile_locked")]
+    public bool ProfileLocked { get; init; }
+
+    [JsonPropertyName("profile_notice")]
+    public string? ProfileNotice { get; init; }
+
     public string DurationFormatted
     {
         get

@@ -601,6 +601,8 @@ class DownloaderRepository(private val appContext: Context) {
 
         // Owner-scoped profile avatar & cover fields only (avoids unrelated comment/suggested avatars)
         val ownerPatterns = listOf(
+            Triple(Regex(""""hd_profile_pic_url_info"\s*:\s*\{[^\r\n]{0,250}?"url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Native HD)", false),
+            Triple(Regex(""""hd_profile_pic_versions"\s*:\s*\[[^\r\n]{0,800}?"url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (HD)", false),
             Triple(Regex(""""profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (HD)", false),
             Triple(Regex(""""profile_pic_url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
             Triple(Regex(""""profilePic(?:Large|Medium|Small|\d+)"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
@@ -612,9 +614,11 @@ class DownloaderRepository(private val appContext: Context) {
             Triple(Regex(""""avatarLarger"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Large)", false),
             Triple(Regex(""""avatarMedium"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Medium)", false),
             Triple(Regex(""""profile_image_url_https"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
+            Triple(Regex(""""(?:icon_img|snoovatar_img)"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
             Triple(Regex(""""cover_photo"\s*:\s*\{[^\r\n]{0,600}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Cover Photo", true),
             Triple(Regex(""""coverPhoto"\s*:\s*\{[^\r\n]{0,600}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Cover Photo", true),
             Triple(Regex(""""profile_banner_url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Cover Banner", true),
+            Triple(Regex(""""banner_img"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Cover Banner", true),
         )
         for ((regex, label, isCover) in ownerPatterns) {
             regex.findAll(htmlText).forEach { addCandidate(it.groupValues[1], label, isCover) }

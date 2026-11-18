@@ -20,6 +20,7 @@ from universal_downloader.profile import (
     ProfileImageCandidate,
     _build_cookie_header,
     compute_hd_target_dimensions,
+    detect_facebook_profile_locked,
     enhance_image_bytes_to_hd,
     extract_facebook_photo_viewer_links,
     extract_photo_viewer_images,
@@ -29,6 +30,10 @@ from universal_downloader.profile import (
     is_generic_site_logo,
     load_cookie_jar,
     resolve_profile_input,
+)
+from universal_downloader.upscaler import (
+    _enhance_rgb_ycbcr_numpy,
+    _enhance_rgb_ycbcr_pillow,
 )
 
 
@@ -318,3 +323,59 @@ def test_extract_supported_qualities_sorts_descending_and_includes_audio():
         ]
     }
     assert _extract_supported_qualities(info) == ["1080p", "720p", "480p", "Audio"]
+
+
+def test_upscaler_both_ycbcr_paths_and_rgba():
+    import io
+    from PIL import Image
+
+    rgb = Image.new("RGB", (240, 240), color=(90, 140, 200))
+    out_np = _enhance_rgb_ycbcr_numpy(rgb, 960, 960)
+    assert out_np.size == (960, 960)
+    assert out_np.mode == "RGB"
+
+    out_pil = _enhance_rgb_ycbcr_pillow(rgb, 960, 960)
+    assert out_pil.size == (960, 960)
+    assert out_pil.mode == "RGB"
+
+    rgba = Image.new("RGBA", (200, 200), color=(40, 120, 210, 180))
+    buf = io.BytesIO()
+    rgba.save(buf, format="PNG")
+    out_bytes, w, h, ext = enhance_image_bytes_to_hd(buf.getvalue())
+    assert ext == "png"
+    assert (w, h) == (800, 800)
+    with Image.open(io.BytesIO(out_bytes)) as img:
+        assert img.mode == "RGBA"
+        assert img.size == (800, 800)
+
+
+def test_detect_facebook_profile_locked_and_multiplatform_extractors():
+    assert detect_facebook_profile_locked('{"is_profile_locked":true}')
+    assert detect_facebook_profile_locked("<div>Tina locked her profile</div>")
+    assert not detect_facebook_profile_locked('{"is_profile_locked":false}')
+
+    multi_html = r'''
+    <script>
+      {"hd_profile_pic_url_info":{"url":"https:\/\/scontent.cdninstagram.com\/native_ig.jpg"}}
+      {"icon_img":"https:\/\/styles.redditmedia.com\/avatar_r.png","banner_img":"https:\/\/styles.redditmedia.com\/banner_r.png"}
+      {"profile_banner_url":"https:\/\/pbs.twimg.com\/profile_banners\/123\/456"}
+      {"profile_image_url_https":"https:\/\/pbs.twimg.com\/profile_images\/99\/pic_400x400.jpg"}
+    </script>
+    <meta property="og:image" content="https://yt3.googleusercontent.com/ch=s176-c-k-c0x00ffffff-no-rj" />
+    '''
+    cands = extract_public_profile_candidates(multi_html)
+    urls = [c.url for c in cands]
+    assert "https://scontent.cdninstagram.com/native_ig.jpg" in urls
+    assert "https://styles.redditmedia.com/avatar_r.png" in urls
+    assert any(c.is_cover and "banner_r.png" in c.url for c in cands)
+    assert any(c.is_cover and "1500x500" in c.url for c in cands)
+    assert "https://pbs.twimg.com/profile_images/99/pic.jpg" in urls
+    assert "https://yt3.googleusercontent.com/ch=s2048-c-k-c0x00ffffff-no-rj" in urls
+
+    fb_php = r'{"profile_photo":{"url":"\/photo.php?fbid=99887766"}}'
+    assert extract_facebook_photo_viewer_links(fb_php) == [
+        ("https://www.facebook.com/photo.php?fbid=99887766", False)
+    ]
+    fw_html = r'{"full_width_image":{"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-6\/fw.jpg"}}'
+    assert extract_photo_viewer_images(fw_html)[0].url == "https://scontent.xx.fbcdn.net/v/t39.30808-6/fw.jpg"
+

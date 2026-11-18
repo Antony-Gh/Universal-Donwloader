@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<PlaylistVideoCardModel> _playlistCards = new();
     private CancellationTokenSource? _queueCts;
     private CancellationTokenSource? _playlistQualityCts;
+    private CancellationTokenSource? _streamPreviewCts;
     private bool _isQueueRunning;
     private readonly DispatcherTimer _logBatchTimer;
     private long _lastProgressUpdateMs = 0;
@@ -203,6 +204,7 @@ public partial class MainWindow : Window
         OpenDirText.Text = T("Open");
         BrowserCookiesHeader.Text = T("BrowserCookies");
         CookiesFileHeader.Text = T("CookiesFile");
+        WebLoginButton.Content = T("WebLogin");
         PasteCookiesButton.Content = T("PasteCookies");
 
         EmbedMetadataCheck.Content = T("EmbedMetadata");
@@ -268,6 +270,21 @@ public partial class MainWindow : Window
     {
         var path = CookiesFileBox.Text?.Trim();
         return string.IsNullOrWhiteSpace(path) ? null : path;
+    }
+
+    private async void WebLoginButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new BrowserLoginWindow(UrlTextBox.Text?.Trim());
+        var saved = await dialog.ShowDialog<bool>(this);
+        if (saved && !string.IsNullOrWhiteSpace(dialog.SavedCookiesPath))
+        {
+            CookiesFileBox.Text = dialog.SavedCookiesPath;
+            CookiesBrowserComboBox.SelectedIndex = 0; // Use synced cookies.txt directly
+            SaveUserSettings();
+            var domainLabel = string.IsNullOrWhiteSpace(dialog.SyncedDomain) ? "site" : dialog.SyncedDomain;
+            OnRawOutputReceived(this, $"[Complete] Web Login synced {dialog.SavedCookieCount} cookie(s) for {domainLabel} to {dialog.SavedCookiesPath}");
+            GlobalStatusText.Text = $"Synced {dialog.SavedCookieCount} cookie(s) for {domainLabel} — ready to inspect or download.";
+        }
     }
 
     private async void PasteCookiesButton_Click(object? sender, RoutedEventArgs e)
@@ -988,25 +1005,65 @@ public partial class MainWindow : Window
         RefreshStreamsButtonText.Text = "Inspecting...";
 
         MainTabControl.SelectedItem = StreamsTab;
+        StreamsNoticeBanner.IsVisible = false;
+        StreamsNoticeText.Text = string.Empty;
         StreamsLoadingLabel.Text = "Inspecting available video & audio streams...";
         StreamsLoadingPanel.IsVisible = true;
         StreamsListBox.IsVisible = false;
         StreamsStatusHeader.Text = $"Inspecting available streams for: {url}...";
         BeginGlobalActivity("Inspecting stream formats...");
 
+        _streamPreviewCts?.Cancel();
+        _streamPreviewCts?.Dispose();
+        _streamPreviewCts = new CancellationTokenSource();
+        var previewToken = _streamPreviewCts.Token;
+
         try
         {
             var cookiesFile = GetSelectedCookiesFile();
             var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
-            var formats = await _client.GetFormatsAsync(url, cookiesFromBrowser: cookiesBrowser, cookiesFile: cookiesFile);
-            StreamsListBox.ItemsSource = formats;
+            var inspection = await _client.InspectFormatsDetailedAsync(url, cookiesFromBrowser: cookiesBrowser, cookiesFile: cookiesFile);
+            var formats = inspection.Formats;
+            var streamVms = formats.Select(f => new StreamItemViewModel(f)).ToList();
+            StreamsListBox.ItemsSource = streamVms;
+
             var isImageList = formats.Count > 0 && formats.All(f => f.IsImage);
             var hasCookies = !string.IsNullOrWhiteSpace(cookiesFile) || !string.IsNullOrWhiteSpace(cookiesBrowser);
             var hasEnhancedOnly = isImageList && formats.Any(f => f.FormatId.StartsWith("img_hd_", StringComparison.OrdinalIgnoreCase));
 
+            if (!string.IsNullOrWhiteSpace(inspection.ProfileNotice))
+            {
+                StreamsNoticeText.Text = inspection.ProfileNotice;
+                StreamsNoticeBanner.IsVisible = true;
+            }
+            else if (inspection.ProfileLocked)
+            {
+                StreamsNoticeText.Text = "Profile Locked by Platform — Only small identification avatars are exposed to non-friends. Use the HD Enhanced rendition above for the sharpest available output.";
+                StreamsNoticeBanner.IsVisible = true;
+            }
+
+            // Sync Download tab preview card qualities & lock badge with refreshed stream list
+            if (MetadataCard.IsVisible)
+            {
+                ProfileLockedBadge.IsVisible = inspection.ProfileLocked;
+                var syncedQualities = isImageList
+                    ? formats.Where(f => !string.IsNullOrWhiteSpace(f.Resolution)).Select(f => f.Resolution).Distinct().ToList()
+                    : FormatInfoModel.ExtractSupportedQualities(formats);
+                if (syncedQualities.Count > 0)
+                {
+                    SingleVideoQualitiesItems.ItemsSource = syncedQualities;
+                    SingleVideoQualitiesPanel.IsVisible = true;
+                }
+            }
+
+            if (isImageList)
+            {
+                _ = LoadStreamPreviewsAsync(streamVms, previewToken);
+            }
+
             StreamsStatusHeader.Text = isImageList
                 ? (hasEnhancedOnly && !hasCookies
-                    ? $"Found {formats.Count} picture(s) — Tip: set Browser Cookies or cookies.txt for native HD on authorized profiles."
+                    ? $"Found {formats.Count} picture(s) — Tip: use Web Login or cookies.txt for native HD on authorized profiles."
                     : $"Found {formats.Count} verified picture(s) for: {url}")
                 : $"Found {formats.Count} streams for: {url}";
             GlobalStatusText.Text = isImageList
@@ -1034,9 +1091,58 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task LoadStreamPreviewsAsync(List<StreamItemViewModel> items, CancellationToken token)
+    {
+        var imageItems = items.Where(i => i.IsImage && !string.IsNullOrWhiteSpace(i.Format.DirectUrl)).ToList();
+        if (imageItems.Count == 0) return;
+
+        using var semaphore = new SemaphoreSlim(4, 4);
+        var tasks = imageItems.Select(async item =>
+        {
+            await semaphore.WaitAsync(token);
+            try
+            {
+                if (token.IsCancellationRequested) return;
+                var bytes = await _httpClient.GetByteArrayAsync(item.Format.DirectUrl!, token);
+                if (token.IsCancellationRequested || bytes == null || bytes.Length == 0) return;
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        using var ms = new MemoryStream(bytes);
+                        item.PreviewBitmap = new Bitmap(ms);
+                    }
+                    catch { }
+                    finally
+                    {
+                        item.IsLoadingPreview = false;
+                    }
+                });
+            }
+            catch
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => item.IsLoadingPreview = false);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        catch (OperationCanceledException) { }
+    }
+
     private async void DownloadStream_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.DataContext is FormatInfoModel format)
+        var format = sender is Button btn
+            ? (btn.DataContext is StreamItemViewModel vm ? vm.Format : btn.DataContext as FormatInfoModel)
+            : null;
+        if (format != null)
         {
             var url = UrlTextBox.Text?.Trim();
             if (string.IsNullOrWhiteSpace(url)) return;
@@ -1218,6 +1324,7 @@ public partial class MainWindow : Window
         ClearPlaylistCards();
         SingleVideoQualitiesPanel.IsVisible = false;
         SingleVideoQualitiesItems.ItemsSource = null;
+        ProfileLockedBadge.IsVisible = false;
         PlatformBadge.Text = platformDisplay;
         VideoTitleLabel.Text = "Fetching media details...";
         UploaderLabel.Text = uri.Host;
@@ -1255,6 +1362,8 @@ public partial class MainWindow : Window
                 {
                     PlatformBadge.Text = meta.Platform.ToUpperInvariant();
                 }
+
+                ProfileLockedBadge.IsVisible = meta.ProfileLocked;
 
                 if (!string.IsNullOrWhiteSpace(meta.DurationFormatted))
                 {

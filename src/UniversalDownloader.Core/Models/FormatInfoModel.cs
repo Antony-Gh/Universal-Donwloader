@@ -87,6 +87,13 @@ public record FormatInfoModel
     }
 }
 
+public record FormatInspectionResult
+{
+    public List<FormatInfoModel> Formats { get; init; } = new();
+    public bool ProfileLocked { get; init; }
+    public string? ProfileNotice { get; init; }
+}
+
 public record HistoryRecordModel
 {
     [JsonPropertyName("id")]

@@ -234,5 +234,26 @@ RunTest("NetscapeCookieHelper converts Cookie headers and merges per domain", ()
     }
 });
 
+RunTest("BrowserLoginSession converts CDP cookies JSON with #HttpOnly_ and domain filtering", () =>
+{
+    var cdpJson = """
+    {
+      "id": 1,
+      "result": {
+        "cookies": [
+          {"name":"xs","value":"42%3Asecret","domain":".facebook.com","path":"/","expires":2147483647,"httpOnly":true,"secure":true},
+          {"name":"c_user","value":"100088","domain":".facebook.com","path":"/","expires":2147483647,"httpOnly":false,"secure":true},
+          {"name":"NID","value":"other","domain":".google.com","path":"/","expires":2147483647,"httpOnly":true,"secure":true}
+        ]
+      }
+    }
+    """;
+    var lines = BrowserLoginSession.ConvertCdpCookiesJsonToNetscapeLines(cdpJson, "facebook.com");
+    AssertEqual(2, lines.Count);
+    AssertTrue(lines.Any(l => l.StartsWith("#HttpOnly_.facebook.com\tTRUE\t/\tTRUE\t") && l.EndsWith("\txs\t42%3Asecret")), "HttpOnly xs preserved verbatim");
+    AssertTrue(lines.Any(l => l.StartsWith(".facebook.com\tTRUE\t/\tTRUE\t") && l.EndsWith("\tc_user\t100088")), "c_user preserved");
+    AssertTrue(lines.All(l => !l.Contains("google.com")), "non-matching domain filtered out");
+});
+
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

@@ -21,6 +21,11 @@ from universal_downloader.console import info
 from universal_downloader.exceptions import ExtractionError, ProfileError
 from universal_downloader.extractor import YTDLPExtractor
 from universal_downloader.models import AppConfig, Platform
+from universal_downloader.upscaler import (
+    compute_hd_target_dimensions,
+    enhance_image_bytes_to_hd,
+    find_local_onnx_upscaler,
+)
 from universal_downloader.utils.fs import (
     ensure_inside_directory,
     platform_directory,
@@ -307,17 +312,23 @@ def upgrade_public_avatar_url(url: str) -> list[str]:
     variants: list[str] = []
     lowered = url.lower()
 
-    # X / Twitter: replace _normal (48x48) or _bigger (73x73) with original & _400x400
+    # X / Twitter: replace _normal (48x48), _bigger (73x73), _200x200, or _400x400 with original full size
     if "pbs.twimg.com/profile_images/" in lowered:
-        for suffix in ("_normal.", "_bigger.", "_mini.", "_200x200."):
+        for suffix in ("_normal.", "_bigger.", "_mini.", "_200x200.", "_400x400."):
             if suffix in url:
                 variants.append(url.replace(suffix, "."))
-                variants.append(url.replace(suffix, "_400x400."))
+                if suffix != "_400x400.":
+                    variants.append(url.replace(suffix, "_400x400."))
                 break
 
-    # YouTube / Google CDN: upgrade =s88 / =s176 / =s240 avatars to =s1024
+    # YouTube / Google CDN: upgrade =s88 / =s176 / =s240 / =s480 avatars to =s1024 and =s2048
     if ("yt3.googleusercontent.com" in lowered or "yt3.ggpht.com" in lowered) and re.search(r"=s\d{2,3}(?=[-&]|$)", url):
+        variants.append(re.sub(r"=s\d{2,3}(?=[-&]|$)", "=s2048", url))
         variants.append(re.sub(r"=s\d{2,3}(?=[-&]|$)", "=s1024", url))
+
+    # X / Twitter banners: prefer /1500x500 full banner rendition
+    if "pbs.twimg.com/profile_banners/" in lowered and not re.search(r"/\d{3,4}x\d{3,4}$", url):
+        variants.append(url.rstrip("/") + "/1500x500")
 
     variants.append(url)
     return list(dict.fromkeys(variants))
@@ -433,75 +444,26 @@ class ProfileImageCandidate:
         }
 
 
-def compute_hd_target_dimensions(width: int, height: int, target_min_side: int = 960, max_scale: float = 4.0) -> tuple[int, int]:
-    """Calculate aspect-preserving HD target dimensions (up to 4x, aiming for >=960px on the longest side)."""
-    longest = max(width, height)
-    if longest <= 0 or longest >= target_min_side:
-        return width, height
-    scale = min(max_scale, target_min_side / float(longest))
-    return max(1, int(round(width * scale))), max(1, int(round(height * scale)))
+@dataclass
+class ProfileInspectionResult:
+    """Structured result of profile picture inspection including platform lock notices."""
+    images: list[ProfileImageCandidate]
+    profile_locked: bool = False
+    profile_notice: Optional[str] = None
+    title: Optional[str] = None
 
 
-def enhance_image_bytes_to_hd(
-    data: bytes,
-    target_min_side: int = 960,
-    output_format: str = "PNG",
-) -> tuple[bytes, int, int, str]:
-    """
-    Enhance a low-resolution profile image to crisp HD using progressive multi-step Lanczos3
-    resampling, light deblocking, and edge-preserving unsharp masking (thresholded so smooth
-    regions stay clean without noise or halos).
-    Returns (enhanced_bytes, new_width, new_height, ext_without_dot).
-    """
-    from PIL import Image, ImageEnhance, ImageFilter
-
-    with Image.open(io.BytesIO(data)) as raw_img:
-        has_alpha = raw_img.mode in ("RGBA", "LA") or (raw_img.mode == "P" and "transparency" in raw_img.info)
-        img = raw_img.convert("RGBA" if has_alpha else "RGB")
-        orig_w, orig_h = img.size
-        target_w, target_h = compute_hd_target_dimensions(orig_w, orig_h, target_min_side=target_min_side)
-
-        if target_w <= orig_w and target_h <= orig_h:
-            buf = io.BytesIO()
-            if has_alpha or output_format.upper() == "PNG":
-                img.save(buf, format="PNG", optimize=True)
-                return buf.getvalue(), orig_w, orig_h, "png"
-            img.save(buf, format="JPEG", quality=96, subsampling=0)
-            return buf.getvalue(), orig_w, orig_h, "jpg"
-
-        # 1. Light JPEG deblocking blend before upscaling (keeps details intact while softening 8x8 blocks)
-        smooth_base = img.filter(ImageFilter.SMOOTH)
-        work = Image.blend(img, smooth_base, alpha=0.14)
-
-        # 2. Progressive multi-step Lanczos3 upscaling (max 1.5x per pass prevents stair-stepping)
-        cur_w, cur_h = orig_w, orig_h
-        resampler = getattr(Image, "Resampling", Image).LANCZOS
-        while cur_w < target_w or cur_h < target_h:
-            next_w = min(target_w, max(cur_w + 1, int(round(cur_w * 1.5))))
-            next_h = min(target_h, max(cur_h + 1, int(round(cur_h * 1.5))))
-            work = work.resize((next_w, next_h), resampler)
-            cur_w, cur_h = next_w, next_h
-
-        # 3. Edge-preserving Unsharp Mask (threshold=4 sharpens real contours without amplifying flat-area noise)
-        if has_alpha:
-            rgb_part = work.convert("RGB")
-            alpha_ch = work.getchannel("A")
-            rgb_part = rgb_part.filter(ImageFilter.UnsharpMask(radius=1.35, percent=115, threshold=4))
-            rgb_part = ImageEnhance.Contrast(rgb_part).enhance(1.04)
-            rgb_part = ImageEnhance.Sharpness(rgb_part).enhance(1.06)
-            work = rgb_part.convert("RGBA")
-            work.putalpha(alpha_ch)
-        else:
-            work = work.filter(ImageFilter.UnsharpMask(radius=1.35, percent=115, threshold=4))
-            work = ImageEnhance.Contrast(work).enhance(1.04)
-            work = ImageEnhance.Sharpness(work).enhance(1.06)
-
-        buf = io.BytesIO()
-        if has_alpha or output_format.upper() == "PNG":
-            work.save(buf, format="PNG", optimize=True)
-            return buf.getvalue(), cur_w, cur_h, "png"
-        work.save(buf, format="JPEG", quality=96, subsampling=0)
-        return buf.getvalue(), cur_w, cur_h, "jpg"
+def detect_facebook_profile_locked(html_text: str) -> bool:
+    """Detect when Facebook's standard web HTML explicitly indicates Profile Lock is active."""
+    if not html_text:
+        return False
+    lock_patterns = (
+        re.compile(r'"is_profile_locked"\s*:\s*true', re.I),
+        re.compile(r'"locked_profile_status"\s*:\s*"LOCKED"', re.I),
+        re.compile(r'"profile_lock_status"\s*:\s*"[^"]*LOCKED', re.I),
+        re.compile(r'\blocked\s+(?:his|her|their|your)\s+profile\b', re.I),
+    )
+    return any(p.search(html_text) for p in lock_patterns)
 
 
 def extract_public_profile_candidates(html_text: str, base_url: str = "") -> list[ProfileImageCandidate]:
@@ -530,9 +492,11 @@ def extract_public_profile_candidates(html_text: str, base_url: str = "") -> lis
                     ext=image_extension_from_url(variant).lstrip("."),
                 )
 
-    # 1. Explicit owner-scoped SSR profile avatar fields
+    # 1. Explicit owner-scoped SSR profile avatar fields across platforms
     owner_avatar_patterns: list[tuple[re.Pattern[str], str, bool]] = [
-        # Instagram / Threads
+        # Instagram / Threads (both public and cookie-authorized HD renditions)
+        (re.compile(r'"hd_profile_pic_url_info"\s*:\s*\{[^\r\n]{0,250}?"url"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Native HD)", False),
+        (re.compile(r'"hd_profile_pic_versions"\s*:\s*\[[^\r\n]{0,800}?"url"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (HD)", False),
         (re.compile(r'"profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (HD)", False),
         (re.compile(r'"profile_pic_url"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
         # Facebook owner profile avatar fields (strictly owner-scoped so logged-in sidebar/chat avatars are never picked)
@@ -548,10 +512,13 @@ def extract_public_profile_candidates(html_text: str, base_url: str = "") -> lis
         (re.compile(r'"avatarMedium"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Medium)", False),
         # X / Twitter
         (re.compile(r'"profile_image_url_https"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        # Reddit
+        (re.compile(r'"(?:icon_img|snoovatar_img)"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
         # Cover / Banner photos (explicitly marked as cover so avatars always sort first)
         (re.compile(r'"cover_photo"\s*:\s*\{[^\r\n]{0,600}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Cover Photo", True),
         (re.compile(r'"coverPhoto"\s*:\s*\{[^\r\n]{0,600}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Cover Photo", True),
         (re.compile(r'"profile_banner_url"\s*:\s*"(https?:[^"]+)"', re.I), "Cover Banner", True),
+        (re.compile(r'"banner_img"\s*:\s*"(https?:[^"]+)"', re.I), "Cover Banner", True),
     ]
     for pattern, label, is_cover in owner_avatar_patterns:
         for match in pattern.finditer(html_text):
@@ -625,10 +592,10 @@ def extract_facebook_photo_viewer_links(html_text: str) -> list[tuple[str, bool]
             links.append((url, is_cover))
 
     url_patterns = [
-        (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"', re.I), False),
-        (re.compile(r'"profilePhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"', re.I), False),
-        (re.compile(r'"cover_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"', re.I), True),
-        (re.compile(r'"coverPhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"', re.I), True),
+        (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo(?:\.php)?[^"]+)"', re.I), False),
+        (re.compile(r'"profilePhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo(?:\.php)?[^"]+)"', re.I), False),
+        (re.compile(r'"cover_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo(?:\.php)?[^"]+)"', re.I), True),
+        (re.compile(r'"coverPhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo(?:\.php)?[^"]+)"', re.I), True),
     ]
     for pattern, is_cover in url_patterns:
         for match in pattern.finditer(html_text):
@@ -658,6 +625,7 @@ def extract_photo_viewer_images(html_text: str, is_cover: bool = False) -> list[
 
     patterns = [
         re.compile(r'"viewer_image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
+        re.compile(r'"full_width_image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
         re.compile(r'"currMedia"\s*:\s*\{[^\r\n]{0,600}?"image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
         re.compile(r'"photo_image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
         re.compile(r'"image"\s*:\s*\{[^\r\n]{0,200}?"height"\s*:\s*\d{3,4}[^\r\n]{0,200}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
@@ -782,20 +750,70 @@ def probe_profile_image(
     )
 
 
-def inspect_profile_images(
+def _fetch_bluesky_public_profile(
+    profile_url: str,
+    timeout: int,
+) -> tuple[list[ProfileImageCandidate], Optional[str]]:
+    """Query Bluesky's official public AppView API for full-resolution avatar & banner."""
+    actor = extract_username_from_profile_url(profile_url, Platform.BLUESKY)
+    if not actor:
+        return [], None
+    api_url = f"https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor={urllib.parse.quote(actor)}"
+    try:
+        req = urllib.request.Request(
+            api_url,
+            headers={"Accept": "application/json", "User-Agent": "UniversalMediaDownloader/2.6"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=min(timeout, 12)) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except Exception:
+        return [], None
+
+    found: list[ProfileImageCandidate] = []
+    if isinstance(data, dict):
+        avatar = data.get("avatar")
+        banner = data.get("banner")
+        display_name = data.get("displayName") or data.get("handle")
+        if isinstance(avatar, str) and avatar.startswith(("http://", "https://")):
+            found.append(
+                ProfileImageCandidate(
+                    url=avatar,
+                    label="Profile Picture (Native HD)",
+                    is_cover=False,
+                    ext=image_extension_from_url(avatar).lstrip("."),
+                )
+            )
+        if isinstance(banner, str) and banner.startswith(("http://", "https://")):
+            found.append(
+                ProfileImageCandidate(
+                    url=banner,
+                    label="Cover Banner (Native HD)",
+                    is_cover=True,
+                    ext=image_extension_from_url(banner).lstrip("."),
+                )
+            )
+        return found, display_name if isinstance(display_name, str) else None
+    return [], None
+
+
+def inspect_profile_images_detailed(
     profile_url: str,
     platform: Platform,
     config: AppConfig,
     extractor: Optional[YTDLPExtractor] = None,
-) -> list[ProfileImageCandidate]:
+) -> ProfileInspectionResult:
     """
     Discover, verify, and measure all publicly exposed (or cookie-authorized) images
-    for a profile URL, sorted by Profile Pictures first and highest real pixel resolution first.
+    for a profile URL, returning verified images plus platform lock status & title.
     """
     target = detect_target(profile_url, timeout=config.timeout)
     cookie_jar = load_cookie_jar(config)
     raw_candidates: list[ProfileImageCandidate] = []
     seen_urls: set[str] = set()
+    profile_locked = False
+    resolved_title: Optional[str] = None
+    had_profile_viewer_hd = False
 
     def add_raw(item: ProfileImageCandidate) -> None:
         if item.url not in seen_urls and not is_generic_site_logo(item.url):
@@ -812,8 +830,23 @@ def inspect_profile_images(
     }
 
     def collect_from_html() -> None:
+        nonlocal profile_locked, resolved_title, had_profile_viewer_hd
+
+        if platform == Platform.BLUESKY:
+            bsky_imgs, bsky_title = _fetch_bluesky_public_profile(target.normalized_url, config.timeout)
+            if bsky_title:
+                resolved_title = bsky_title
+            for item in bsky_imgs:
+                add_raw(item)
+
         try:
             page = fetch_public_html(target.normalized_url, config.timeout, cookie_jar=cookie_jar)
+            if not resolved_title:
+                resolved_title = extract_profile_title(page)
+
+            if platform == Platform.FACEBOOK and detect_facebook_profile_locked(page):
+                profile_locked = True
+
             for item in extract_public_profile_candidates(page, base_url=target.normalized_url):
                 add_raw(item)
 
@@ -821,10 +854,12 @@ def inspect_profile_images(
             # follow authorized photo viewer pages (facebook.com/photo/?fbid=...) for native full-res images.
             if platform == Platform.FACEBOOK:
                 viewer_links = extract_facebook_photo_viewer_links(page)
-                for viewer_url, is_cover in viewer_links[:3]:
+                for viewer_url, is_cover in viewer_links[:4]:
                     try:
                         viewer_html = fetch_public_html(viewer_url, min(config.timeout, 15), cookie_jar=cookie_jar)
                         for v_item in extract_photo_viewer_images(viewer_html, is_cover=is_cover):
+                            if not is_cover:
+                                had_profile_viewer_hd = True
                             add_raw(v_item)
                     except Exception as v_exc:
                         LOGGER.debug("Photo viewer lookup skipped for %s: %s", viewer_url, v_exc)
@@ -832,6 +867,7 @@ def inspect_profile_images(
             LOGGER.info("Profile HTML lookup failed: %s", exc)
 
     def collect_from_ytdlp() -> None:
+        nonlocal resolved_title
         if extractor is None:
             return
         try:
@@ -840,6 +876,10 @@ def inspect_profile_images(
                 download=False,
                 extra={"skip_download": True, "extract_flat": True},
             )
+            if not resolved_title and isinstance(extracted, dict):
+                t = extracted.get("uploader") or extracted.get("channel") or extracted.get("title")
+                if isinstance(t, str) and t.strip():
+                    resolved_title = t.strip()
             for url in extract_thumbnail_candidates(extracted):
                 for variant in upgrade_public_avatar_url(url):
                     add_raw(
@@ -861,7 +901,17 @@ def inspect_profile_images(
         collect_from_html()
 
     if not raw_candidates:
-        return []
+        notice = (
+            "Profile is locked by the platform; no high-resolution images are publicly accessible."
+            if profile_locked
+            else None
+        )
+        return ProfileInspectionResult(
+            images=[],
+            profile_locked=profile_locked,
+            profile_notice=notice,
+            title=resolved_title,
+        )
 
     # Prioritize authorized Native HD viewer candidates and highest estimated resolution before probing
     raw_candidates.sort(
@@ -900,14 +950,16 @@ def inspect_profile_images(
     # If the highest-resolution owner profile picture is below HD (< 720px),
     # offer a detail-preserving HD Enhanced rendition at the top of Inspect Streams.
     best_avatar = next((c for c in deduped if not c.is_cover and c.width and c.height), None)
+    onnx_available = find_local_onnx_upscaler() is not None
     if best_avatar is not None and best_avatar.width and best_avatar.height and max(best_avatar.width, best_avatar.height) < 720:
         hd_w, hd_h = compute_hd_target_dimensions(best_avatar.width, best_avatar.height)
         if hd_w > best_avatar.width or hd_h > best_avatar.height:
+            engine_tag = "AI Super-Res" if onnx_available else "HD Enhanced"
             deduped.insert(
                 0,
                 ProfileImageCandidate(
                     url=best_avatar.url,
-                    label=f"Profile Picture (HD Enhanced from {best_avatar.width}x{best_avatar.height})",
+                    label=f"Profile Picture ({engine_tag} from {best_avatar.width}x{best_avatar.height})",
                     is_cover=False,
                     width=hd_w,
                     height=hd_h,
@@ -918,7 +970,38 @@ def inspect_profile_images(
                 ),
             )
 
-    return deduped
+    profile_notice: Optional[str] = None
+    if profile_locked and not had_profile_viewer_hd:
+        profile_notice = (
+            "Profile Locked by Facebook — Only small identification avatars are exposed to non-friends. "
+            "Use the HD Enhanced rendition above for the sharpest available output."
+        )
+        LOGGER.info("Profile lock detected on %s; platform restricts non-friend avatar resolution.", target.normalized_url)
+
+    return ProfileInspectionResult(
+        images=deduped,
+        profile_locked=profile_locked and not had_profile_viewer_hd,
+        profile_notice=profile_notice,
+        title=resolved_title,
+    )
+
+
+def inspect_profile_images(
+    profile_url: str,
+    platform: Platform,
+    config: AppConfig,
+    extractor: Optional[YTDLPExtractor] = None,
+) -> list[ProfileImageCandidate]:
+    """
+    Discover, verify, and measure all publicly exposed (or cookie-authorized) images
+    for a profile URL, sorted by Profile Pictures first and highest real pixel resolution first.
+    """
+    return inspect_profile_images_detailed(
+        profile_url,
+        platform=platform,
+        config=config,
+        extractor=extractor,
+    ).images
 
 
 def download_direct_profile_image(

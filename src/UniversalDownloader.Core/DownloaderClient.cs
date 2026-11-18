@@ -227,6 +227,19 @@ public class DownloaderClient
         string? cookiesFromBrowser = null,
         string? cookiesFile = null)
     {
+        var result = await InspectFormatsDetailedAsync(url, cancellationToken, cookiesFromBrowser, cookiesFile);
+        return result.Formats;
+    }
+
+    /// <summary>
+    /// Inspect available formats and profile lock notices for a given URL without downloading.
+    /// </summary>
+    public async Task<FormatInspectionResult> InspectFormatsDetailedAsync(
+        string url,
+        CancellationToken cancellationToken = default,
+        string? cookiesFromBrowser = null,
+        string? cookiesFile = null)
+    {
         var arguments = new List<string>();
         if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
         if (!string.IsNullOrWhiteSpace(cookiesFromBrowser))
@@ -248,17 +261,27 @@ public class DownloaderClient
         try
         {
             using var doc = JsonDocument.Parse(output);
-            if (doc.RootElement.TryGetProperty("formats", out var formatsArray))
+            var root = doc.RootElement;
+            var formats = root.TryGetProperty("formats", out var formatsArray)
+                ? JsonSerializer.Deserialize(formatsArray.GetRawText(), DownloaderJsonContext.Default.ListFormatInfoModel) ?? new()
+                : new List<FormatInfoModel>();
+
+            var profileLocked = root.TryGetProperty("profile_locked", out var lockedProp) && lockedProp.ValueKind == JsonValueKind.True;
+            var profileNotice = root.TryGetProperty("profile_notice", out var noticeProp) && noticeProp.ValueKind == JsonValueKind.String
+                ? noticeProp.GetString()
+                : null;
+
+            return new FormatInspectionResult
             {
-                return JsonSerializer.Deserialize(formatsArray.GetRawText(), DownloaderJsonContext.Default.ListFormatInfoModel) ?? new();
-            }
+                Formats = formats,
+                ProfileLocked = profileLocked,
+                ProfileNotice = profileNotice,
+            };
         }
         catch (JsonException ex)
         {
             throw new Exception($"Failed to parse formats JSON: {ex.Message}\nOutput: {output}");
         }
-
-        return new();
     }
 
     /// <summary>

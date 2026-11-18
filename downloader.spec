@@ -37,6 +37,7 @@ hidden_imports = [
     "universal_downloader.formats",
     "universal_downloader.models",
     "universal_downloader.profile",
+    "universal_downloader.upscaler",
     "universal_downloader.progress",
     "universal_downloader.console",
     "universal_downloader.logging_utils",
