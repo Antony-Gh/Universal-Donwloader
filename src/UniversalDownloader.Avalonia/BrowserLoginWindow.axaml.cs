@@ -17,14 +17,22 @@ public partial class BrowserLoginWindow : Window
     {
         InitializeComponent();
         var detected = BrowserLoginSession.FindInstalledChromiumBrowser();
+        var hasSaved = BrowserLoginSession.HasSavedLoginProfile();
         if (detected != null)
         {
             BrowserDetectedText.Text = $"{detected.Name} (ready)";
+            if (hasSaved)
+            {
+                SavedProfileBadge.IsVisible = true;
+                QuickResyncButton.IsVisible = true;
+                StatusText.Text = "Saved login profile detected — click 'Quick Re-Sync (Saved Login)' to refresh cookies instantly without signing in again.";
+            }
         }
         else
         {
             BrowserDetectedText.Text = "No Chrome / Edge / Brave detected";
             LaunchBrowserButton.IsEnabled = false;
+            QuickResyncButton.IsVisible = false;
             StatusText.Text = "Install Google Chrome, Microsoft Edge, or Brave to use Web Login, or use Paste Cookies instead.";
         }
     }
@@ -55,12 +63,12 @@ public partial class BrowserLoginWindow : Window
     {
         return SiteComboBox.SelectedIndex switch
         {
-            0 => ("https://www.facebook.com/login/", "facebook.com"),
-            1 => ("https://www.instagram.com/accounts/login/", "instagram.com"),
+            0 => ("https://www.facebook.com/", "facebook.com"),
+            1 => ("https://www.instagram.com/", "instagram.com"),
             2 => ("https://www.youtube.com/", "youtube.com"),
-            3 => ("https://www.tiktok.com/login", "tiktok.com"),
-            4 => ("https://x.com/i/flow/login", "x.com"),
-            5 => ("https://www.reddit.com/login/", "reddit.com"),
+            3 => ("https://www.tiktok.com/", "tiktok.com"),
+            4 => ("https://x.com/", "x.com"),
+            5 => ("https://www.reddit.com/", "reddit.com"),
             _ => ParseCustomSite(CustomUrlBox.Text?.Trim() ?? string.Empty),
         };
     }
@@ -73,6 +81,37 @@ public partial class BrowserLoginWindow : Window
         return (url, host);
     }
 
+    private async void QuickResyncButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var (_, domain) = GetSelectedSite();
+        if (string.IsNullOrWhiteSpace(domain))
+        {
+            StatusText.Text = "Please choose a platform or enter a valid URL first.";
+            return;
+        }
+
+        QuickResyncButton.IsEnabled = false;
+        LaunchBrowserButton.IsEnabled = false;
+        SyncCookiesButton.IsEnabled = false;
+        StatusText.Text = $"Silently refreshing saved cookies for {domain}...";
+
+        try
+        {
+            var destPath = NetscapeCookieHelper.GetDefaultManagedCookiesPath();
+            var count = await _session.QuickResyncSavedSessionAsync(destPath, domain);
+            SavedCookiesPath = destPath;
+            SavedCookieCount = count;
+            SyncedDomain = domain;
+            Close(true);
+        }
+        catch (Exception ex)
+        {
+            QuickResyncButton.IsEnabled = true;
+            LaunchBrowserButton.IsEnabled = true;
+            StatusText.Text = $"{ex.Message} (If you haven't signed in to {domain} in Web Login yet, click 'Open Browser & Sign In' once.)";
+        }
+    }
+
     private async void LaunchBrowserButton_Click(object? sender, RoutedEventArgs e)
     {
         var (loginUrl, domain) = GetSelectedSite();
@@ -82,6 +121,7 @@ public partial class BrowserLoginWindow : Window
             return;
         }
 
+        QuickResyncButton.IsEnabled = false;
         LaunchBrowserButton.IsEnabled = false;
         SyncCookiesButton.IsEnabled = false;
         StatusText.Text = $"Opening browser window for {domain}...";
@@ -91,10 +131,11 @@ public partial class BrowserLoginWindow : Window
             await _session.StartAsync(loginUrl);
             SyncCookiesButton.IsEnabled = true;
             LaunchBrowserButton.IsEnabled = true;
-            StatusText.Text = $"Browser opened for {domain}. Sign in to your account, then click 'Sync & Apply Cookies'.";
+            StatusText.Text = $"Browser opened for {domain}. If not already signed in, log in once, then click 'Sync & Apply Cookies'.";
         }
         catch (Exception ex)
         {
+            QuickResyncButton.IsEnabled = true;
             LaunchBrowserButton.IsEnabled = true;
             StatusText.Text = ex.Message;
         }
@@ -103,31 +144,32 @@ public partial class BrowserLoginWindow : Window
     private async void SyncCookiesButton_Click(object? sender, RoutedEventArgs e)
     {
         var (_, domain) = GetSelectedSite();
+        QuickResyncButton.IsEnabled = false;
         SyncCookiesButton.IsEnabled = false;
         LaunchBrowserButton.IsEnabled = false;
-        StatusText.Text = $"Syncing cookies for {domain}...";
+        StatusText.Text = $"Syncing cookies & saving session cleanly for {domain}...";
 
         try
         {
             var destPath = NetscapeCookieHelper.GetDefaultManagedCookiesPath();
-            var count = await _session.SyncCookiesToFileAsync(destPath, domain);
+            var count = await _session.SyncCookiesToFileAsync(destPath, domain, closeAfterSync: true);
             SavedCookiesPath = destPath;
             SavedCookieCount = count;
             SyncedDomain = domain;
-            _session.CloseBrowser();
             Close(true);
         }
         catch (Exception ex)
         {
+            QuickResyncButton.IsEnabled = true;
             SyncCookiesButton.IsEnabled = _session.IsRunning;
             LaunchBrowserButton.IsEnabled = true;
             StatusText.Text = ex.Message;
         }
     }
 
-    private void CloseButton_Click(object? sender, RoutedEventArgs e)
+    private async void CloseButton_Click(object? sender, RoutedEventArgs e)
     {
-        _session.CloseBrowser();
+        await _session.CloseBrowserGracefullyAsync();
         Close(false);
     }
 

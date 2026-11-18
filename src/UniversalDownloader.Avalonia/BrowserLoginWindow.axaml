@@ -2,10 +2,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="UniversalDownloader.Avalonia.BrowserLoginWindow"
         Title="Web Login — Automatic Cookie Sync"
-        Width="580"
-        Height="410"
-        MinWidth="500"
-        MinHeight="370"
+        Width="610"
+        Height="455"
+        MinWidth="520"
+        MinHeight="410"
         WindowStartupLocation="CenterOwner"
         Background="#121216"
         Foreground="#F4F4F8"
@@ -13,26 +13,31 @@
     <Grid RowDefinitions="Auto,*,Auto" Margin="20">
         <!-- Header -->
         <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,14">
-            <TextBlock Text="Sign In via Browser (Automatic Cookie Sync)"
+            <TextBlock Text="Sign In via Browser (Persistent Cookie Sync)"
                        FontSize="17" FontWeight="Bold" Foreground="#F4F4F8"/>
-            <TextBlock Text="Opens a dedicated, isolated browser login window using your installed Chrome or Edge. Sign in once — your login stays remembered inside the app's own login profile so you never need to copy cookies manually."
+            <TextBlock Text="Chrome/Edge block external apps from reading your personal browser profile directly (App-Bound Encryption). Sign in once in the app's dedicated browser profile below — your login is saved cleanly to disk so future syncs take 1 click without signing in again."
                        FontSize="12" Foreground="#9CA3AF" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Body -->
         <StackPanel Grid.Row="1" Spacing="12">
-            <!-- Detected browser pill -->
+            <!-- Detected browser & saved profile status pill -->
             <Border Background="#181820" BorderBrush="#27272A" BorderThickness="1" CornerRadius="6" Padding="12,8">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="Browser Engine:" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="BrowserDetectedText" Text="Detecting installed browser..." FontSize="12" FontWeight="SemiBold" Foreground="#A7F3D0" VerticalAlignment="Center"/>
-                </StackPanel>
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="Browser Engine:" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="BrowserDetectedText" Text="Detecting installed browser..." FontSize="12" FontWeight="SemiBold" Foreground="#A7F3D0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Border x:Name="SavedProfileBadge" Grid.Column="1" IsVisible="False" Background="#064E3B" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
+                        <TextBlock Text="Saved Login Found" FontSize="11" FontWeight="SemiBold" Foreground="#6EE7B7"/>
+                    </Border>
+                </Grid>
             </Border>
 
             <!-- Platform selection -->
             <StackPanel Spacing="6">
                 <TextBlock Text="1. Choose Platform" FontSize="12" Foreground="#CBD5E1" FontWeight="SemiBold"/>
-                <Grid ColumnDefinitions="200,*">
+                <Grid ColumnDefinitions="210,*">
                     <ComboBox x:Name="SiteComboBox" Grid.Column="0" SelectedIndex="0" HorizontalAlignment="Stretch"
                               SelectionChanged="SiteComboBox_SelectionChanged">
                         <ComboBoxItem Content="Facebook (facebook.com)"/>
@@ -52,17 +57,20 @@
             <!-- Action Step Buttons -->
             <Border Background="#181820" BorderBrush="#27272A" BorderThickness="1" CornerRadius="8" Padding="14">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="2. Sign In &amp; Sync" FontSize="12" Foreground="#CBD5E1" FontWeight="SemiBold"/>
-                    <TextBlock Text="Click 'Open Browser &amp; Sign In', complete login in the popup window, then return here and click 'Sync &amp; Apply Cookies'."
+                    <TextBlock Text="2. Sign In Once or Quick Re-Sync" FontSize="12" Foreground="#CBD5E1" FontWeight="SemiBold"/>
+                    <TextBlock Text="First time: click 'Open Browser &amp; Sign In', sign in normally, then click 'Sync &amp; Apply Cookies'. Next time: just click 'Quick Re-Sync' to refresh cookies silently without re-typing your password."
                                FontSize="11" Foreground="#94A3B8" TextWrapping="Wrap"/>
-                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
-                        <Button x:Name="LaunchBrowserButton" Padding="16,9" Background="#2563EB" Foreground="White"
+                    <WrapPanel Margin="0,4,0,0">
+                        <Button x:Name="QuickResyncButton" Margin="0,0,8,6" Padding="14,9" Background="#0D9488" Foreground="White"
+                                FontWeight="Bold" Content="Quick Re-Sync (Saved Login)" IsVisible="False"
+                                Click="QuickResyncButton_Click"/>
+                        <Button x:Name="LaunchBrowserButton" Margin="0,0,8,6" Padding="14,9" Background="#2563EB" Foreground="White"
                                 FontWeight="SemiBold" Content="Open Browser &amp; Sign In"
                                 Click="LaunchBrowserButton_Click"/>
-                        <Button x:Name="SyncCookiesButton" Padding="16,9" Background="#10B981" Foreground="White"
+                        <Button x:Name="SyncCookiesButton" Margin="0,0,0,6" Padding="14,9" Background="#10B981" Foreground="White"
                                 FontWeight="Bold" Content="Sync &amp; Apply Cookies" IsEnabled="False"
                                 Click="SyncCookiesButton_Click"/>
-                    </StackPanel>
+                    </WrapPanel>
                 </StackPanel>
             </Border>
 
@@ -71,9 +79,9 @@
 
         <!-- Footer -->
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
-            <TextBlock Grid.Column="0" Text="Uses isolated app profile • Never modifies your personal Chrome data."
-                       FontSize="11" Foreground="#64748B" VerticalAlignment="Center"/>
-            <Button Grid.Column="1" Padding="14,7" Background="#27272A" Foreground="#CBD5E1"
+            <TextBlock Grid.Column="0" Text="Session saved in %LOCALAPPDATA%\UniversalDownloader\login_profile • Tip: Firefox also works directly via Browser Cookies."
+                       FontSize="11" Foreground="#64748B" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            <Button Grid.Column="1" Margin="10,0,0,0" Padding="14,7" Background="#27272A" Foreground="#CBD5E1"
                     Content="Close" Click="CloseButton_Click"/>
         </Grid>
     </Grid>

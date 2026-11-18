@@ -93,9 +93,17 @@ public sealed class BrowserLoginSession : IDisposable
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
-    public async Task StartAsync(string loginUrl, CancellationToken cancellationToken = default)
+    public static bool HasSavedLoginProfile()
     {
-        CloseBrowser();
+        var dir = GetAppLoginProfileDirectory();
+        return File.Exists(Path.Combine(dir, "Default", "Network", "Cookies"))
+            || File.Exists(Path.Combine(dir, "Default", "Cookies"))
+            || File.Exists(Path.Combine(dir, "Local State"));
+    }
+
+    public async Task StartAsync(string loginUrl, bool headless = false, CancellationToken cancellationToken = default)
+    {
+        await CloseBrowserGracefullyAsync();
 
         var browser = FindInstalledChromiumBrowser()
             ?? throw new InvalidOperationException(
@@ -109,14 +117,22 @@ public sealed class BrowserLoginSession : IDisposable
         {
             FileName = browser.ExecutablePath,
             UseShellExecute = false,
-            CreateNoWindow = false,
+            CreateNoWindow = headless,
         };
         psi.ArgumentList.Add($"--user-data-dir={profileDir}");
         psi.ArgumentList.Add($"--remote-debugging-port={_debugPort}");
         psi.ArgumentList.Add("--no-first-run");
         psi.ArgumentList.Add("--no-default-browser-check");
-        psi.ArgumentList.Add("--window-size=1024,760");
-        psi.ArgumentList.Add($"--app={loginUrl}");
+        if (headless)
+        {
+            psi.ArgumentList.Add("--headless=new");
+            psi.ArgumentList.Add("--disable-gpu");
+        }
+        else
+        {
+            psi.ArgumentList.Add("--window-size=1080,780");
+        }
+        psi.ArgumentList.Add(loginUrl);
 
         _browserProcess = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to launch {browser.Name}.");
@@ -152,9 +168,36 @@ public sealed class BrowserLoginSession : IDisposable
             $"Timed out waiting for {browser.Name} login window to initialize.");
     }
 
+    /// <summary>
+    /// Silently re-syncs fresh cookies from the already-signed-in persistent app login profile
+    /// without prompting the user to sign in again.
+    /// </summary>
+    public async Task<int> QuickResyncSavedSessionAsync(
+        string cookiesFilePath,
+        string? targetDomainFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!HasSavedLoginProfile())
+        {
+            throw new InvalidOperationException(
+                "No saved Web Login profile found yet. Click 'Open Browser & Sign In' once to sign in, and future syncs will be automatic.");
+        }
+
+        await StartAsync("about:blank", headless: true, cancellationToken: cancellationToken);
+        try
+        {
+            return await SyncCookiesToFileAsync(cookiesFilePath, targetDomainFilter, closeAfterSync: true, cancellationToken: cancellationToken);
+        }
+        finally
+        {
+            await CloseBrowserGracefullyAsync();
+        }
+    }
+
     public async Task<int> SyncCookiesToFileAsync(
         string cookiesFilePath,
         string? targetDomainFilter = null,
+        bool closeAfterSync = true,
         CancellationToken cancellationToken = default)
     {
         if (!IsRunning)
@@ -193,17 +236,35 @@ public sealed class BrowserLoginSession : IDisposable
             netscapeLines = ConvertCdpCookiesJsonToNetscapeLines(cdpResponse, targetDomainFilter);
         }
 
+        if (netscapeLines.Count == 0)
+        {
+            try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None); } catch { }
+            var domainLabel = string.IsNullOrWhiteSpace(targetDomainFilter) ? "this site" : targetDomainFilter;
+            throw new InvalidOperationException(
+                $"No session cookies found for {domainLabel} yet. Complete signing in inside the browser window first, then click Sync & Apply Cookies.");
+        }
+
+        // Gracefully ask Chrome to exit via CDP Browser.close so it flushes all session cookies
+        // cleanly to login_profile on disk (so the user never has to sign in again!).
+        if (closeAfterSync)
+        {
+            try
+            {
+                var closeBytes = Encoding.UTF8.GetBytes("{\"id\":99,\"method\":\"Browser.close\"}");
+                await ws.SendAsync(closeBytes, WebSocketMessageType.Text, true, CancellationToken.None);
+            }
+            catch { }
+        }
+
         try
         {
             await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
         }
         catch { }
 
-        if (netscapeLines.Count == 0)
+        if (closeAfterSync)
         {
-            var domainLabel = string.IsNullOrWhiteSpace(targetDomainFilter) ? "this site" : targetDomainFilter;
-            throw new InvalidOperationException(
-                $"No session cookies found for {domainLabel} yet. Complete signing in inside the browser window first, then click Sync & Apply Cookies.");
+            await WaitForCleanExitAsync();
         }
 
         var joined = NetscapeCookieHelper.NetscapeHeader + Environment.NewLine + string.Join(Environment.NewLine, netscapeLines);
@@ -318,6 +379,67 @@ public sealed class BrowserLoginSession : IDisposable
         return f;
     }
 
+    private async Task WaitForCleanExitAsync()
+    {
+        if (_browserProcess == null) return;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try
+            {
+                if (!_browserProcess.HasExited)
+                {
+                    await _browserProcess.WaitForExitAsync(cts.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (!_browserProcess.HasExited)
+                {
+                    _browserProcess.CloseMainWindow();
+                    _browserProcess.WaitForExit(1500);
+                }
+            }
+        }
+        catch { }
+        finally
+        {
+            try { _browserProcess?.Dispose(); } catch { }
+            _browserProcess = null;
+            _debugPort = 0;
+        }
+    }
+
+    public async Task CloseBrowserGracefullyAsync()
+    {
+        if (_browserProcess == null) return;
+
+        if (!_browserProcess.HasExited && _debugPort > 0)
+        {
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+                var versionJson = await http.GetStringAsync($"http://127.0.0.1:{_debugPort}/json/version");
+                using var vdoc = JsonDocument.Parse(versionJson);
+                if (vdoc.RootElement.TryGetProperty("webSocketDebuggerUrl", out var wsProp))
+                {
+                    var wsUrl = wsProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(wsUrl))
+                    {
+                        using var ws = new ClientWebSocket();
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                        await ws.ConnectAsync(new Uri(wsUrl), cts.Token);
+                        var closeBytes = Encoding.UTF8.GetBytes("{\"id\":99,\"method\":\"Browser.close\"}");
+                        await ws.SendAsync(closeBytes, WebSocketMessageType.Text, true, cts.Token);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        await WaitForCleanExitAsync();
+    }
+
     public void CloseBrowser()
     {
         if (_browserProcess != null)
@@ -327,7 +449,7 @@ public sealed class BrowserLoginSession : IDisposable
                 if (!_browserProcess.HasExited)
                 {
                     _browserProcess.CloseMainWindow();
-                    if (!_browserProcess.WaitForExit(1200))
+                    if (!_browserProcess.WaitForExit(3500))
                     {
                         _browserProcess.Kill(entireProcessTree: true);
                     }
