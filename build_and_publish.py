@@ -31,6 +31,8 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
+import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -574,6 +576,43 @@ def generate_checksums(archives: List[Path]) -> Path:
     return checksum_file
 
 
+def _format_size(path: Path) -> str:
+    size = path.stat().st_size
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.1f} MB"
+    if size >= 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size} B"
+
+
+def _upload_asset_via_gh_with_retry(
+    tag: str,
+    file_path: Path,
+    index: int,
+    total: int,
+    max_attempts: int = 3,
+) -> None:
+    """Upload a single release asset via `gh release upload --clobber` with clear progress & retry."""
+    size_str = _format_size(file_path)
+    for attempt in range(1, max_attempts + 1):
+        suffix = f" (retry {attempt}/{max_attempts})" if attempt > 1 else ""
+        print(f"  [{index}/{total}] Uploading {Colors.BOLD}{file_path.name}{Colors.RESET} ({size_str}){suffix}...")
+        proc = subprocess.run(
+            ["gh", "release", "upload", tag, str(file_path), "--clobber"],
+            cwd=str(ROOT_DIR),
+            text=True,
+        )
+        if proc.returncode == 0:
+            print_success(f"Uploaded [{index}/{total}] {file_path.name} ({size_str})")
+            return
+        if attempt < max_attempts:
+            wait_sec = attempt * 3
+            print_warning(f"Upload failed for {file_path.name} (exit {proc.returncode}); retrying in {wait_sec}s...")
+            time.sleep(wait_sec)
+
+    raise RuntimeError(f"Failed to upload {file_path.name} after {max_attempts} attempts.")
+
+
 def publish_github_release(
     owner: str,
     repo: str,
@@ -585,44 +624,87 @@ def publish_github_release(
     draft: bool = False,
     prerelease: bool = False,
 ) -> bool:
-    """Publish release using gh CLI or GitHub REST API."""
+    """Publish or update a GitHub release using `gh` CLI (with per-file upload & retry) or GitHub REST API."""
     print_step(f"Publishing Release to GitHub ({owner}/{repo} @ {tag})")
 
-    # 1. Ensure git tag is pushed
+    # 1. Ensure git tag exists & is pushed (avoid noisy 'tag already exists' errors)
     try:
-        run_command(["git", "tag", "-a", tag, "-m", release_name], check=False)
+        tag_check = subprocess.run(
+            ["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}"],
+            cwd=str(ROOT_DIR),
+            capture_output=True,
+            text=True,
+        )
+        if tag_check.returncode != 0:
+            run_command(["git", "tag", "--no-sign", "-a", tag, "-m", release_name], check=False)
+        else:
+            print(f"  Git tag '{tag}' already exists locally; keeping existing tag.")
         print("  Pushing git tag to remote origin...")
         run_command(["git", "push", "origin", tag], check=False)
     except Exception as exc:
         print_warning(f"Git tag push skipped or warning: {exc}")
+
+    valid_files = [f for f in files if f.exists() and f.is_file()]
 
     # 2. Try GitHub CLI first if available
     if shutil.which("gh"):
         gh_auth = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True)
         if gh_auth.returncode == 0:
             print("  Using authenticated GitHub CLI (gh)...")
-            cmd = ["gh", "release", "create", tag]
-            for f in files:
-                cmd.append(str(f))
-            cmd.extend(["--title", release_name, "--notes", notes])
-            if draft: cmd.append("--draft")
-            if prerelease: cmd.append("--prerelease")
-
+            notes_path: Optional[Path] = None
             try:
-                run_command(cmd)
+                # Write notes to a temp file so Windows CLI never truncates multi-line release notes
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    suffix=".md",
+                    prefix="ud_release_notes_",
+                    delete=False,
+                ) as tf:
+                    tf.write(notes)
+                    notes_path = Path(tf.name)
+
+                # Check whether the release already exists before creating
+                view_proc = subprocess.run(
+                    ["gh", "release", "view", tag],
+                    cwd=str(ROOT_DIR),
+                    capture_output=True,
+                    text=True,
+                )
+                if view_proc.returncode == 0:
+                    print(f"  Release '{tag}' already exists — updating release notes & uploading assets...")
+                    edit_cmd = ["gh", "release", "edit", tag, "--title", release_name, "--notes-file", str(notes_path)]
+                    if draft:
+                        edit_cmd.append("--draft")
+                    if prerelease:
+                        edit_cmd.append("--prerelease")
+                    run_command(edit_cmd, check=False)
+                else:
+                    create_cmd = ["gh", "release", "create", tag, "--title", release_name, "--notes-file", str(notes_path)]
+                    if draft:
+                        create_cmd.append("--draft")
+                    if prerelease:
+                        create_cmd.append("--prerelease")
+                    run_command(create_cmd)
+                    print_success(f"Created release container {tag}")
+
+                # Upload assets one-by-one with clear per-file progress and retry
+                total_mb = sum(f.stat().st_size for f in valid_files) / (1024 * 1024)
+                print(f"  Uploading {len(valid_files)} asset(s) ({total_mb:.1f} MB total)...")
+                for idx, file_path in enumerate(valid_files, start=1):
+                    _upload_asset_via_gh_with_retry(tag, file_path, idx, len(valid_files))
+
                 print_success(f"Successfully published release {tag} via GitHub CLI!")
                 print(f"  View online: https://github.com/{owner}/{repo}/releases/tag/{tag}")
                 return True
             except Exception as exc:
-                print_warning(f"gh release create returned an error ({exc}); trying upload --clobber to existing release...")
-                try:
-                    upload_cmd = ["gh", "release", "upload", tag] + [str(f) for f in files] + ["--clobber"]
-                    run_command(upload_cmd)
-                    print_success(f"Uploaded updated assets to existing release {tag} via GitHub CLI!")
-                    print(f"  View online: https://github.com/{owner}/{repo}/releases/tag/{tag}")
-                    return True
-                except Exception as upload_exc:
-                    print_warning(f"gh CLI release upload encountered an issue: {upload_exc}")
+                print_warning(f"gh CLI release publish encountered an issue: {exc}")
+            finally:
+                if notes_path and notes_path.exists():
+                    try:
+                        notes_path.unlink()
+                    except Exception:
+                        pass
 
     # 3. Fallback to GitHub REST API with Token
     auth_token = token or os.environ.get("GITHUB_TOKEN")
@@ -697,6 +779,7 @@ def main() -> None:
     )
     parser.add_argument("-v", "--version", default=None, help="Release version (e.g. 1.1.0 or v1.1.0)")
     parser.add_argument("--no-publish", action="store_true", help="Build local packages without publishing to GitHub")
+    parser.add_argument("--publish-only", action="store_true", help="Skip building and publish existing files from releases/")
     parser.add_argument("--token", default=None, help="GitHub Personal Access Token for API publishing")
     parser.add_argument("--draft", action="store_true", help="Publish release as a draft")
     parser.add_argument("--prerelease", action="store_true", help="Mark release as a pre-release")
@@ -718,33 +801,53 @@ def main() -> None:
     RELEASES_DIR.mkdir(parents=True, exist_ok=True)
     BUILD_TMP_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Build Standalone Python Backend
-    python_bin = build_python_backend()
-    ensure_release_ffmpeg()
-
-    # 2. Build C# Avalonia for all platforms
-    avalonia_proj = ROOT_DIR / "src" / "UniversalDownloader.Avalonia" / "UniversalDownloader.Avalonia.csproj"
-    wpf_proj = ROOT_DIR / "src" / "UniversalDownloader.App" / "UniversalDownloader.App.csproj"
-
-    print_step("Publishing Self-Contained .NET 9 Frontend Executables")
-    # Windows
-    publish_dotnet_target(avalonia_proj, "win-x64", BUILD_TMP_DIR / "win-x64-avalonia")
-    if sys.platform.startswith("win"):
-        publish_dotnet_target(wpf_proj, "win-x64", BUILD_TMP_DIR / "win-x64-wpf")
-
-    # Linux & macOS
-    publish_dotnet_target(avalonia_proj, "linux-x64", BUILD_TMP_DIR / "linux-x64")
-    publish_dotnet_target(avalonia_proj, "osx-x64", BUILD_TMP_DIR / "osx-x64")
-    publish_dotnet_target(avalonia_proj, "osx-arm64", BUILD_TMP_DIR / "osx-arm64")
-
-    # 3. Create Distribution Archives & Standalone Executables
     archives: List[Path] = []
-    archives.extend(package_windows_release(version))
-    archives.extend(package_tar_release("linux-x64", "linux-x64", version))
-    archives.extend(package_tar_release("macos-arm64", "osx-arm64", version))
-    archives.extend(package_tar_release("macos-x64", "osx-x64", version))
-    if not args.skip_android:
-        archives.extend(build_and_package_android_release(version))
+    if args.publish_only:
+        expected_names = [
+            "UniversalDownloader.exe",
+            f"UniversalDownloader-v{version}-windows-x64.zip",
+            "UniversalDownloader-Setup-x64.msi",
+            "UniversalDownloader-linux-x64",
+            f"UniversalDownloader-v{version}-linux-x64.tar.gz",
+            f"UniversalDownloader-v{version}-macos-arm64.tar.gz",
+            f"UniversalDownloader-v{version}-macos-x64.tar.gz",
+            "UniversalDownloader-android-arm64.apk",
+            "UniversalDownloader-android-universal.apk",
+        ]
+        for name in expected_names:
+            candidate = RELEASES_DIR / name
+            if candidate.exists() and candidate.is_file():
+                archives.append(candidate)
+        if not archives:
+            print_error(f"No built release files found in {RELEASES_DIR} for v{version}. Run without --publish-only first.")
+            sys.exit(1)
+    else:
+        # 1. Build Standalone Python Backend
+        python_bin = build_python_backend()
+        ensure_release_ffmpeg()
+
+        # 2. Build C# Avalonia for all platforms
+        avalonia_proj = ROOT_DIR / "src" / "UniversalDownloader.Avalonia" / "UniversalDownloader.Avalonia.csproj"
+        wpf_proj = ROOT_DIR / "src" / "UniversalDownloader.App" / "UniversalDownloader.App.csproj"
+
+        print_step("Publishing Self-Contained .NET 9 Frontend Executables")
+        # Windows
+        publish_dotnet_target(avalonia_proj, "win-x64", BUILD_TMP_DIR / "win-x64-avalonia")
+        if sys.platform.startswith("win"):
+            publish_dotnet_target(wpf_proj, "win-x64", BUILD_TMP_DIR / "win-x64-wpf")
+
+        # Linux & macOS
+        publish_dotnet_target(avalonia_proj, "linux-x64", BUILD_TMP_DIR / "linux-x64")
+        publish_dotnet_target(avalonia_proj, "osx-x64", BUILD_TMP_DIR / "osx-x64")
+        publish_dotnet_target(avalonia_proj, "osx-arm64", BUILD_TMP_DIR / "osx-arm64")
+
+        # 3. Create Distribution Archives & Standalone Executables
+        archives.extend(package_windows_release(version))
+        archives.extend(package_tar_release("linux-x64", "linux-x64", version))
+        archives.extend(package_tar_release("macos-arm64", "osx-arm64", version))
+        archives.extend(package_tar_release("macos-x64", "osx-x64", version))
+        if not args.skip_android:
+            archives.extend(build_and_package_android_release(version))
 
     # 4. Generate SHA256 Checksums
     checksum_file = generate_checksums(archives)
