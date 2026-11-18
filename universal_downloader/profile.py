@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import html
 import http.cookiejar
 import io
@@ -445,13 +445,89 @@ class ProfileImageCandidate:
 
 
 @dataclass
+class ProfileInfoField:
+    """A single public metadata chip shown on the profile preview card (click-to-copy)."""
+    label: str
+    value: str
+    copy_value: Optional[str] = None
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "label": self.label,
+            "value": self.value,
+            "copy_value": self.copy_value if self.copy_value is not None else self.value,
+        }
+
+
+@dataclass
 class ProfileInspectionResult:
-    """Structured result of profile picture inspection including platform lock notices and profile ID."""
+    """Structured result of profile picture inspection including platform lock notices, ID, and public metadata."""
     images: list[ProfileImageCandidate]
     profile_locked: bool = False
     profile_notice: Optional[str] = None
     title: Optional[str] = None
     profile_id: Optional[str] = None
+    bio: Optional[str] = None
+    is_verified: bool = False
+    profile_info: list[ProfileInfoField] = field(default_factory=list)
+
+
+def _format_compact_count(raw: Any) -> Optional[str]:
+    """Format an integer or numeric string (e.g. 12450 -> '12.5K', 1500000 -> '1.5M')."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        cleaned = raw.strip().replace(",", "")
+        if not cleaned:
+            return None
+        if re.fullmatch(r"\d+(?:\.\d+)?[KMBkmb]", cleaned):
+            return cleaned.upper()
+        try:
+            num = int(float(cleaned))
+        except ValueError:
+            return raw.strip()
+    else:
+        try:
+            num = int(raw)
+        except (TypeError, ValueError):
+            return None
+
+    if num < 0:
+        return None
+    if num >= 1_000_000_000:
+        return f"{num / 1_000_000_000:.1f}B".replace(".0B", "B")
+    if num >= 1_000_000:
+        return f"{num / 1_000_000:.1f}M".replace(".0M", "M")
+    if num >= 1_000:
+        return f"{num / 1_000:.1f}K".replace(".0K", "K")
+    return str(num)
+
+
+def _unescape_json_text(raw: str) -> str:
+    """Decode JSON-escaped unicode/newlines safely into clean display text."""
+    try:
+        decoded = json.loads(f'"{raw}"')
+        if isinstance(decoded, str):
+            return re.sub(r"\s+", " ", html.unescape(decoded)).strip()
+    except Exception:
+        pass
+    cleaned = raw.replace("\\n", " ").replace("\\r", " ").replace("\\t", " ").replace("\\/", "/")
+    return re.sub(r"\s+", " ", html.unescape(cleaned)).strip()
+
+
+def _extract_meta_description(html_text: str) -> Optional[str]:
+    for pattern in (
+        re.compile(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']', re.I),
+        re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:description["\']', re.I),
+        re.compile(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']', re.I),
+        re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']description["\']', re.I),
+    ):
+        match = pattern.search(html_text)
+        if match:
+            val = re.sub(r"\s+", " ", html.unescape(match.group(1))).strip()
+            if val:
+                return val
+    return None
 
 
 def extract_facebook_user_id(profile_url: str, html_text: str = "") -> Optional[str]:
@@ -485,6 +561,288 @@ def extract_facebook_user_id(profile_url: str, html_text: str = "") -> Optional[
             return match.group(1)
 
     return None
+
+
+def extract_profile_metadata_fields(
+    platform: Platform,
+    profile_url: str,
+    html_text: str = "",
+    extra_data: Optional[dict[str, Any]] = None,
+) -> tuple[Optional[str], Optional[str], bool, bool, list[ProfileInfoField]]:
+    """
+    Extract public, click-to-copy profile metadata fields across all supported social platforms
+    (User/Channel ID, @handle, followers/following/posts/likes/karma, category, bio, verified/private flags).
+    Returns (profile_id, bio, is_verified, is_private_or_locked, info_fields).
+    """
+    fields: list[ProfileInfoField] = []
+    seen_labels: set[str] = set()
+    profile_id: Optional[str] = None
+    bio: Optional[str] = None
+    is_verified = False
+    is_private = False
+
+    def add_field(label: str, value: Optional[str], copy_value: Optional[str] = None) -> None:
+        if not value or not value.strip() or label in seen_labels:
+            return
+        seen_labels.add(label)
+        fields.append(ProfileInfoField(label=label, value=value.strip(), copy_value=(copy_value or value).strip()))
+
+    def add_count(label: str, raw_val: Any) -> None:
+        if raw_val is None:
+            return
+        formatted = _format_compact_count(raw_val)
+        if not formatted:
+            return
+        raw_copy = str(raw_val).strip()
+        add_field(label, formatted, copy_value=raw_copy if raw_copy.isdigit() else formatted)
+
+    username = extract_username_from_profile_url(profile_url, platform)
+    meta_desc = _extract_meta_description(html_text) if html_text else None
+
+    if platform == Platform.FACEBOOK:
+        profile_id = extract_facebook_user_id(profile_url, html_text)
+        if profile_id:
+            add_field("ID", profile_id)
+        if username and username != profile_id and username != "facebook_profile":
+            add_field("Username", f"@{username}", copy_value=username)
+
+        if html_text:
+            is_private = detect_facebook_profile_locked(html_text)
+            if re.search(r'"is_verified"\s*:\s*true', html_text):
+                is_verified = True
+            cat_m = re.search(r'"category_name"\s*:\s*"([^"]{2,60})"', html_text)
+            if cat_m:
+                add_field("Category", _unescape_json_text(cat_m.group(1)))
+
+            fol_m = re.search(r'"follower_count"\s*:\s*(\d+)', html_text)
+            if fol_m:
+                add_count("Followers", fol_m.group(1))
+            elif meta_desc:
+                m_likes = re.search(r'([\d.,]+[KMBkmb]?)\s+likes?', meta_desc, re.I)
+                m_fols = re.search(r'([\d.,]+[KMBkmb]?)\s+followers?', meta_desc, re.I)
+                if m_fols:
+                    add_count("Followers", m_fols.group(1))
+                elif m_likes:
+                    add_count("Likes", m_likes.group(1))
+
+            if meta_desc and "join facebook to connect" not in meta_desc.lower() and "is on facebook" not in meta_desc.lower():
+                bio = meta_desc[:220]
+
+    elif platform == Platform.INSTAGRAM:
+        if html_text:
+            for pat in (
+                re.compile(r'"profilePage_(\d{5,})"'),
+                re.compile(r'"target_id"\s*:\s*"(\d{5,})"'),
+                re.compile(r'"props"\s*:\s*\{[^\r\n]{0,400}?"id"\s*:\s*"(\d{5,})"'),
+                re.compile(r'"user_id"\s*:\s*"(\d{5,})"'),
+            ):
+                m = pat.search(html_text)
+                if m:
+                    profile_id = m.group(1)
+                    break
+            if re.search(r'"is_verified"\s*:\s*true', html_text):
+                is_verified = True
+            if re.search(r'"is_private"\s*:\s*true', html_text):
+                is_private = True
+
+        if profile_id:
+            add_field("ID", profile_id)
+        if username:
+            add_field("Username", f"@{username}", copy_value=username)
+
+        if html_text:
+            fol_m = re.search(r'"edge_followed_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)', html_text) or re.search(r'"follower_count"\s*:\s*(\d+)', html_text)
+            fng_m = re.search(r'"edge_follow"\s*:\s*\{\s*"count"\s*:\s*(\d+)', html_text) or re.search(r'"following_count"\s*:\s*(\d+)', html_text)
+            pst_m = re.search(r'"edge_owner_to_timeline_media"\s*:\s*\{\s*"count"\s*:\s*(\d+)', html_text) or re.search(r'"media_count"\s*:\s*(\d+)', html_text)
+            if fol_m:
+                add_count("Followers", fol_m.group(1))
+            if fng_m:
+                add_count("Following", fng_m.group(1))
+            if pst_m:
+                add_count("Posts", pst_m.group(1))
+            bio_m = re.search(r'"biography"\s*:\s*"((?:[^"\\]|\\.)*)"', html_text)
+            if bio_m and bio_m.group(1):
+                bio = _unescape_json_text(bio_m.group(1))[:220]
+
+        if meta_desc:
+            if "Followers" not in seen_labels:
+                m = re.search(r'([\d.,]+[KMBkmb]?)\s+Followers', meta_desc, re.I)
+                if m:
+                    add_count("Followers", m.group(1))
+            if "Following" not in seen_labels:
+                m = re.search(r'([\d.,]+[KMBkmb]?)\s+Following', meta_desc, re.I)
+                if m:
+                    add_count("Following", m.group(1))
+            if "Posts" not in seen_labels:
+                m = re.search(r'([\d.,]+[KMBkmb]?)\s+Posts', meta_desc, re.I)
+                if m:
+                    add_count("Posts", m.group(1))
+
+    elif platform == Platform.TIKTOK:
+        if html_text:
+            uid_m = re.search(r'"userInfo"\s*:\s*\{\s*"user"\s*:\s*\{[^\r\n]{0,400}?"id"\s*:\s*"(\d{5,})"', html_text)
+            if not uid_m:
+                uid_m = re.search(r'"uniqueId"\s*:\s*"[^"]+"[^\r\n]{0,200}?"id"\s*:\s*"(\d{5,})"', html_text)
+            if uid_m:
+                profile_id = uid_m.group(1)
+
+            if re.search(r'"user"\s*:\s*\{[^\r\n]{0,400}?"verified"\s*:\s*true', html_text):
+                is_verified = True
+            if re.search(r'"privateAccount"\s*:\s*true', html_text):
+                is_private = True
+
+        if profile_id:
+            add_field("ID", profile_id)
+        if username:
+            add_field("Username", f"@{username}", copy_value=username)
+
+        if html_text:
+            for key, label in (
+                ("followerCount", "Followers"),
+                ("followingCount", "Following"),
+                ("heartCount", "Likes"),
+                ("videoCount", "Videos"),
+            ):
+                m = re.search(rf'"{key}"\s*:\s*(\d+)', html_text)
+                if m:
+                    add_count(label, m.group(1))
+            sig_m = re.search(r'"signature"\s*:\s*"((?:[^"\\]|\\.)*)"', html_text)
+            if sig_m and sig_m.group(1):
+                bio = _unescape_json_text(sig_m.group(1))[:220]
+
+        if meta_desc:
+            if "Followers" not in seen_labels:
+                m = re.search(r'([\d.,]+[KMBkmb]?)\s+Followers', meta_desc, re.I)
+                if m:
+                    add_count("Followers", m.group(1))
+            if "Likes" not in seen_labels:
+                m = re.search(r'([\d.,]+[KMBkmb]?)\s+Likes', meta_desc, re.I)
+                if m:
+                    add_count("Likes", m.group(1))
+
+    elif platform == Platform.TWITTER:
+        if html_text:
+            id_m = re.search(r'"rest_id"\s*:\s*"(\d{5,})"', html_text) or re.search(r'"identifier"\s*:\s*"(\d{5,})"', html_text)
+            if id_m:
+                profile_id = id_m.group(1)
+            if re.search(r'"(?:is_blue_verified|verified)"\s*:\s*true', html_text):
+                is_verified = True
+            if re.search(r'"protected"\s*:\s*true', html_text):
+                is_private = True
+
+        if profile_id:
+            add_field("ID", profile_id)
+        if username:
+            add_field("Username", f"@{username}", copy_value=username)
+
+        if html_text:
+            for key, label in (
+                ("followers_count", "Followers"),
+                ("friends_count", "Following"),
+                ("statuses_count", "Posts"),
+            ):
+                m = re.search(rf'"{key}"\s*:\s*(\d+)', html_text)
+                if m:
+                    add_count(label, m.group(1))
+            bio_m = re.search(r'"description"\s*:\s*"((?:[^"\\]|\\.)*)"', html_text)
+            if bio_m and bio_m.group(1):
+                bio = _unescape_json_text(bio_m.group(1))[:220]
+
+    elif platform == Platform.YOUTUBE:
+        parsed = urllib.parse.urlparse(profile_url)
+        ch_m = re.search(r'/channel/(UC[A-Za-z0-9_-]{20,})', parsed.path)
+        if ch_m:
+            profile_id = ch_m.group(1)
+        elif html_text:
+            for pat in (
+                re.compile(r'<meta[^>]+itemprop=["\']identifier["\'][^>]+content=["\'](UC[A-Za-z0-9_-]{20,})["\']', re.I),
+                re.compile(r'"externalId"\s*:\s*"(UC[A-Za-z0-9_-]{20,})"'),
+                re.compile(r'"channelId"\s*:\s*"(UC[A-Za-z0-9_-]{20,})"'),
+            ):
+                m = pat.search(html_text)
+                if m:
+                    profile_id = m.group(1)
+                    break
+
+        if profile_id:
+            add_field("Channel ID", profile_id)
+        if username and not username.startswith("UC"):
+            add_field("Handle", f"@{username}", copy_value=f"@{username}")
+
+        if html_text:
+            sub_m = re.search(r'"subscriberCountText"\s*:\s*\{[^\r\n]{0,120}?"simpleText"\s*:\s*"([^"]+)"', html_text)
+            if sub_m:
+                sub_val = re.sub(r'\s*subscribers?$', '', sub_m.group(1), flags=re.I).strip()
+                add_field("Subscribers", sub_val)
+            vid_m = re.search(r'"videosCountText"\s*:\s*\{[^\r\n]{0,120}?"text"\s*:\s*"([\d.,]+[KMBkmb]?)"', html_text)
+            if vid_m:
+                add_count("Videos", vid_m.group(1))
+            if meta_desc:
+                bio = meta_desc[:220]
+
+    elif platform == Platform.THREADS:
+        if html_text:
+            id_m = re.search(r'"user_id"\s*:\s*"(\d{5,})"', html_text) or re.search(r'"pk"\s*:\s*"(\d{5,})"', html_text)
+            if id_m:
+                profile_id = id_m.group(1)
+            if re.search(r'"is_verified"\s*:\s*true', html_text):
+                is_verified = True
+            if re.search(r'"is_private"\s*:\s*true', html_text):
+                is_private = True
+
+        if profile_id:
+            add_field("ID", profile_id)
+        if username:
+            add_field("Username", f"@{username}", copy_value=username)
+
+        if html_text:
+            fol_m = re.search(r'"follower_count"\s*:\s*(\d+)', html_text)
+            if fol_m:
+                add_count("Followers", fol_m.group(1))
+        if meta_desc:
+            if "Followers" not in seen_labels:
+                m = re.search(r'([\d.,]+[KMBkmb]?)\s+Followers', meta_desc, re.I)
+                if m:
+                    add_count("Followers", m.group(1))
+            bio = meta_desc[:220]
+
+    elif platform == Platform.REDDIT:
+        if html_text:
+            id_m = re.search(r'"id"\s*:\s*"(t2_[a-z0-9]+)"', html_text, re.I)
+            if id_m:
+                profile_id = id_m.group(1)
+        if profile_id:
+            add_field("ID", profile_id)
+        if username:
+            add_field("Username", f"u/{username}", copy_value=f"u/{username}")
+        if html_text:
+            karma_m = re.search(r'"total_karma"\s*:\s*(\d+)', html_text)
+            if karma_m:
+                add_count("Karma", karma_m.group(1))
+
+    elif platform == Platform.BLUESKY:
+        if isinstance(extra_data, dict):
+            did = extra_data.get("did")
+            handle = extra_data.get("handle")
+            if isinstance(did, str) and did:
+                profile_id = did
+                add_field("DID", did)
+            if isinstance(handle, str) and handle:
+                add_field("Handle", f"@{handle}", copy_value=handle)
+            add_count("Followers", extra_data.get("followersCount"))
+            add_count("Following", extra_data.get("followsCount"))
+            add_count("Posts", extra_data.get("postsCount"))
+            desc = extra_data.get("description")
+            if isinstance(desc, str) and desc.strip():
+                bio = re.sub(r"\s+", " ", desc).strip()[:220]
+        elif username:
+            add_field("Handle", f"@{username}", copy_value=username)
+
+    else:
+        if username:
+            add_field("Username", f"@{username}", copy_value=username)
+
+    return profile_id, bio, is_verified, is_private, fields
 
 
 def detect_facebook_profile_locked(html_text: str) -> bool:
@@ -787,11 +1145,11 @@ def probe_profile_image(
 def _fetch_bluesky_public_profile(
     profile_url: str,
     timeout: int,
-) -> tuple[list[ProfileImageCandidate], Optional[str]]:
-    """Query Bluesky's official public AppView API for full-resolution avatar & banner."""
+) -> tuple[list[ProfileImageCandidate], Optional[str], Optional[dict[str, Any]]]:
+    """Query Bluesky's official public AppView API for full-resolution avatar, banner, and profile stats."""
     actor = extract_username_from_profile_url(profile_url, Platform.BLUESKY)
     if not actor:
-        return [], None
+        return [], None, None
     api_url = f"https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor={urllib.parse.quote(actor)}"
     try:
         req = urllib.request.Request(
@@ -802,7 +1160,7 @@ def _fetch_bluesky_public_profile(
         with urllib.request.urlopen(req, timeout=min(timeout, 12)) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="replace"))
     except Exception:
-        return [], None
+        return [], None, None
 
     found: list[ProfileImageCandidate] = []
     if isinstance(data, dict):
@@ -827,8 +1185,8 @@ def _fetch_bluesky_public_profile(
                     ext=image_extension_from_url(banner).lstrip("."),
                 )
             )
-        return found, display_name if isinstance(display_name, str) else None
-    return [], None
+        return found, (display_name if isinstance(display_name, str) else None), data
+    return [], None, None
 
 
 def inspect_profile_images_detailed(
@@ -839,7 +1197,7 @@ def inspect_profile_images_detailed(
 ) -> ProfileInspectionResult:
     """
     Discover, verify, and measure all publicly exposed (or cookie-authorized) images
-    for a profile URL, returning verified images plus platform lock status & title.
+    for a profile URL, returning verified images plus platform lock status, ID, bio, and metadata fields.
     """
     target = detect_target(profile_url, timeout=config.timeout)
     cookie_jar = load_cookie_jar(config)
@@ -847,8 +1205,8 @@ def inspect_profile_images_detailed(
     seen_urls: set[str] = set()
     profile_locked = False
     resolved_title: Optional[str] = None
-    resolved_profile_id: Optional[str] = (
-        extract_facebook_user_id(target.normalized_url) if platform == Platform.FACEBOOK else None
+    resolved_profile_id, resolved_bio, resolved_verified, _, resolved_info = extract_profile_metadata_fields(
+        platform, target.normalized_url
     )
     had_profile_viewer_hd = False
 
@@ -860,32 +1218,53 @@ def inspect_profile_images_detailed(
     html_first_platforms = {
         Platform.FACEBOOK,
         Platform.INSTAGRAM,
+        Platform.TIKTOK,
         Platform.TWITTER,
         Platform.THREADS,
         Platform.BLUESKY,
         Platform.REDDIT,
+        Platform.YOUTUBE,
     }
 
     def collect_from_html() -> None:
-        nonlocal profile_locked, resolved_title, resolved_profile_id, had_profile_viewer_hd
+        nonlocal profile_locked, resolved_title, resolved_profile_id, resolved_bio, resolved_verified, resolved_info, had_profile_viewer_hd
 
+        bsky_data: Optional[dict[str, Any]] = None
         if platform == Platform.BLUESKY:
-            bsky_imgs, bsky_title = _fetch_bluesky_public_profile(target.normalized_url, config.timeout)
+            bsky_imgs, bsky_title, bsky_data = _fetch_bluesky_public_profile(target.normalized_url, config.timeout)
             if bsky_title:
                 resolved_title = bsky_title
             for item in bsky_imgs:
                 add_raw(item)
+            if bsky_data:
+                pid, bio, ver, priv, info_fields = extract_profile_metadata_fields(
+                    platform, target.normalized_url, extra_data=bsky_data
+                )
+                resolved_profile_id = pid or resolved_profile_id
+                resolved_bio = bio or resolved_bio
+                resolved_verified = resolved_verified or ver
+                profile_locked = profile_locked or priv
+                if info_fields:
+                    resolved_info = info_fields
 
         try:
             page = fetch_public_html(target.normalized_url, config.timeout, cookie_jar=cookie_jar)
             if not resolved_title:
                 resolved_title = extract_profile_title(page)
 
-            if platform == Platform.FACEBOOK:
-                if not resolved_profile_id:
-                    resolved_profile_id = extract_facebook_user_id(target.normalized_url, page)
-                if detect_facebook_profile_locked(page):
-                    profile_locked = True
+            pid, bio, ver, priv, info_fields = extract_profile_metadata_fields(
+                platform, target.normalized_url, page, extra_data=bsky_data
+            )
+            if pid:
+                resolved_profile_id = pid
+            if bio:
+                resolved_bio = bio
+            if ver:
+                resolved_verified = True
+            if priv:
+                profile_locked = True
+            if info_fields and (not bsky_data or len(info_fields) > len(resolved_info)):
+                resolved_info = info_fields
 
             for item in extract_public_profile_candidates(page, base_url=target.normalized_url):
                 add_raw(item)
@@ -952,6 +1331,9 @@ def inspect_profile_images_detailed(
             profile_notice=notice,
             title=resolved_title,
             profile_id=resolved_profile_id,
+            bio=resolved_bio,
+            is_verified=resolved_verified,
+            profile_info=resolved_info,
         )
 
     # Prioritize authorized Native HD viewer candidates and highest estimated resolution before probing
@@ -1012,19 +1394,28 @@ def inspect_profile_images_detailed(
             )
 
     profile_notice: Optional[str] = None
-    if profile_locked and not had_profile_viewer_hd:
-        profile_notice = (
-            "Profile Locked by Facebook — Only small identification avatars are exposed to non-friends. "
-            "Use the HD Enhanced rendition above for the sharpest available output."
-        )
-        LOGGER.info("Profile lock detected on %s; platform restricts non-friend avatar resolution.", target.normalized_url)
+    is_restricted = profile_locked and not had_profile_viewer_hd
+    if is_restricted:
+        if platform == Platform.FACEBOOK:
+            profile_notice = (
+                "Profile Locked by Facebook — Only small identification avatars are exposed to non-friends. "
+                "Use the HD Enhanced rendition above for the sharpest available output."
+            )
+            LOGGER.info("Profile lock detected on %s; platform restricts non-friend avatar resolution.", target.normalized_url)
+        else:
+            profile_notice = (
+                f"Private account on {platform.value.capitalize()} — Only publicly exposed profile preview metadata and avatar are available."
+            )
 
     return ProfileInspectionResult(
         images=deduped,
-        profile_locked=profile_locked and not had_profile_viewer_hd,
+        profile_locked=is_restricted,
         profile_notice=profile_notice,
         title=resolved_title,
         profile_id=resolved_profile_id,
+        bio=resolved_bio,
+        is_verified=resolved_verified,
+        profile_info=resolved_info,
     )
 
 

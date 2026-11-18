@@ -39,6 +39,8 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _metadataCts;
     private string? _lastInspectedMetadataUrl;
     private string? _currentProfileId;
+    private string? _currentProfileBio;
+    private List<ProfileInfoChipViewModel> _currentProfileChips = new();
     private int _activeTaskCount = 0;
     private AppUpdateInfo? _latestUpdateInfo;
     private UserSettings _settings = new();
@@ -1043,13 +1045,18 @@ public partial class MainWindow : Window
                 StreamsNoticeBanner.IsVisible = true;
             }
 
-            // Sync Download tab preview card qualities, lock badge & profile ID with refreshed stream list
+            // Sync Download tab preview card qualities, lock badge, ID & public profile info chips with refreshed stream list
             if (MetadataCard.IsVisible)
             {
-                ProfileLockedBadge.IsVisible = inspection.ProfileLocked;
-                if (!string.IsNullOrWhiteSpace(inspection.ProfileId))
+                if (isImageList || !string.IsNullOrWhiteSpace(inspection.ProfileId) || inspection.ProfileInfo.Count > 0 || inspection.ProfileLocked)
                 {
-                    SetProfileIdBadge(inspection.ProfileId);
+                    ApplyProfileMetadataToCard(
+                        inspection.ProfileId ?? _currentProfileId,
+                        inspection.Bio ?? _currentProfileBio,
+                        inspection.IsVerified,
+                        inspection.ProfileLocked,
+                        PlatformBadge.Text,
+                        inspection.ProfileInfo.Count > 0 ? inspection.ProfileInfo : null);
                 }
                 var syncedQualities = isImageList
                     ? formats.Where(f => !string.IsNullOrWhiteSpace(f.Resolution)).Select(f => f.Resolution).Distinct().ToList()
@@ -1319,6 +1326,8 @@ public partial class MainWindow : Window
             var h when h.Contains("instagram") => "INSTAGRAM",
             var h when h.Contains("facebook") || h.Contains("fb.watch") => "FACEBOOK",
             var h when h.Contains("twitter") || h.Contains("x.com") => "X / TWITTER",
+            var h when h.Contains("threads.net") || h.Contains("threads.com") => "THREADS",
+            var h when h.Contains("bsky.app") => "BLUESKY",
             var h when h.Contains("soundcloud") => "SOUNDCLOUD",
             var h when h.Contains("vimeo") => "VIMEO",
             var h when h.Contains("reddit") => "REDDIT",
@@ -1329,8 +1338,7 @@ public partial class MainWindow : Window
         ClearPlaylistCards();
         SingleVideoQualitiesPanel.IsVisible = false;
         SingleVideoQualitiesItems.ItemsSource = null;
-        ProfileLockedBadge.IsVisible = false;
-        SetProfileIdBadge(TryExtractFacebookIdFromUri(uri));
+        ApplyProfileMetadataToCard(TryExtractFacebookIdFromUri(uri), null, false, false, platformDisplay, null);
         PlatformBadge.Text = platformDisplay;
         VideoTitleLabel.Text = "Fetching media details...";
         UploaderLabel.Text = uri.Host;
@@ -1369,11 +1377,13 @@ public partial class MainWindow : Window
                     PlatformBadge.Text = meta.Platform.ToUpperInvariant();
                 }
 
-                ProfileLockedBadge.IsVisible = meta.ProfileLocked;
-                if (!string.IsNullOrWhiteSpace(meta.ProfileId))
-                {
-                    SetProfileIdBadge(meta.ProfileId);
-                }
+                ApplyProfileMetadataToCard(
+                    meta.ProfileId,
+                    meta.Bio,
+                    meta.IsVerified,
+                    meta.ProfileLocked,
+                    meta.Platform,
+                    meta.ProfileInfo);
 
                 if (!string.IsNullOrWhiteSpace(meta.DurationFormatted))
                 {
@@ -1449,6 +1459,60 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ApplyProfileMetadataToCard(
+        string? profileId,
+        string? bio,
+        bool isVerified,
+        bool profileLocked,
+        string? platform,
+        IReadOnlyList<ProfileInfoItemModel>? infoItems)
+    {
+        SetProfileIdBadge(profileId);
+        ProfileVerifiedBadge.IsVisible = isVerified;
+
+        ProfileLockedBadge.IsVisible = profileLocked;
+        var isFb = !string.IsNullOrWhiteSpace(platform) && platform.Contains("facebook", StringComparison.OrdinalIgnoreCase);
+        ProfileLockedBadgeText.Text = isFb ? "LOCKED PROFILE" : "PRIVATE ACCOUNT";
+
+        var cleanedBio = bio?.Trim();
+        if (!string.IsNullOrWhiteSpace(cleanedBio))
+        {
+            _currentProfileBio = cleanedBio;
+            ProfileBioText.Text = cleanedBio;
+            ProfileBioButton.IsVisible = true;
+        }
+        else
+        {
+            _currentProfileBio = null;
+            ProfileBioText.Text = string.Empty;
+            ProfileBioButton.IsVisible = false;
+        }
+
+        // Build clickable profile info chips (skip duplicate 'ID' chip if already shown in top ProfileIdButton)
+        var chips = new List<ProfileInfoChipViewModel>();
+        if (infoItems != null)
+        {
+            foreach (var item in infoItems)
+            {
+                if (string.IsNullOrWhiteSpace(item.Label) || string.IsNullOrWhiteSpace(item.Value)) continue;
+                if (!string.IsNullOrWhiteSpace(_currentProfileId) &&
+                    item.Label.Equals("ID", StringComparison.OrdinalIgnoreCase) &&
+                    item.EffectiveCopyValue.Equals(_currentProfileId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                chips.Add(new ProfileInfoChipViewModel(item));
+            }
+        }
+
+        _currentProfileChips = chips;
+        ProfileInfoItems.ItemsSource = chips;
+        ProfileInfoItems.IsVisible = chips.Count > 0;
+        CopyAllProfileInfoButton.IsVisible = !string.IsNullOrWhiteSpace(_currentProfileId)
+            || chips.Count > 0
+            || !string.IsNullOrWhiteSpace(_currentProfileBio);
+    }
+
     private void SetProfileIdBadge(string? profileId)
     {
         var cleaned = profileId?.Trim();
@@ -1474,8 +1538,8 @@ public partial class MainWindow : Window
         if (clipboard != null)
         {
             await clipboard.SetTextAsync(id);
-            ProfileIdLabel.Text = $"Copied: {id}";
-            GlobalStatusText.Text = $"Copied Facebook Profile ID: {id}";
+            ProfileIdLabel.Text = $"✓ Copied: {id}";
+            GlobalStatusText.Text = $"Copied Profile ID: {id}";
             DispatcherTimer.RunOnce(() =>
             {
                 if (_currentProfileId == id)
@@ -1484,6 +1548,60 @@ public partial class MainWindow : Window
                 }
             }, TimeSpan.FromSeconds(2));
         }
+    }
+
+    private async void ProfileInfoChip_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is ProfileInfoChipViewModel chip)
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard != null)
+            {
+                await clipboard.SetTextAsync(chip.CopyValue);
+                chip.RecentlyCopied = true;
+                GlobalStatusText.Text = $"Copied {chip.Label}: {chip.CopyValue}";
+                DispatcherTimer.RunOnce(() => chip.RecentlyCopied = false, TimeSpan.FromSeconds(1.8));
+            }
+        }
+    }
+
+    private async void ProfileBioButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var bio = _currentProfileBio;
+        if (string.IsNullOrWhiteSpace(bio)) return;
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard != null)
+        {
+            await clipboard.SetTextAsync(bio);
+            GlobalStatusText.Text = "Copied profile bio to clipboard.";
+        }
+    }
+
+    private async void CopyAllProfileInfoButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard == null) return;
+
+        var lines = new List<string>();
+        if (!string.IsNullOrWhiteSpace(VideoTitleLabel.Text)) lines.Add($"Name: {VideoTitleLabel.Text}");
+        if (!string.IsNullOrWhiteSpace(PlatformBadge.Text)) lines.Add($"Platform: {PlatformBadge.Text}");
+        if (!string.IsNullOrWhiteSpace(_currentProfileId)) lines.Add($"ID: {_currentProfileId}");
+        foreach (var chip in _currentProfileChips)
+        {
+            lines.Add($"{chip.Label}: {chip.CopyValue}");
+        }
+        if (ProfileVerifiedBadge.IsVisible) lines.Add("Verified: Yes");
+        if (ProfileLockedBadge.IsVisible) lines.Add($"Status: {ProfileLockedBadgeText.Text}");
+        if (!string.IsNullOrWhiteSpace(_currentProfileBio)) lines.Add($"Bio: {_currentProfileBio}");
+        var url = UrlTextBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(url)) lines.Add($"URL: {url}");
+
+        if (lines.Count == 0) return;
+
+        await clipboard.SetTextAsync(string.Join(Environment.NewLine, lines));
+        CopyAllProfileInfoText.Text = "✓ Copied All";
+        GlobalStatusText.Text = "Copied all profile info to clipboard.";
+        DispatcherTimer.RunOnce(() => CopyAllProfileInfoText.Text = "Copy All Info", TimeSpan.FromSeconds(2));
     }
 
     private static string? TryExtractFacebookIdFromUri(Uri uri)

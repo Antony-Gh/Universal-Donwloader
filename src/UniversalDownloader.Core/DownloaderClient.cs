@@ -273,6 +273,13 @@ public class DownloaderClient
             var profileId = root.TryGetProperty("profile_id", out var idProp) && idProp.ValueKind == JsonValueKind.String
                 ? idProp.GetString()
                 : null;
+            var bio = root.TryGetProperty("bio", out var bioProp) && bioProp.ValueKind == JsonValueKind.String
+                ? bioProp.GetString()
+                : null;
+            var isVerified = root.TryGetProperty("is_verified", out var verProp) && verProp.ValueKind == JsonValueKind.True;
+            var profileInfo = root.TryGetProperty("profile_info", out var infoArr) && infoArr.ValueKind == JsonValueKind.Array
+                ? JsonSerializer.Deserialize(infoArr.GetRawText(), DownloaderJsonContext.Default.ListProfileInfoItemModel) ?? new()
+                : new List<ProfileInfoItemModel>();
 
             return new FormatInspectionResult
             {
@@ -280,6 +287,9 @@ public class DownloaderClient
                 ProfileLocked = profileLocked,
                 ProfileNotice = profileNotice,
                 ProfileId = profileId,
+                Bio = bio,
+                IsVerified = isVerified,
+                ProfileInfo = profileInfo,
             };
         }
         catch (JsonException ex)

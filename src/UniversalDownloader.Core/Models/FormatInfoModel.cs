@@ -93,6 +93,9 @@ public record FormatInspectionResult
     public bool ProfileLocked { get; init; }
     public string? ProfileNotice { get; init; }
     public string? ProfileId { get; init; }
+    public string? Bio { get; init; }
+    public bool IsVerified { get; init; }
+    public List<ProfileInfoItemModel> ProfileInfo { get; init; } = new();
 }
 
 public record HistoryRecordModel

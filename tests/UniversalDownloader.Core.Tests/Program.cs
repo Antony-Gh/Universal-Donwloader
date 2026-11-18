@@ -117,13 +117,17 @@ RunTest("UserSettings saves and reloads cleanly via source-generated JSON", () =
 
 RunTest("DownloaderJsonContext deserializes MediaMetadataModel and DownloadProgressEvent", () =>
 {
-    var metaJson = """{"url":"https://youtu.be/abc","platform":"youtube","title":"Demo Video","uploader":"Tester","duration":125,"view_count":1500000,"profile_id":"1000123456789","profile_locked":true}""";
+    var metaJson = """{"url":"https://instagram.com/nasa","platform":"instagram","title":"NASA","uploader":"nasa","duration":125,"view_count":1500000,"profile_id":"1000123456789","profile_locked":true,"is_verified":true,"bio":"Explore space","profile_info":[{"label":"Followers","value":"12.5M","copy_value":"12500000"}]}""";
     var meta = JsonSerializer.Deserialize(metaJson, DownloaderJsonContext.Default.MediaMetadataModel);
     AssertTrue(meta != null, "meta deserialized");
-    AssertEqual("Demo Video", meta!.Title);
+    AssertEqual("NASA", meta!.Title);
     AssertEqual("2:05", meta.DurationFormatted);
     AssertEqual("1000123456789", meta.ProfileId ?? "");
     AssertEqual(true, meta.ProfileLocked);
+    AssertEqual(true, meta.IsVerified);
+    AssertEqual("Explore space", meta.Bio ?? "");
+    AssertEqual(1, meta.ProfileInfo.Count);
+    AssertEqual("12500000", meta.ProfileInfo[0].EffectiveCopyValue);
 
     var progJson = """{"event":"progress","status":"downloading","downloaded_bytes":5242880,"total_bytes":10485760,"percent":50.0,"speed":1048576,"eta":5}""";
     var prog = JsonSerializer.Deserialize(progJson, DownloaderJsonContext.Default.DownloadProgressEvent);

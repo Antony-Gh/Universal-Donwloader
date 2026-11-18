@@ -700,10 +700,12 @@ def main() -> int:
                 if target.content_type == ContentType.PROFILE and target.platform in {
                     Platform.FACEBOOK,
                     Platform.INSTAGRAM,
+                    Platform.TIKTOK,
                     Platform.TWITTER,
                     Platform.THREADS,
                     Platform.BLUESKY,
                     Platform.REDDIT,
+                    Platform.YOUTUBE,
                 }:
                     inspection = inspect_profile_images_detailed(
                         target.normalized_url,
@@ -726,7 +728,8 @@ def main() -> int:
                         "duration": None,
                         "duration_string": None,
                         "thumbnail": verified_imgs[0].url if verified_imgs else None,
-                        "description": inspection.profile_notice
+                        "description": inspection.bio
+                        or inspection.profile_notice
                         or "Profile page — use 'Inspect Streams' to view all available picture resolutions or click 'Profile Pic'.",
                         "view_count": None,
                         "is_playlist": False,
@@ -736,6 +739,9 @@ def main() -> int:
                         "profile_locked": inspection.profile_locked,
                         "profile_notice": inspection.profile_notice,
                         "profile_id": inspection.profile_id,
+                        "bio": inspection.bio,
+                        "is_verified": inspection.is_verified,
+                        "profile_info": [item.to_dict() for item in inspection.profile_info],
                     }
                     if config.json_output or config.json_stream:
                         print(json.dumps(payload, indent=2))
@@ -848,6 +854,9 @@ def main() -> int:
                                     "profile_locked": inspection.profile_locked,
                                     "profile_notice": inspection.profile_notice,
                                     "profile_id": inspection.profile_id,
+                                    "bio": inspection.bio,
+                                    "is_verified": inspection.is_verified,
+                                    "profile_info": [item.to_dict() for item in inspection.profile_info],
                                 },
                                 indent=2,
                             )

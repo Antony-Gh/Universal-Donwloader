@@ -11,6 +11,8 @@ namespace UniversalDownloader.Core;
 [JsonSerializable(typeof(DownloadCompleteEvent))]
 [JsonSerializable(typeof(DownloadErrorEvent))]
 [JsonSerializable(typeof(MediaMetadataModel))]
+[JsonSerializable(typeof(ProfileInfoItemModel))]
+[JsonSerializable(typeof(List<ProfileInfoItemModel>))]
 [JsonSerializable(typeof(PlaylistEntryModel))]
 [JsonSerializable(typeof(List<PlaylistEntryModel>))]
 [JsonSerializable(typeof(FormatInfoModel))]

@@ -313,6 +313,18 @@ def detect_content_type(url: str, platform: Platform) -> ContentType:
         if "/comments/" in path:
             return ContentType.POST
 
+    if platform == Platform.THREADS:
+        if "/post/" in path:
+            return ContentType.POST
+        if path.startswith("/@"):
+            return ContentType.PROFILE
+
+    if platform == Platform.BLUESKY:
+        if "/post/" in path:
+            return ContentType.POST
+        if "/profile/" in path:
+            return ContentType.PROFILE
+
     if platform == Platform.PINTEREST:
         if "/pin/" in path:
             return ContentType.POST

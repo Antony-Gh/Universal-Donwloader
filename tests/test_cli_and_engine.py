@@ -25,6 +25,7 @@ from universal_downloader.profile import (
     extract_facebook_photo_viewer_links,
     extract_facebook_user_id,
     extract_photo_viewer_images,
+    extract_profile_metadata_fields,
     extract_public_profile_candidates,
     extract_public_profile_images,
     extract_username_from_profile_url,
@@ -394,5 +395,80 @@ def test_detect_facebook_profile_locked_and_multiplatform_extractors():
         "https://www.facebook.com/tina.merzik",
         '{"CurrentUserInitialData":{"USER_ID":"999999999"},"props":{"userID":"1000444444444"}}',
     ) == "1000444444444"
+
+
+def test_extract_profile_metadata_fields_across_platforms():
+    # Instagram
+    ig_html = r'''
+    <meta name="description" content="12.5M Followers, 120 Following, 450 Posts - See Instagram photos" />
+    <script>{"profilePage_987654321":true,"is_verified":true,"is_private":false,"biography":"Hello IG \u2764"}</script>
+    '''
+    pid, bio, verified, private, fields = extract_profile_metadata_fields(
+        Platform.INSTAGRAM, "https://www.instagram.com/nasa/", ig_html
+    )
+    assert pid == "987654321"
+    assert verified is True
+    assert private is False
+    assert bio and "Hello IG" in bio
+    by_label = {f.label: f for f in fields}
+    assert by_label["ID"].value == "987654321"
+    assert by_label["Username"].value == "@nasa"
+    assert by_label["Followers"].value == "12.5M"
+    assert by_label["Following"].value == "120"
+    assert by_label["Posts"].value == "450"
+
+    # TikTok
+    tt_html = r'''
+    <script>{"userInfo":{"user":{"id":"681234567890","uniqueId":"creator","verified":true,"signature":"Bio TT"},"stats":{"followerCount":1500000,"followingCount":50,"heartCount":42000000,"videoCount":310}}}</script>
+    '''
+    pid, bio, verified, private, fields = extract_profile_metadata_fields(
+        Platform.TIKTOK, "https://www.tiktok.com/@creator", tt_html
+    )
+    assert pid == "681234567890"
+    assert verified is True
+    assert bio == "Bio TT"
+    by_label = {f.label: f for f in fields}
+    assert by_label["Followers"].value == "1.5M"
+    assert by_label["Followers"].copy_value == "1500000"
+    assert by_label["Likes"].value == "42M"
+    assert by_label["Videos"].value == "310"
+
+    # X / Twitter
+    tw_html = r'{"rest_id":"44196397","is_blue_verified":true,"followers_count":200000000,"friends_count":800,"statuses_count":50000,"description":"Mars"}'
+    pid, bio, verified, private, fields = extract_profile_metadata_fields(
+        Platform.TWITTER, "https://x.com/elonmusk", tw_html
+    )
+    assert pid == "44196397"
+    assert verified is True
+    assert bio == "Mars"
+    assert {f.label: f.value for f in fields}["Followers"] == "200M"
+
+    # YouTube
+    yt_html = r'{"externalId":"UC_x5XG1OV2P6uZZ5FSM9Ttw","subscriberCountText":{"simpleText":"2.4M subscribers"},"videosCountText":{"text":"6.1K"}}'
+    pid, bio, verified, private, fields = extract_profile_metadata_fields(
+        Platform.YOUTUBE, "https://www.youtube.com/@GoogleDevelopers", yt_html
+    )
+    assert pid == "UC_x5XG1OV2P6uZZ5FSM9Ttw"
+    by_label = {f.label: f.value for f in fields}
+    assert by_label["Channel ID"] == "UC_x5XG1OV2P6uZZ5FSM9Ttw"
+    assert by_label["Subscribers"] == "2.4M"
+
+    # Bluesky
+    pid, bio, verified, private, fields = extract_profile_metadata_fields(
+        Platform.BLUESKY,
+        "https://bsky.app/profile/bsky.app",
+        extra_data={
+            "did": "did:plc:z72i7hdynmk6r22z27h6tvur",
+            "handle": "bsky.app",
+            "followersCount": 25000000,
+            "followsCount": 12,
+            "postsCount": 420,
+            "description": "Official Bluesky",
+        },
+    )
+    assert pid == "did:plc:z72i7hdynmk6r22z27h6tvur"
+    assert bio == "Official Bluesky"
+    assert {f.label: f.value for f in fields}["Followers"] == "25M"
+
 
 

@@ -4,6 +4,21 @@ using System.Text.Json.Serialization;
 
 namespace UniversalDownloader.Core.Models;
 
+public record ProfileInfoItemModel
+{
+    [JsonPropertyName("label")]
+    public string Label { get; init; } = string.Empty;
+
+    [JsonPropertyName("value")]
+    public string Value { get; init; } = string.Empty;
+
+    [JsonPropertyName("copy_value")]
+    public string? CopyValue { get; init; }
+
+    public string EffectiveCopyValue => string.IsNullOrWhiteSpace(CopyValue) ? Value : CopyValue;
+    public string DisplayText => $"{Label}: {Value}";
+}
+
 public record PlaylistEntryModel
 {
     [JsonPropertyName("index")]
@@ -100,6 +115,15 @@ public record MediaMetadataModel
 
     [JsonPropertyName("profile_id")]
     public string? ProfileId { get; init; }
+
+    [JsonPropertyName("bio")]
+    public string? Bio { get; init; }
+
+    [JsonPropertyName("is_verified")]
+    public bool IsVerified { get; init; }
+
+    [JsonPropertyName("profile_info")]
+    public List<ProfileInfoItemModel> ProfileInfo { get; init; } = new();
 
     public string DurationFormatted
     {

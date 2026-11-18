@@ -170,19 +170,25 @@
                                     <!-- Metadata Details -->
                                     <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
                                         <!-- Platform & Status Badges -->
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <Border Background="#3B82F6" CornerRadius="4" Padding="6,2">
+                                        <WrapPanel Orientation="Horizontal">
+                                            <Border Background="#3B82F6" CornerRadius="4" Padding="6,2" Margin="0,0,6,3" VerticalAlignment="Center">
                                                 <TextBlock x:Name="PlatformBadge" Text="YOUTUBE" Foreground="White" FontSize="10" FontWeight="Bold"/>
                                             </Border>
-                                            <Button x:Name="ProfileIdButton" IsVisible="False" Padding="7,2" Background="#1E293B" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="4" Click="ProfileIdButton_Click" ToolTip.Tip="Click to copy Facebook Profile ID">
+                                            <Button x:Name="ProfileIdButton" IsVisible="False" Margin="0,0,6,3" Padding="7,2" Background="#1E293B" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="4" Click="ProfileIdButton_Click" ToolTip.Tip="Click to copy Profile ID">
                                                 <TextBlock x:Name="ProfileIdLabel" Text="ID: " Foreground="#7DD3FC" FontSize="10" FontWeight="SemiBold"/>
                                             </Button>
-                                            <Border x:Name="ProfileLockedBadge" IsVisible="False" Background="#451A03" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="4" Padding="6,2">
-                                                <TextBlock Text="LOCKED PROFILE" Foreground="#FCD34D" FontSize="10" FontWeight="Bold"/>
+                                            <Border x:Name="ProfileVerifiedBadge" IsVisible="False" Background="#172554" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="0,0,6,3" VerticalAlignment="Center">
+                                                <TextBlock Text="✓ VERIFIED" Foreground="#93C5FD" FontSize="10" FontWeight="Bold"/>
                                             </Border>
-                                            <PathIcon x:Name="MetadataHeaderSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="12" Height="12" Foreground="#38BDF8" VerticalAlignment="Center" IsVisible="False"/>
-                                            <TextBlock x:Name="MetadataLoadingText" Text="Loading media details..." Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" IsVisible="False"/>
-                                        </StackPanel>
+                                            <Border x:Name="ProfileLockedBadge" IsVisible="False" Background="#451A03" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="0,0,6,3" VerticalAlignment="Center">
+                                                <TextBlock x:Name="ProfileLockedBadgeText" Text="LOCKED PROFILE" Foreground="#FCD34D" FontSize="10" FontWeight="Bold"/>
+                                            </Border>
+                                            <Button x:Name="CopyAllProfileInfoButton" IsVisible="False" Margin="0,0,6,3" Padding="7,2" Background="#1E1B4B" BorderBrush="#6366F1" BorderThickness="1" CornerRadius="4" Click="CopyAllProfileInfoButton_Click" ToolTip.Tip="Copy all public profile details to clipboard">
+                                                <TextBlock x:Name="CopyAllProfileInfoText" Text="Copy All Info" Foreground="#C7D2FE" FontSize="10" FontWeight="SemiBold"/>
+                                            </Button>
+                                            <PathIcon x:Name="MetadataHeaderSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="12" Height="12" Foreground="#38BDF8" Margin="0,0,6,3" VerticalAlignment="Center" IsVisible="False"/>
+                                            <TextBlock x:Name="MetadataLoadingText" Text="Loading media details..." Foreground="#94A3B8" FontSize="11" Margin="0,0,0,3" VerticalAlignment="Center" IsVisible="False"/>
+                                        </WrapPanel>
 
                                         <!-- Title -->
                                         <TextBlock x:Name="VideoTitleLabel" Text="Video Title" FontSize="15" FontWeight="Bold" Foreground="#F4F4F8" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
@@ -198,6 +204,32 @@
                                                 <TextBlock x:Name="ViewsLabel" Text="" FontSize="12" Foreground="#64748B" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </StackPanel>
+
+                                        <!-- Click-to-Copy Public Profile Bio -->
+                                        <Button x:Name="ProfileBioButton" IsVisible="False" Padding="0" Background="Transparent" BorderThickness="0" HorizontalAlignment="Left" Click="ProfileBioButton_Click" ToolTip.Tip="Click to copy bio">
+                                            <TextBlock x:Name="ProfileBioText" Text="" FontSize="11" Foreground="#CBD5E1" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                        </Button>
+
+                                        <!-- Click-to-Copy Public Profile Info Chips (ID, @handle, Followers, Likes, Posts, Channel ID, DID, etc.) -->
+                                        <ItemsControl x:Name="ProfileInfoItems" IsVisible="False" Margin="0,2,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel Orientation="Horizontal"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="local:ProfileInfoChipViewModel">
+                                                    <Button Padding="7,2" Margin="0,0,5,4" CornerRadius="4"
+                                                            Background="#162032"
+                                                            BorderBrush="{Binding BorderHex}"
+                                                            BorderThickness="1"
+                                                            ToolTip.Tip="{Binding TooltipText}"
+                                                            Click="ProfileInfoChip_Click">
+                                                        <TextBlock Text="{Binding DisplayText}" Foreground="{Binding ForegroundHex}" FontSize="10" FontWeight="SemiBold"/>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
 
                                         <!-- Single-video Supported Qualities Pills -->
                                         <StackPanel x:Name="SingleVideoQualitiesPanel" IsVisible="False" Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
