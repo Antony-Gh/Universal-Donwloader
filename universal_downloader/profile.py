@@ -64,13 +64,81 @@ def is_generic_site_logo(url: str) -> bool:
     return any(token in lowered for token in GENERIC_LOGO_SUBSTRINGS)
 
 
+def _load_netscape_cookie_jar(path: Path) -> http.cookiejar.CookieJar:
+    """
+    Parse a Netscape cookies.txt file into a CookieJar, properly supporting #HttpOnly_ lines
+    (which Python's stdlib MozillaCookieJar silently skips, dropping Facebook's xs/datr/sb session cookies).
+    """
+    jar = http.cookiejar.CookieJar()
+    raw_text = path.read_text(encoding="utf-8-sig", errors="replace")
+    loaded = 0
+
+    for raw_line in raw_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            if line.lower().startswith("#httponly_"):
+                line = line[len("#HttpOnly_"):]
+            else:
+                continue
+
+        cols = line.split("\t")
+        if len(cols) < 7:
+            continue
+
+        domain, flag, cookie_path, secure_str, expires_str, name, value = (
+            cols[0].strip(),
+            cols[1].strip().upper(),
+            cols[2].strip() or "/",
+            cols[3].strip().upper(),
+            cols[4].strip(),
+            cols[5].strip(),
+            cols[6].strip(),
+        )
+        if not domain or not name:
+            continue
+
+        try:
+            expires_val: Optional[int] = int(expires_str)
+            if expires_val <= 0:
+                expires_val = None
+        except ValueError:
+            expires_val = None
+
+        cookie = http.cookiejar.Cookie(
+            version=0,
+            name=name,
+            value=value,
+            port=None,
+            port_specified=False,
+            domain=domain,
+            domain_specified=True,
+            domain_initial_dot=domain.startswith(".") or flag == "TRUE",
+            path=cookie_path,
+            path_specified=True,
+            secure=(secure_str == "TRUE"),
+            expires=expires_val,
+            discard=False,
+            comment=None,
+            comment_url=None,
+            rest={},
+            rfc2109=False,
+        )
+        jar.set_cookie(cookie)
+        loaded += 1
+
+    LOGGER.debug("Loaded %d cookie(s) from %s", loaded, path)
+    return jar
+
+
 def load_cookie_jar(config: AppConfig) -> Optional[http.cookiejar.CookieJar]:
     """Load the user's configured cookies (cookies.txt or browser session) for authorized profile access."""
     if config.cookies_file and config.cookies_file.exists():
-        jar = http.cookiejar.MozillaCookieJar(str(config.cookies_file))
         try:
-            jar.load(ignore_discard=True, ignore_expires=True)
-            return jar
+            jar = _load_netscape_cookie_jar(config.cookies_file)
+            if len(jar) > 0:
+                return jar
         except Exception as exc:
             LOGGER.warning("Could not load cookies file %s: %s", config.cookies_file, exc)
 
@@ -93,6 +161,28 @@ def load_cookie_jar(config: AppConfig) -> Optional[http.cookiejar.CookieJar]:
                 LOGGER.warning("Could not load cookies from browser '%s': %s", config.cookies_from_browser, err_text)
 
     return None
+
+
+def _build_cookie_header(
+    cookie_jar: Optional[http.cookiejar.CookieJar],
+    url: str,
+) -> Optional[str]:
+    """Build a verbatim RFC Cookie header string for cookies matching the target host."""
+    if cookie_jar is None:
+        return None
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    if not host:
+        return None
+    pairs: dict[str, str] = {}
+    for c in cookie_jar:
+        if c.value is None:
+            continue
+        domain = (c.domain or "").lstrip(".").lower()
+        if not domain or host == domain or host.endswith("." + domain):
+            pairs[c.name] = c.value
+    if not pairs:
+        return None
+    return "; ".join(f"{name}={val}" for name, val in pairs.items())
 
 
 def _build_url_opener(cookie_jar: Optional[http.cookiejar.CookieJar]) -> urllib.request.OpenerDirector:
@@ -445,12 +535,9 @@ def extract_public_profile_candidates(html_text: str, base_url: str = "") -> lis
         # Instagram / Threads
         (re.compile(r'"profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (HD)", False),
         (re.compile(r'"profile_pic_url"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
-        # Facebook owner profile avatar fields (flat and nested SSR objects)
-        (re.compile(r'"profilePicLarge"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Large)", False),
-        (re.compile(r'"profilePic(?:Full|HD|High|Original|720|960|1080)[^"]*"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (HD)", False),
-        (re.compile(r'"profile_picture(?:_for_sticky_bar|_url)?"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
-        (re.compile(r'"profilePicMedium"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (Medium)", False),
-        (re.compile(r'"profilePic160"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture (160px)", False),
+        # Facebook owner profile avatar fields (strictly owner-scoped so logged-in sidebar/chat avatars are never picked)
+        (re.compile(r'"profilePic(?:Large|Medium|Small|\d+)"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
+        (re.compile(r'"profile_picture_for_sticky_bar"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
         (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,1200}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
         (re.compile(r'"profilePhoto"\s*:\s*\{[^\r\n]{0,1200}?"uri"\s*:\s*"(https?:[^"]+)"', re.I), "Profile Picture", False),
         (re.compile(r'"viewer_image"\s*:\s*\{[^\r\n]{0,250}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"', re.I), "Profile Picture (Full)", False),
@@ -528,18 +615,36 @@ def extract_facebook_photo_viewer_links(html_text: str) -> list[tuple[str, bool]
     """
     links: list[tuple[str, bool]] = []
     seen: set[str] = set()
-    patterns = [
-        (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"', re.I), False),
-        (re.compile(r'"profilePhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"', re.I), False),
-        (re.compile(r'"cover_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"', re.I), True),
-        (re.compile(r'"coverPhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"', re.I), True),
+
+    def add_link(raw_url: str, is_cover: bool) -> None:
+        url = _unescape_embedded_url(raw_url)
+        if url.startswith("/"):
+            url = f"https://www.facebook.com{url}"
+        if url.startswith(("http://", "https://")) and url not in seen:
+            seen.add(url)
+            links.append((url, is_cover))
+
+    url_patterns = [
+        (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"', re.I), False),
+        (re.compile(r'"profilePhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"', re.I), False),
+        (re.compile(r'"cover_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"', re.I), True),
+        (re.compile(r'"coverPhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"', re.I), True),
     ]
-    for pattern, is_cover in patterns:
+    for pattern, is_cover in url_patterns:
         for match in pattern.finditer(html_text):
-            url = _unescape_embedded_url(match.group(1))
-            if url.startswith(("http://", "https://")) and url not in seen:
-                seen.add(url)
-                links.append((url, is_cover))
+            add_link(match.group(1), is_cover)
+
+    # Also resolve photo IDs inside profile_photo / cover_photo objects when URL isn't inlined
+    id_patterns = [
+        (re.compile(r'"profile_photo"\s*:\s*\{[^\r\n]{0,300}?"id"\s*:\s*"(\d{6,})"', re.I), False),
+        (re.compile(r'"cover_photo"\s*:\s*\{[^\r\n]{0,300}?"id"\s*:\s*"(\d{6,})"', re.I), True),
+    ]
+    for pattern, is_cover in id_patterns:
+        for match in pattern.finditer(html_text):
+            fbid = match.group(1)
+            if not any(f"fbid={fbid}" in existing for existing, _ in links):
+                add_link(f"https://www.facebook.com/photo/?fbid={fbid}", is_cover)
+
     return links
 
 
@@ -554,8 +659,11 @@ def extract_photo_viewer_images(html_text: str, is_cover: bool = False) -> list[
     patterns = [
         re.compile(r'"viewer_image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
         re.compile(r'"currMedia"\s*:\s*\{[^\r\n]{0,600}?"image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
-        re.compile(r'"image"\s*:\s*\{[^\r\n]{0,200}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"[^\r\n]{0,120}?"height"\s*:\s*(\d{3,4})', re.I),
+        re.compile(r'"photo_image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
+        re.compile(r'"image"\s*:\s*\{[^\r\n]{0,200}?"height"\s*:\s*\d{3,4}[^\r\n]{0,200}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"', re.I),
+        re.compile(r'"image"\s*:\s*\{[^\r\n]{0,200}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"[^\r\n]{0,200}?"height"\s*:\s*\d{3,4}', re.I),
         re.compile(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\'](https?://scontent[^"\']+)["\']', re.I),
+        re.compile(r'<meta[^>]+content=["\'](https?://scontent[^"\']+)["\'][^>]+property=["\']og:image["\']', re.I),
     ]
     for pattern in patterns:
         for match in pattern.finditer(html_text):
@@ -595,20 +703,14 @@ def _read_image_bytes(
     try:
         from curl_cffi import requests as curl_requests
 
-        cookie_dict = None
-        if cookie_jar is not None:
-            host = (urllib.parse.urlparse(image_url).hostname or "").lower()
-            cookie_dict = {
-                c.name: c.value
-                for c in cookie_jar
-                if c.value is not None
-                and (not c.domain or host == c.domain.lstrip(".").lower() or host.endswith("." + c.domain.lstrip(".").lower()))
-            } or None
+        req_headers = dict(headers)
+        cookie_header = _build_cookie_header(cookie_jar, image_url)
+        if cookie_header:
+            req_headers["Cookie"] = cookie_header
 
         resp = curl_requests.get(
             image_url,
-            headers=headers,
-            cookies=cookie_dict,
+            headers=req_headers,
             impersonate="chrome",
             timeout=timeout,
             allow_redirects=True,
@@ -761,7 +863,17 @@ def inspect_profile_images(
     if not raw_candidates:
         return []
 
-    to_probe = raw_candidates[:12]
+    # Prioritize authorized Native HD viewer candidates and highest estimated resolution before probing
+    raw_candidates.sort(
+        key=lambda c: (
+            1 if "Native HD" in c.label else 0,
+            0 if c.is_cover else 1,
+            estimate_image_resolution_score(c.url),
+        ),
+        reverse=True,
+    )
+
+    to_probe = raw_candidates[:16]
     verified: list[ProfileImageCandidate] = []
     with ThreadPoolExecutor(max_workers=min(6, len(to_probe))) as pool:
         futures = [pool.submit(probe_profile_image, item, config.timeout, cookie_jar) for item in to_probe]
@@ -886,27 +998,27 @@ def fetch_public_html(
         "Sec-Fetch-Dest": "document",
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
     }
+
+    cookie_header = _build_cookie_header(cookie_jar, url)
+    if cookie_header:
+        host = (urllib.parse.urlparse(url).hostname or "").lower()
+        LOGGER.info("Using %d session cookie(s) for %s", cookie_header.count(";") + 1, host)
 
     # Prefer curl_cffi (Chrome HTTP/2 TLS fingerprint) when available so social platforms
     # return their normal public SSR HTML instead of an empty bot-check shell.
     try:
         from curl_cffi import requests as curl_requests
 
-        cookie_dict = None
-        if cookie_jar is not None:
-            host = (urllib.parse.urlparse(url).hostname or "").lower()
-            cookie_dict = {
-                c.name: c.value
-                for c in cookie_jar
-                if c.value is not None
-                and (not c.domain or host == c.domain.lstrip(".").lower() or host.endswith("." + c.domain.lstrip(".").lower()))
-            } or None
+        req_headers = dict(headers)
+        if cookie_header:
+            req_headers["Cookie"] = cookie_header
 
         resp = curl_requests.get(
             url,
-            headers=headers,
-            cookies=cookie_dict,
+            headers=req_headers,
             impersonate="chrome",
             timeout=timeout,
             allow_redirects=True,

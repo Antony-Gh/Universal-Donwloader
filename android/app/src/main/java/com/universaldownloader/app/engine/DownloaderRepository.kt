@@ -603,12 +603,10 @@ class DownloaderRepository(private val appContext: Context) {
         val ownerPatterns = listOf(
             Triple(Regex(""""profile_pic_url_hd"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (HD)", false),
             Triple(Regex(""""profile_pic_url"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
-            Triple(Regex(""""profilePicLarge"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Large)", false),
-            Triple(Regex(""""profilePic(?:Full|HD|High|Original|720|960|1080)[^"]*"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (HD)", false),
-            Triple(Regex(""""profile_picture(?:_for_sticky_bar|_url)?"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
-            Triple(Regex(""""profilePicMedium"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Medium)", false),
-            Triple(Regex(""""profilePic160"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (160px)", false),
+            Triple(Regex(""""profilePic(?:Large|Medium|Small|\d+)"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
+            Triple(Regex(""""profile_picture_for_sticky_bar"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
             Triple(Regex(""""profile_photo"\s*:\s*\{[^\r\n]{0,1200}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
+            Triple(Regex(""""profilePhoto"\s*:\s*\{[^\r\n]{0,1200}?"uri"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture", false),
             Triple(Regex(""""viewer_image"\s*:\s*\{[^\r\n]{0,250}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+\\?/(?:t39\.30808-1|t1\.6435-1)\\?/[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Full)", false),
             Triple(Regex("""<svg[^>]+aria-label=[^>]*>(?:(?!</svg>).){0,2500}?<image[^>]+(?:xlink:)?href=["'](https?://scontent[^"']+)["']""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)), "Profile Picture (Header)", false),
             Triple(Regex(""""avatarLarger"\s*:\s*"(https?:[^"]+)"""", RegexOption.IGNORE_CASE), "Profile Picture (Large)", false),
@@ -697,16 +695,36 @@ class DownloaderRepository(private val appContext: Context) {
 
     private fun extractFacebookPhotoViewerLinks(htmlText: String): List<Pair<String, Boolean>> {
         val links = LinkedHashMap<String, Boolean>()
-        val patterns = listOf(
-            Regex(""""profile_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to false,
-            Regex(""""profilePhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to false,
-            Regex(""""cover_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to true,
-            Regex(""""coverPhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"(https?:\\?/\\?/[^"]*facebook\.com\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to true,
+        fun addLink(raw: String, isCover: Boolean) {
+            var url = unescapeEmbeddedUrl(raw)
+            if (url.startsWith("/")) {
+                url = "https://www.facebook.com$url"
+            }
+            if (url.startsWith("http")) {
+                links.putIfAbsent(url, isCover)
+            }
+        }
+
+        val urlPatterns = listOf(
+            Regex(""""profile_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to false,
+            Regex(""""profilePhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to false,
+            Regex(""""cover_photo"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to true,
+            Regex(""""coverPhoto"\s*:\s*\{[^\r\n]{0,700}?"url"\s*:\s*"((?:https?:\\?/\\?/[^"]*facebook\.com)?\\?/photo[^"]+)"""", RegexOption.IGNORE_CASE) to true,
         )
-        for ((regex, isCover) in patterns) {
+        for ((regex, isCover) in urlPatterns) {
+            regex.findAll(htmlText).forEach { m -> addLink(m.groupValues[1], isCover) }
+        }
+
+        val idPatterns = listOf(
+            Regex(""""profile_photo"\s*:\s*\{[^\r\n]{0,300}?"id"\s*:\s*"(\d{6,})"""", RegexOption.IGNORE_CASE) to false,
+            Regex(""""cover_photo"\s*:\s*\{[^\r\n]{0,300}?"id"\s*:\s*"(\d{6,})"""", RegexOption.IGNORE_CASE) to true,
+        )
+        for ((regex, isCover) in idPatterns) {
             regex.findAll(htmlText).forEach { m ->
-                val url = unescapeEmbeddedUrl(m.groupValues[1])
-                if (url.startsWith("http")) links.putIfAbsent(url, isCover)
+                val fbid = m.groupValues[1]
+                if (links.keys.none { it.contains("fbid=$fbid") }) {
+                    addLink("https://www.facebook.com/photo/?fbid=$fbid", isCover)
+                }
             }
         }
         return links.entries.map { it.key to it.value }
@@ -718,7 +736,11 @@ class DownloaderRepository(private val appContext: Context) {
         val patterns = listOf(
             Regex(""""viewer_image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"""", RegexOption.IGNORE_CASE),
             Regex(""""currMedia"\s*:\s*\{[^\r\n]{0,600}?"image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""photo_image"\s*:\s*\{[^\r\n]{0,300}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""image"\s*:\s*\{[^\r\n]{0,200}?"height"\s*:\s*\d{3,4}[^\r\n]{0,200}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"""", RegexOption.IGNORE_CASE),
+            Regex(""""image"\s*:\s*\{[^\r\n]{0,200}?"uri"\s*:\s*"(https?:\\?/\\?/scontent[^"]+)"[^\r\n]{0,200}?"height"\s*:\s*\d{3,4}""", RegexOption.IGNORE_CASE),
             Regex("""<meta[^>]+property=["']og:image["'][^>]+content=["'](https?://scontent[^"']+)["']""", RegexOption.IGNORE_CASE),
+            Regex("""<meta[^>]+content=["'](https?://scontent[^"']+)["'][^>]+property=["']og:image["']""", RegexOption.IGNORE_CASE),
         )
         for (regex in patterns) {
             regex.findAll(htmlText).forEach { m ->
@@ -779,7 +801,13 @@ class DownloaderRepository(private val appContext: Context) {
             }
         }
 
-        val probed = rawCandidates.values.take(10).mapNotNull { (url, label, isCover) ->
+        val prioritized = rawCandidates.values.sortedWith(
+            compareByDescending<Triple<String, String, Boolean>> { if (it.second.contains("Native HD")) 1 else 0 }
+                .thenByDescending { if (it.third) 0 else 1 }
+                .thenByDescending { estimateImageResolutionScore(it.first) }
+        )
+
+        val probed = prioritized.take(16).mapNotNull { (url, label, isCover) ->
             probeProfileImage(url, label, isCover, cookiesFilePath)
         }
 

@@ -18,6 +18,7 @@ from universal_downloader.extractor import parse_rate_limit
 from universal_downloader.models import AppConfig, ContentType, DetectedTarget, Platform
 from universal_downloader.profile import (
     ProfileImageCandidate,
+    _build_cookie_header,
     compute_hd_target_dimensions,
     enhance_image_bytes_to_hd,
     extract_facebook_photo_viewer_links,
@@ -86,17 +87,27 @@ def test_resolve_profile_input():
     assert is_generic_site_logo("https://static.xx.fbcdn.net/rsrc.php/v3/y/r/fb_icon_325x325.png")
     assert not is_generic_site_logo("https://scontent.cdninstagram.com/v/t51.2885-19/123456_n.jpg")
 
-    # Netscape cookies.txt loading
+    # Netscape cookies.txt loading (including #HttpOnly_ lines required for Facebook xs/datr/sb)
     with tempfile.TemporaryDirectory() as td:
         cookie_path = Path(td) / "cookies.txt"
         cookie_path.write_text(
-            "# Netscape HTTP Cookie File\n.instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tabc123\n",
+            "# Netscape HTTP Cookie File\n"
+            ".instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tabc123\n"
+            "#HttpOnly_.facebook.com\tTRUE\t/\tTRUE\t2147483647\txs\t42%3Afb_secret_xs\n"
+            ".facebook.com\tTRUE\t/\tTRUE\t2147483647\tc_user\t1000999\n",
             encoding="utf-8",
         )
         cfg = AppConfig(cookies_file=cookie_path)
         jar = load_cookie_jar(cfg)
         assert jar is not None
-        assert any(c.name == "sessionid" for c in jar)
+        names = {c.name for c in jar}
+        assert "sessionid" in names
+        assert "xs" in names
+        fb_hdr = _build_cookie_header(jar, "https://www.facebook.com/example")
+        assert fb_hdr is not None
+        assert "xs=42%3Afb_secret_xs" in fb_hdr
+        assert "c_user=1000999" in fb_hdr
+        assert "sessionid" not in fb_hdr
 
     # Ambiguous bare @username must raise error
     with pytest.raises(ProfileError, match="ambiguous"):
@@ -192,14 +203,30 @@ def test_extract_facebook_photo_viewer_links_and_images():
         ("https://www.facebook.com/photo/?fbid=987654&set=a.2", True),
     ]
 
+    # Relative /photo/?fbid=... URLs and fallback profile_photo.id extraction
+    rel_html = r'''
+    <script>
+      {"profile_photo":{"url":"\/photo\/?fbid=555555\u0026set=a.11"}}
+      {"cover_photo":{"id":"7777777"}}
+    </script>
+    '''
+    rel_links = extract_facebook_photo_viewer_links(rel_html)
+    assert rel_links == [
+        ("https://www.facebook.com/photo/?fbid=555555&set=a.11", False),
+        ("https://www.facebook.com/photo/?fbid=7777777", True),
+    ]
+
     viewer_html = r'''
-    <script>{"viewer_image":{"height":1440,"width":1440,"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-6\/full_hd.jpg?a=1\u0026b=2"}}</script>
+    <script>
+      {"viewer_image":{"height":1440,"width":1440,"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-6\/full_hd.jpg?a=1\u0026b=2"}}
+      {"image":{"height":1080,"width":1080,"uri":"https:\/\/scontent.xx.fbcdn.net\/v\/t39.30808-6\/alt_hd.jpg"}}
+    </script>
     '''
     imgs = extract_photo_viewer_images(viewer_html, is_cover=False)
-    assert len(imgs) == 1
-    assert imgs[0].url == "https://scontent.xx.fbcdn.net/v/t39.30808-6/full_hd.jpg?a=1&b=2"
-    assert imgs[0].label == "Profile Picture (Native HD)"
-    assert imgs[0].is_cover is False
+    img_urls = [i.url for i in imgs]
+    assert "https://scontent.xx.fbcdn.net/v/t39.30808-6/full_hd.jpg?a=1&b=2" in img_urls
+    assert "https://scontent.xx.fbcdn.net/v/t39.30808-6/alt_hd.jpg" in img_urls
+    assert all(i.label == "Profile Picture (Native HD)" and not i.is_cover for i in imgs)
 
     # Verify X/Twitter _normal and YouTube =s88 upgrade to high-resolution renditions first
     social_small = r'''
