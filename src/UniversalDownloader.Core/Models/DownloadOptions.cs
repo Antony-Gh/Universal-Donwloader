@@ -69,6 +69,7 @@ public class DownloadOptions
     public bool TagMusic { get; set; }
     public bool ShareOnLan { get; set; }
     public int SharePort { get; set; }
+    public bool CheckDuplicates { get; set; }
 
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
@@ -275,6 +276,11 @@ public class DownloadOptions
                 args.Add("--share-port");
                 args.Add(SharePort.ToString());
             }
+        }
+
+        if (CheckDuplicates)
+        {
+            args.Add("--check-duplicates");
         }
 
         return args;

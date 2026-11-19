@@ -350,6 +350,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Local network port to bind for file sharing (default: random available port).",
     )
     post_group.add_argument(
+        "--check-duplicates",
+        action="store_true",
+        help="Check download history and local storage before downloading to avoid duplicates.",
+    )
+    post_group.add_argument(
         "--split-chapters",
         action="store_true",
         help="Split video into multiple files based on internal chapters.",

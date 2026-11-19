@@ -390,6 +390,30 @@ class DownloadEngine:
                 },
             )
 
+        if self.config.check_duplicates:
+            from universal_downloader.duplicate_detector import find_existing_duplicate
+            dup = find_existing_duplicate(target.normalized_url, self.config.output_dir)
+            if dup:
+                dup_path = dup["path"]
+                LOGGER.info("Duplicate download detected: %s", dup_path)
+                if self.config.json_stream:
+                    emit_json_event(
+                        "duplicate",
+                        {
+                            "url": target.normalized_url,
+                            "existing_file": str(dup_path),
+                            "message": f"Duplicate file already exists: {dup_path.name}",
+                        },
+                    )
+                if not self.config.json_output:
+                    warning(f"Duplicate detected! You already downloaded this file:\n  • {dup_path}", self.config)
+                return DownloadResult(
+                    success=True,
+                    url=target.normalized_url,
+                    files=[dup_path],
+                    metadata={"title": dup.get("title") or dup_path.stem, "duplicate": True},
+                )
+
         last_error: Optional[Exception] = None
 
         for attempt in range(1, self.config.retries + 2):

@@ -125,6 +125,7 @@ class AppConfig:
     tag_music: bool = False
     share: bool = False
     share_port: int = 0
+    check_duplicates: bool = False
 
 
 @dataclass
