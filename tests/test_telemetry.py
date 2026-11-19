@@ -80,6 +80,13 @@ def test_build_heartbeat_payload_structure(tmp_path: Path):
     assert "os_name" in payload
     assert "device_model" in payload
     assert "app_version" in payload
+    assert "locale" in payload
+    assert "timezone" in payload
+    assert "cpu_cores" in payload
+    assert isinstance(payload["cpu_cores"], int)
+    assert "cpu_arch" in payload
+    assert "screen_res" in payload
+    assert "connection_type" in payload
 
 
 def test_detect_device_type_android(monkeypatch):
@@ -171,6 +178,13 @@ def test_push_heartbeat_to_neon():
             "os_name": "Windows 11",
             "device_model": "Custom PC",
             "app_version": "3.4.0",
+            "locale": "en_US",
+            "timezone": "America/New_York",
+            "cpu_cores": 16,
+            "cpu_arch": "x86_64",
+            "total_ram_gb": 32.0,
+            "screen_res": "2560x1440",
+            "connection_type": "Ethernet",
         }
         res = push_heartbeat_to_neon("https://neon.mock/sql", "test_key", payload)
         assert res is True
@@ -179,6 +193,8 @@ def test_push_heartbeat_to_neon():
         body = json.loads(req.data.decode("utf-8"))
         assert "record_device_heartbeat" in body["query"]
         assert "Desktop PC" in body["query"]
+        assert "en_US" in body["query"]
+        assert "32.0" in body["query"]
 
 
 def test_send_telemetry_heartbeat_disabled_skips(monkeypatch):
@@ -214,9 +230,22 @@ def test_format_analytics_dashboard_rendering():
                     "other_devices": 0,
                     "active_last_30_days": 400,
                     "active_last_7_days": 250,
+                    "avg_ram_gb": 16.0,
+                    "avg_cpu_cores": 8.0,
                 }
             ]
-        }
+        },
+        "geo": {
+            "rows": [
+                {"locale": "en_US", "timezone": "America/New_York", "count": 250, "percentage": 50.0},
+                {"locale": "ar_EG", "timezone": "Africa/Cairo", "count": 100, "percentage": 20.0},
+            ]
+        },
+        "hardware": {
+            "rows": [
+                {"cpu_arch": "x86_64", "screen_res": "1920x1080", "count": 300, "percentage": 60.0},
+            ]
+        },
     }
 
     report = format_analytics_dashboard(gh_stats, neon_stats)
@@ -228,3 +257,7 @@ def test_format_analytics_dashboard_rendering():
     assert "Desktop PC:             250 ( 50.0%)" in report
     assert "Laptop:                 150 ( 30.0%)" in report
     assert "Android:                100 ( 20.0%)" in report
+    assert "Average CPU Cores:      8.0 cores" in report
+    assert "Average Installed RAM:  16.0 GB" in report
+    assert "en_US (America/New_York): 250 (50.0%)" in report
+    assert "x86_64 / 1920x1080: 300 devices" in report
