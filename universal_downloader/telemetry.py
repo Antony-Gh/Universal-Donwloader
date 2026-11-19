@@ -553,6 +553,8 @@ def fetch_neon_device_stats(
         queries = {
             "stats": "SELECT * FROM v_device_stats;",
             "breakdown": "SELECT * FROM v_device_breakdown LIMIT 10;",
+            "geo": "SELECT * FROM v_geo_demographics LIMIT 5;",
+            "hardware": "SELECT * FROM v_hardware_specs LIMIT 5;",
             "versions": "SELECT * FROM v_version_breakdown LIMIT 10;",
         }
         results: dict[str, Any] = {}
@@ -624,13 +626,14 @@ def format_analytics_dashboard(
         rows = neon_stats["stats"].get("rows", [])
         if rows:
             st = rows[0]
-            # Column indices or dictionary
             tot_dev = st.get("total_unique_devices", 0) if isinstance(st, dict) else st[0]
             desktops = st.get("desktop_pcs", 0) if isinstance(st, dict) else st[1]
             laptops = st.get("laptops", 0) if isinstance(st, dict) else st[2]
             androids = st.get("android_devices", 0) if isinstance(st, dict) else st[3]
             act_30 = st.get("active_last_30_days", 0) if isinstance(st, dict) else st[5]
             act_7 = st.get("active_last_7_days", 0) if isinstance(st, dict) else st[6]
+            avg_ram = st.get("avg_ram_gb") if isinstance(st, dict) else (st[7] if len(st) > 7 else None)
+            avg_cores = st.get("avg_cpu_cores") if isinstance(st, dict) else (st[8] if len(st) > 8 else None)
 
             lines.append(f"Total Unique Installations: {tot_dev:,}")
             if tot_dev > 0:
@@ -641,6 +644,38 @@ def format_analytics_dashboard(
                 lines.append(f"  • Desktop PC:             {desktops:,} ({(desktops/tot_dev)*100:5.1f}%)")
                 lines.append(f"  • Laptop:                 {laptops:,} ({(laptops/tot_dev)*100:5.1f}%)")
                 lines.append(f"  • Android:                {androids:,} ({(androids/tot_dev)*100:5.1f}%)")
+
+                if avg_ram or avg_cores:
+                    lines.append("")
+                    lines.append("Hardware Capability Profile:")
+                    if avg_cores:
+                        lines.append(f"  • Average CPU Cores:      {float(avg_cores):.1f} cores")
+                    if avg_ram:
+                        lines.append(f"  • Average Installed RAM:  {float(avg_ram):.1f} GB")
+
+            # Demographics breakdown
+            geo_rows = neon_stats.get("geo", {}).get("rows", [])
+            if geo_rows:
+                lines.append("")
+                lines.append("Top Regional Locales & Timezones:")
+                for g in geo_rows[:4]:
+                    loc_name = g.get("locale") if isinstance(g, dict) else g[0]
+                    tz_name = g.get("timezone") if isinstance(g, dict) else g[1]
+                    cnt = g.get("count") if isinstance(g, dict) else g[2]
+                    pct = g.get("percentage") if isinstance(g, dict) else g[3]
+                    lines.append(f"  • {loc_name} ({tz_name}): {cnt} ({pct}%)")
+
+            # Hardware specs breakdown
+            hw_rows = neon_stats.get("hardware", {}).get("rows", [])
+            if hw_rows:
+                lines.append("")
+                lines.append("Display & Architecture Breakdown:")
+                for h in hw_rows[:4]:
+                    arch_name = h.get("cpu_arch") if isinstance(h, dict) else h[0]
+                    res_name = h.get("screen_res") if isinstance(h, dict) else h[1]
+                    cnt = h.get("count") if isinstance(h, dict) else h[3]
+                    lines.append(f"  • {arch_name} / {res_name}: {cnt} devices")
+
         else:
             lines.append("Connected to Neon: No device heartbeats recorded yet.")
     else:
