@@ -323,3 +323,9 @@ All 43 unit and integration tests run in ~1.2 seconds across platforms.
 ## Legal & Compliance Notice
 
 Universal Media Downloader is designed for educational, archiving, and research purposes on **publicly accessible content** that the user is authorized to download. It does not circumvent digital rights management (DRM), bypass paywalls, extract private credentials, or solve CAPTCHAs. Always respect copyright laws and platform terms of service.
+
+---
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.

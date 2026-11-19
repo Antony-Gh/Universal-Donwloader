@@ -8,9 +8,9 @@ version = "3.2.0"
 description = "Universal Media Downloader for publicly accessible media"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 authors = [
-    {name = "Universal Downloader"}
+    {name = "Antony-Gh"}
 ]
 keywords = ["downloader", "media", "video", "audio", "yt-dlp", "cli"]
 classifiers = [
