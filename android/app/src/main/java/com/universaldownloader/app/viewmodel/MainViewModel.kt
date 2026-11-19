@@ -122,6 +122,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initializeEngine()
         loadHistory()
         checkForAppUpdate(silent = true)
+        viewModelScope.launch(Dispatchers.IO) {
+            val store = (getApplication<Application>() as UniversalDownloaderApp).preferencesStore
+            if (store.isTelemetryEnabled()) {
+                val installId = store.getOrCreateInstallId()
+                repo.sendDeviceHeartbeat(installId)
+            }
+        }
     }
 
     fun checkForAppUpdate(silent: Boolean = false) {

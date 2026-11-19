@@ -1466,6 +1466,48 @@ class DownloaderRepository(private val appContext: Context) {
             "bestvideo$heightLimit+bestaudio/best$heightLimit/best"
         }
     }
+
+    suspend fun sendDeviceHeartbeat(installId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val neonUrl = System.getenv("NEON_DATABASE_URL")
+                ?: System.getenv("UD_TELEMETRY_URL")
+            if (neonUrl.isNullOrBlank()) return@withContext false
+
+            val neonKey = System.getenv("NEON_TELEMETRY_KEY")
+
+            val deviceType = "Android"
+            val osName = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})"
+            val deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+            val appVersion = com.universaldownloader.app.BuildConfig.VERSION_NAME
+
+            val escId = installId.replace("'", "''")
+            val escType = deviceType.replace("'", "''")
+            val escOs = osName.replace("'", "''")
+            val escModel = deviceModel.replace("'", "''")
+            val escVer = appVersion.replace("'", "''")
+
+            val sql = "SELECT record_device_heartbeat('$escId'::UUID, '$escType', '$escOs', '$escModel', '$escVer');"
+            val jsonPayload = org.json.JSONObject().put("query", sql).toString()
+
+            val conn = (URL(neonUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 4000
+                readTimeout = 4000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                if (!neonKey.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer $neonKey")
+                }
+                setRequestProperty("User-Agent", "UniversalDownloader-Android/$appVersion")
+            }
+
+            conn.outputStream.use { it.write(jsonPayload.toByteArray(Charsets.UTF_8)) }
+            val responseCode = conn.responseCode
+            responseCode in 200..299
+        } catch (_: Exception) {
+            false
+        }
+    }
 }
 
 data class SearchResultItem(

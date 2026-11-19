@@ -49,6 +49,21 @@ class PreferencesStore(context: Context) {
         prefs.edit().putString(KEY_LANGUAGE, code).apply()
     }
 
+    fun getOrCreateInstallId(): String {
+        var id = prefs.getString(KEY_INSTALL_ID, null)
+        if (id.isNullOrBlank()) {
+            id = java.util.UUID.randomUUID().toString()
+            prefs.edit().putString(KEY_INSTALL_ID, id).apply()
+        }
+        return id
+    }
+
+    fun isTelemetryEnabled(): Boolean = prefs.getBoolean(KEY_TELEMETRY_ENABLED, true)
+
+    fun setTelemetryEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_TELEMETRY_ENABLED, enabled).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "universal_downloader_prefs"
         private const val KEY_QUALITY = "quality"
@@ -61,5 +76,7 @@ class PreferencesStore(context: Context) {
         private const val KEY_COOKIES_PATH = "cookies_path"
         private const val KEY_SPONSORBLOCK = "sponsorblock"
         private const val KEY_LANGUAGE = "language"
+        private const val KEY_INSTALL_ID = "install_id"
+        private const val KEY_TELEMETRY_ENABLED = "telemetry_enabled"
     }
 }
