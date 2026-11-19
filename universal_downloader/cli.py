@@ -336,6 +336,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enrich audio files with metadata and cover art from MusicBrainz & Cover Art Archive.",
     )
     post_group.add_argument(
+        "--share",
+        "--serve",
+        action="store_true",
+        dest="share",
+        help="Host media on local network and display QR code to transfer directly to mobile devices.",
+    )
+    post_group.add_argument(
+        "--share-port",
+        type=int,
+        default=0,
+        metavar="PORT",
+        help="Local network port to bind for file sharing (default: random available port).",
+    )
+    post_group.add_argument(
         "--split-chapters",
         action="store_true",
         help="Split video into multiple files based on internal chapters.",
@@ -1371,6 +1385,38 @@ def main() -> int:
                     print(json.dumps({"success": False, "error": str(texc)}))
                 else:
                     failure(f"Music tagging failed: {texc}", config)
+                return 1
+
+        # Direct local file sharing over Wi-Fi with QR code
+        if getattr(args, "share", False) and requested_url:
+            try:
+                local_path = Path(requested_url).expanduser()
+                if local_path.is_file():
+                    from universal_downloader.local_share import generate_qr_ascii, start_file_share
+                    server = start_file_share(local_path, port=config.share_port)
+                    qr_text = generate_qr_ascii(server.url)
+                    if config.json_output or config.json_stream:
+                        print(json.dumps({"success": True, "share_url": server.url, "file": str(local_path)}))
+                    else:
+                        print("\n" + "=" * 60)
+                        print(f"📲 Sharing '{local_path.name}' over Local Wi-Fi")
+                        print(f"👉 Scan QR code with your phone camera or visit:")
+                        print(f"   {server.url}")
+                        print("=" * 60)
+                        print(qr_text)
+                        print("Press Ctrl+C to stop sharing.\n")
+                    try:
+                        while True:
+                            time.sleep(1)
+                    except KeyboardInterrupt:
+                        server.stop()
+                        print("\nSharing stopped.")
+                    return 0
+            except Exception as sexc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(sexc)}))
+                else:
+                    failure(f"File sharing failed: {sexc}", config)
                 return 1
 
         # Metadata inspection mode

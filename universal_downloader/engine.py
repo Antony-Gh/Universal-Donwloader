@@ -487,6 +487,30 @@ class DownloadEngine:
                     title_str = res.metadata.get("title") or "Download Complete"
                     send_notification("Universal Downloader", f"Downloaded: {title_str}")
 
+                # Local network file share
+                if self.config.share and res.files:
+                    try:
+                        from universal_downloader.local_share import generate_qr_ascii, start_file_share
+                        primary_file = res.files[0]
+                        server = start_file_share(primary_file, port=self.config.share_port)
+                        qr_ascii = generate_qr_ascii(server.url)
+                        if self.config.json_stream:
+                            emit_json_event(
+                                "share",
+                                {
+                                    "share_url": server.url,
+                                    "file": str(primary_file),
+                                },
+                            )
+                        if not self.config.json_output and not self.config.json_stream:
+                            print("\n" + "=" * 60)
+                            print(f"📲 Sharing '{primary_file.name}' over Local Wi-Fi")
+                            print(f"👉 Scan QR code with your phone camera or visit: {server.url}")
+                            print("=" * 60)
+                            print(qr_ascii)
+                    except Exception as s_exc:
+                        LOGGER.warning("Local file sharing failed: %s", s_exc)
+
                 # JSON streaming event
                 if self.config.json_stream:
                     emit_json_event(

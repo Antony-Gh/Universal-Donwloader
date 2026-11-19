@@ -67,6 +67,8 @@ public class DownloadOptions
     public int GifWidth { get; set; } = 480;
     public string? FrameGrabTimestamp { get; set; }
     public bool TagMusic { get; set; }
+    public bool ShareOnLan { get; set; }
+    public int SharePort { get; set; }
 
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
@@ -263,6 +265,16 @@ public class DownloadOptions
         if (TagMusic)
         {
             args.Add("--tag-music");
+        }
+
+        if (ShareOnLan)
+        {
+            args.Add("--share");
+            if (SharePort > 0)
+            {
+                args.Add("--share-port");
+                args.Add(SharePort.ToString());
+            }
         }
 
         return args;

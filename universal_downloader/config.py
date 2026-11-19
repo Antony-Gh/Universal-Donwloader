@@ -479,6 +479,8 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         frame_grab=getattr(args, "frame_grab", None) or json_config.get("frame_grab"),
         make_clip=getattr(args, "make_clip", False) or parse_config_bool(json_config.get("make_clip")),
         tag_music=getattr(args, "tag_music", False) or parse_config_bool(json_config.get("tag_music")),
+        share=getattr(args, "share", False) or parse_config_bool(json_config.get("share")),
+        share_port=int(getattr(args, "share_port", 0) or json_config.get("share_port") or 0),
     )
 
     if config.retries > 20:

@@ -123,6 +123,8 @@ class AppConfig:
     frame_grab: Optional[str] = None
     make_clip: bool = False
     tag_music: bool = False
+    share: bool = False
+    share_port: int = 0
 
 
 @dataclass
