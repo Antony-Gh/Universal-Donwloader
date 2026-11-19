@@ -297,6 +297,78 @@ public static class PlatformUtils
         }
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private class MEMORYSTATUSEX
+    {
+        public uint dwLength;
+        public uint dwMemoryLoad;
+        public ulong ullTotalPhys;
+        public ulong ullAvailPhys;
+        public ulong ullTotalPageFile;
+        public ulong ullAvailPageFile;
+        public ulong ullTotalVirtual;
+        public ulong ullAvailVirtual;
+        public ulong ullAvailExtendedVirtual;
+
+        public MEMORYSTATUSEX()
+        {
+            dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+        }
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    public static double DetectTotalRamGb()
+    {
+        try
+        {
+            if (IsWindows)
+            {
+                var stat = new MEMORYSTATUSEX();
+                if (GlobalMemoryStatusEx(stat))
+                {
+                    return Math.Round(stat.ullTotalPhys / (1024.0 * 1024 * 1024), 1);
+                }
+            }
+            else if (IsLinux && File.Exists("/proc/meminfo"))
+            {
+                foreach (var line in File.ReadLines("/proc/meminfo"))
+                {
+                    if (line.StartsWith("MemTotal:"))
+                    {
+                        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length >= 2 && double.TryParse(parts[1], out var kb))
+                        {
+                            return Math.Round(kb / (1024.0 * 1024), 1);
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+        return 0;
+    }
+
+    public static string DetectScreenResolution()
+    {
+        try
+        {
+            if (IsWindows)
+            {
+                var w = GetSystemMetrics(0);
+                var h = GetSystemMetrics(1);
+                if (w > 0 && h > 0) return $"{w}x{h}";
+            }
+        }
+        catch { }
+        return "Unknown";
+    }
+
     /// <summary>
     /// Sends an anonymous heartbeat to Neon Serverless Postgres via SQL-over-HTTPS.
     /// Safe, non-blocking, zero personal data.
@@ -325,14 +397,27 @@ public static class PlatformUtils
             var osName = RuntimeInformation.OSDescription;
             var deviceModel = "PC";
             var appVersion = UpdateChecker.GetCurrentVersion();
+            var locale = System.Globalization.CultureInfo.CurrentCulture.Name;
+            var timezone = TimeZoneInfo.Local.StandardName;
+            var cpuCores = Environment.ProcessorCount;
+            var cpuArch = RuntimeInformation.ProcessArchitecture.ToString();
+            var ramGb = DetectTotalRamGb();
+            var screenRes = DetectScreenResolution();
+            var connType = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable() ? "Connected" : "Offline";
 
             var escId = installId.Replace("'", "''");
             var escType = deviceType.Replace("'", "''");
             var escOs = osName.Replace("'", "''");
             var escModel = deviceModel.Replace("'", "''");
             var escVer = appVersion.Replace("'", "''");
+            var escLocale = locale.Replace("'", "''");
+            var escTz = timezone.Replace("'", "''");
+            var escArch = cpuArch.Replace("'", "''");
+            var escScreen = screenRes.Replace("'", "''");
+            var escConn = connType.Replace("'", "''");
+            var escRam = ramGb > 0 ? ramGb.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) : "NULL";
 
-            var sql = $"SELECT record_device_heartbeat('{escId}'::UUID, '{escType}', '{escOs}', '{escModel}', '{escVer}');";
+            var sql = $"SELECT record_device_heartbeat('{escId}'::UUID, '{escType}', '{escOs}', '{escModel}', '{escVer}', '{escLocale}', '{escTz}', {cpuCores}, '{escArch}', {escRam}, '{escScreen}', '{escConn}');";
             var jsonPayload = $"{{\"query\":\"{sql}\"}}";
 
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
