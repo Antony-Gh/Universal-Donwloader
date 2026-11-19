@@ -5,4 +5,17 @@
     <Application.Styles>
         <FluentTheme />
     </Application.Styles>
+    <TrayIcon.Icons>
+        <TrayIcons>
+            <TrayIcon Icon="/Assets/app-icon.ico" ToolTipText="Universal Media Downloader" Clicked="TrayIcon_Clicked">
+                <TrayIcon.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Open Universal Downloader" Click="ShowApp_Click" />
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Exit" Click="ExitApp_Click" />
+                    </NativeMenu>
+                </TrayIcon.Menu>
+            </TrayIcon>
+        </TrayIcons>
+    </TrayIcon.Icons>
 </Application>

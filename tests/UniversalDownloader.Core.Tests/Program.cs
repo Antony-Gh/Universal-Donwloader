@@ -157,6 +157,8 @@ RunTest("UserSettings saves and reloads cleanly via source-generated JSON", () =
             EmbedSubs = true,
             CookiesBrowserIndex = 3,
             SponsorBlockEnabled = true,
+            MinimizeToTray = true,
+            WatchClipboard = true,
         };
         original.Save(tmpPath);
 
@@ -169,6 +171,8 @@ RunTest("UserSettings saves and reloads cleanly via source-generated JSON", () =
         AssertEqual(true, loaded.EmbedSubs);
         AssertEqual(3, loaded.CookiesBrowserIndex);
         AssertEqual(true, loaded.SponsorBlockEnabled);
+        AssertEqual(true, loaded.MinimizeToTray);
+        AssertEqual(true, loaded.WatchClipboard);
     }
     finally
     {

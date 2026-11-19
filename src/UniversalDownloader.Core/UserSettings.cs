@@ -23,6 +23,8 @@ public class UserSettings
     public string? TelemetryKey { get; set; } = null;
     public string? FriendTag { get; set; } = null;
     public string Language { get; set; } = "en";
+    public bool MinimizeToTray { get; set; } = true;
+    public bool WatchClipboard { get; set; } = true;
 
     public static string SettingsFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

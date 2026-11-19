@@ -20,4 +20,36 @@ public partial class App : Application
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    private void TrayIcon_Clicked(object? sender, EventArgs e)
+    {
+        ShowWindow();
+    }
+
+    private void ShowApp_Click(object? sender, EventArgs e)
+    {
+        ShowWindow();
+    }
+
+    private void ExitApp_Click(object? sender, EventArgs e)
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            if (desktop.MainWindow is MainWindow mw)
+            {
+                mw.ForceExit();
+            }
+            desktop.Shutdown();
+        }
+    }
+
+    private void ShowWindow()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
+        {
+            desktop.MainWindow.Show();
+            desktop.MainWindow.WindowState = global::Avalonia.Controls.WindowState.Normal;
+            desktop.MainWindow.Activate();
+        }
+    }
 }

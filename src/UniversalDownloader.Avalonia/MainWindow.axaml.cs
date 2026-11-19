@@ -34,6 +34,9 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _streamPreviewCts;
     private bool _isQueueRunning;
     private readonly DispatcherTimer _logBatchTimer;
+    private readonly DispatcherTimer _clipboardTimer;
+    private bool _isExiting = false;
+    public void ForceExit() => _isExiting = true;
     private long _lastProgressUpdateMs = 0;
     private LogWindow? _logWindow;
     private CancellationTokenSource? _cts;
@@ -77,6 +80,19 @@ public partial class MainWindow : Window
         );
         _logBatchTimer.Start();
 
+        _clipboardTimer = new DispatcherTimer(
+            TimeSpan.FromSeconds(1.5),
+            DispatcherPriority.Background,
+            async (s, e) =>
+            {
+                if (_settings.WatchClipboard)
+                {
+                    await CheckClipboardForMediaUrlAsync();
+                }
+            }
+        );
+        _clipboardTimer.Start();
+
         _client = new DownloaderClient();
         _client.ProgressChanged += OnProgressChanged;
         _client.DownloadCompleted += OnDownloadCompleted;
@@ -117,7 +133,14 @@ public partial class MainWindow : Window
         Activated += async (s, e) => await CheckClipboardForMediaUrlAsync();
         Closing += (s, e) =>
         {
+            if (_settings.MinimizeToTray && !_isExiting)
+            {
+                e.Cancel = true;
+                Hide();
+                return;
+            }
             _playlistQualityCts?.Cancel();
+            _clipboardTimer.Stop();
             SaveUserSettings();
         };
     }
@@ -154,6 +177,12 @@ public partial class MainWindow : Window
             _detectedClipboardUrl = raw;
             ClipboardBannerText.Text = $"Copied link detected: {raw}";
             ClipboardBanner.IsVisible = true;
+            if (!IsVisible)
+            {
+                Show();
+                WindowState = WindowState.Normal;
+                Activate();
+            }
         }
         catch
         {
