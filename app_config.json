@@ -1,8 +1,8 @@
 {
   "app_name": "Universal Media Downloader",
   "short_name": "Universal Downloader",
-  "version_name": "3.0.0",
-  "version_code": 300,
+  "version_name": "3.1.0",
+  "version_code": 310,
   "github_owner": "Antony-Gh",
   "github_repo": "Universal-Donwloader",
   "android": {
