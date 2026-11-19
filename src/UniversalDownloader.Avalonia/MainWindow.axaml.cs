@@ -84,6 +84,7 @@ public partial class MainWindow : Window
         {
             await LoadHistoryAsync();
             _ = CheckForAppUpdatesAsync(silent: true);
+            _ = PlatformUtils.SendTelemetryHeartbeatAsync(_settings);
             await CheckClipboardForMediaUrlAsync();
         };
         Activated += async (s, e) => await CheckClipboardForMediaUrlAsync();

@@ -18,6 +18,9 @@ public class UserSettings
     public int CookiesBrowserIndex { get; set; } = 0;
     public string CookiesFilePath { get; set; } = string.Empty;
     public bool SponsorBlockEnabled { get; set; } = false;
+    public bool TelemetryEnabled { get; set; } = true;
+    public string? TelemetryUrl { get; set; } = null;
+    public string? TelemetryKey { get; set; } = null;
     public string Language { get; set; } = "en";
 
     public static string SettingsFilePath => Path.Combine(
