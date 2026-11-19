@@ -7,6 +7,7 @@ import com.universaldownloader.app.UniversalDownloaderApp
 import com.universaldownloader.app.engine.AppUpdateChecker
 import com.universaldownloader.app.engine.AppUpdateInfo
 import com.universaldownloader.app.engine.DownloaderRepository
+import com.universaldownloader.app.engine.SearchResultItem
 import com.universaldownloader.app.model.CodecOption
 import com.universaldownloader.app.model.DownloadOptions
 import com.universaldownloader.app.model.EngineStatus
@@ -39,6 +40,9 @@ data class MainUiState(
     val isFetchingMetadata: Boolean = false,
     val metadata: MediaMetadata? = null,
     val preliminaryPlatform: String = "",
+    val suggestions: List<String> = emptyList(),
+    val searchResults: List<SearchResultItem> = emptyList(),
+    val isSearchingYoutube: Boolean = false,
     val isInspectingStreams: Boolean = false,
     val isDownloadingProfilePic: Boolean = false,
     val streams: List<StreamFormat> = emptyList(),
@@ -95,6 +99,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     private var metadataJob: Job? = null
+    private var suggestJob: Job? = null
+    private var searchJob: Job? = null
     private var downloadJob: Job? = null
     private var activeProcessId: String? = null
     private var lastFetchedUrl: String? = null
@@ -367,6 +373,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val targetInput = if (cleanedUrl.isNotEmpty() && cleanedUrl != newValue) cleanedUrl else newValue
         _uiState.update { it.copy(urlInput = targetInput) }
         triggerMetadataFetch(targetInput, immediate)
+        triggerSuggestionsFetch(targetInput)
+    }
+
+    private fun triggerSuggestionsFetch(rawInput: String) {
+        suggestJob?.cancel()
+        val trimmed = rawInput.trim()
+        if (repo.isValidUrl(trimmed) || trimmed.length !in 2..64 || trimmed.contains("://") || trimmed.startsWith("www.", ignoreCase = true)) {
+            if (_uiState.value.suggestions.isNotEmpty()) {
+                _uiState.update { it.copy(suggestions = emptyList()) }
+            }
+            return
+        }
+        suggestJob = viewModelScope.launch {
+            delay(350)
+            val list = repo.fetchSuggestions(trimmed)
+            _uiState.update { it.copy(suggestions = list) }
+        }
+    }
+
+    fun searchYoutube(queryOverride: String? = null) {
+        val query = (queryOverride ?: _uiState.value.urlInput).trim()
+        if (query.length < 2) return
+        searchJob?.cancel()
+        suggestJob?.cancel()
+        _uiState.update {
+            it.copy(
+                urlInput = query,
+                suggestions = emptyList(),
+                isSearchingYoutube = true,
+                globalStatus = "Searching YouTube for \"$query\"...",
+            )
+        }
+        searchJob = viewModelScope.launch {
+            val result = repo.searchYoutube(query, limit = 10)
+            result.onSuccess { items ->
+                _uiState.update {
+                    it.copy(
+                        isSearchingYoutube = false,
+                        searchResults = items,
+                        globalStatus = if (items.isNotEmpty()) "Found ${items.size} YouTube results" else "No YouTube results found",
+                    )
+                }
+            }.onFailure { err ->
+                _uiState.update {
+                    it.copy(
+                        isSearchingYoutube = false,
+                        globalStatus = "Search failed: ${err.message ?: "unknown error"}",
+                    )
+                }
+            }
+        }
+    }
+
+    fun selectSearchResult(item: SearchResultItem) {
+        _uiState.update { it.copy(searchResults = emptyList(), suggestions = emptyList()) }
+        onUrlChanged(item.url, immediate = true)
+    }
+
+    fun dismissSearchResults() {
+        _uiState.update { it.copy(searchResults = emptyList(), suggestions = emptyList()) }
     }
 
     fun onSharedTextReceived(sharedText: String) {

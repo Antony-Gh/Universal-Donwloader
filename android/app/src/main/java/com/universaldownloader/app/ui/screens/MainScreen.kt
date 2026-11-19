@@ -13,6 +13,7 @@ import com.universaldownloader.app.BuildConfig
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -543,24 +545,139 @@ private fun DownloadTab(
                         Text(strings.paste, color = TextPrimary, fontSize = 13.sp)
                     }
 
+                    val isSearchQueryMode = !isValidUrl && state.urlInput.trim().length >= 2
                     Button(
-                        onClick = { viewModel.inspectStreams() },
-                        enabled = state.urlInput.isNotBlank() && state.engineStatus == EngineStatus.READY && !state.isInspectingStreams && !state.isDownloading,
+                        onClick = {
+                            if (isSearchQueryMode) {
+                                viewModel.searchYoutube()
+                            } else {
+                                viewModel.inspectStreams()
+                            }
+                        },
+                        enabled = state.urlInput.isNotBlank() && state.engineStatus == EngineStatus.READY && !state.isInspectingStreams && !state.isSearchingYoutube && !state.isDownloading,
                         modifier = Modifier.weight(1.3f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF374151)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isSearchQueryMode) Color(0xFF1D4ED8) else Color(0xFF374151),
+                        ),
                     ) {
-                        if (state.isInspectingStreams) {
+                        if (state.isInspectingStreams || state.isSearchingYoutube) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(15.dp),
                                 strokeWidth = 2.dp,
                                 color = AccentSky,
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text(strings.inspecting, fontSize = 13.sp, color = Color.White)
+                            Text(
+                                if (state.isSearchingYoutube) "Searching..." else strings.inspecting,
+                                fontSize = 13.sp,
+                                color = Color.White,
+                            )
                         } else {
                             Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp), tint = AccentSky)
                             Spacer(Modifier.width(6.dp))
-                            Text(strings.inspectStreams, fontSize = 13.sp, color = Color.White)
+                            Text(
+                                if (isSearchQueryMode) "Search YouTube" else strings.inspectStreams,
+                                fontSize = 13.sp,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+
+                // Live Autosuggest Chips for text search queries
+                if (state.suggestions.isNotEmpty()) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(state.suggestions) { suggestion ->
+                            Surface(
+                                color = Color(0xFF1E293B),
+                                border = BorderStroke(1.dp, Color(0xFF334155)),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.clickable { viewModel.searchYoutube(suggestion) },
+                            ) {
+                                Text(
+                                    text = suggestion,
+                                    color = Color(0xFFE2E8F0),
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // YouTube Search Results Card
+                if (state.searchResults.isNotEmpty()) {
+                    Surface(
+                        color = Color(0xFF141824),
+                        border = BorderStroke(1.dp, AccentIndigo),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "YouTube Results (${state.searchResults.size})",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                )
+                                IconButton(
+                                    onClick = { viewModel.dismissSearchResults() },
+                                    modifier = Modifier.size(24.dp),
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                            state.searchResults.take(6).forEach { item ->
+                                Surface(
+                                    color = Color(0xFF1E2433),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.selectSearchResult(item) },
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = item.title,
+                                                color = TextPrimary,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            val meta = listOfNotNull(
+                                                item.uploader.takeIf { it.isNotBlank() },
+                                                item.durationString,
+                                            ).joinToString(" • ")
+                                            if (meta.isNotBlank()) {
+                                                Text(
+                                                    text = meta,
+                                                    color = TextSecondary,
+                                                    fontSize = 11.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Select", color = AccentSky, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
