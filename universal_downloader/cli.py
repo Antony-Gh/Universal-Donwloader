@@ -1090,6 +1090,18 @@ def main() -> int:
             try:
                 target = detect_target(requested_url, timeout=config.timeout)
 
+                # Apply deep-link format hint if user provided #ID/format or url#format
+                if target.format_hint:
+                    hint = target.format_hint.lower()
+                    if hint in {"mp3", "audio", "m4a", "flac", "opus", "wav", "aac"}:
+                        config.audio_only = True
+                        if hint in {"mp3", "m4a", "flac", "opus", "wav", "aac"} and not getattr(args, "audio_format", None):
+                            config.audio_format = hint
+                    elif hint in {"mp4", "video"}:
+                        config.audio_only = False
+                        if hint == "mp4" and not getattr(args, "remux_video", None):
+                            config.remux_video = "mp4"
+
                 if not config.json_output and not config.json_stream:
                     print(f"URL:      {target.normalized_url}")
                     print(f"Platform: {target.platform.value}")

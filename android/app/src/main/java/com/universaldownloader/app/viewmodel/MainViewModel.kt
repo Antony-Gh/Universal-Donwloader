@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.universaldownloader.app.UniversalDownloaderApp
 import com.universaldownloader.app.engine.AppUpdateChecker
 import com.universaldownloader.app.engine.AppUpdateInfo
+import com.universaldownloader.app.engine.DownloaderRepository
 import com.universaldownloader.app.model.CodecOption
 import com.universaldownloader.app.model.DownloadOptions
 import com.universaldownloader.app.model.EngineStatus
@@ -350,8 +351,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onUrlChanged(newValue: String, immediate: Boolean = false) {
-        _uiState.update { it.copy(urlInput = newValue) }
-        triggerMetadataFetch(newValue, immediate)
+        val (cleanedUrl, formatHint) = DownloaderRepository.extractFormatHint(newValue)
+        if (formatHint != null) {
+            when (formatHint) {
+                "mp3", "audio", "m4a", "flac", "opus", "wav", "aac" -> {
+                    updateQuality(QualityOption.AUDIO_MP3)
+                }
+                "mp4", "video" -> {
+                    if (_uiState.value.options.quality == QualityOption.AUDIO_MP3) {
+                        updateQuality(QualityOption.BEST)
+                    }
+                }
+            }
+        }
+        val targetInput = if (cleanedUrl.isNotEmpty() && cleanedUrl != newValue) cleanedUrl else newValue
+        _uiState.update { it.copy(urlInput = targetInput) }
+        triggerMetadataFetch(targetInput, immediate)
     }
 
     fun onSharedTextReceived(sharedText: String) {

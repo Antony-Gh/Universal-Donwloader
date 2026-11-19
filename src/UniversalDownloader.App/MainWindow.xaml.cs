@@ -143,6 +143,22 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Support deep link format shortcuts (#ID/mp3, url#mp3, url#audio, url#mp4)
+        if (url.Contains('#'))
+        {
+            var parts = url.Split('#', 2);
+            var fragment = parts.Length > 1 ? parts[1].Trim().ToLowerInvariant() : "";
+            if (fragment == "mp3" || fragment == "audio" || fragment.EndsWith("/mp3"))
+            {
+                QualityComboBox.SelectedIndex = 4;
+                AudioFormatComboBox.SelectedIndex = 1;
+            }
+            else if (fragment == "mp4" || fragment == "video" || fragment.EndsWith("/mp4"))
+            {
+                if (QualityComboBox.SelectedIndex == 4) QualityComboBox.SelectedIndex = 0;
+            }
+        }
+
         SetDownloadingState(true);
         ProgressCard.Visibility = Visibility.Visible;
         DownloadProgressBar.Value = 0;

@@ -105,6 +105,7 @@ class DetectedTarget:
     platform: Platform
     content_type: ContentType = ContentType.UNKNOWN
     is_profile_candidate: bool = False
+    format_hint: Optional[str] = None
 
 
 @dataclass

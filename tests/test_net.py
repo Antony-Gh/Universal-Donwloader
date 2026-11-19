@@ -100,3 +100,39 @@ def test_normalize_youtube_url_canonicalises_but_keeps_playlists():
     playlist = f'https://www.youtube.com/watch?v={vid}&list=PL123'
     assert normalize_youtube_url(playlist) == playlist
     assert detect_target(f'https://youtu.be/{vid}?si=x').normalized_url == canonical
+
+
+def test_parse_url_format_hint_shortcuts():
+    from universal_downloader.utils.net import parse_url_format_hint
+
+    vid = 'dQw4w9WgXcQ'
+    canonical = f'https://www.youtube.com/watch?v={vid}'
+
+    # #ID/format hash shortcuts
+    u1, f1 = parse_url_format_hint(f'#{vid}/mp3')
+    assert u1 == canonical
+    assert f1 == 'mp3'
+
+    u2, f2 = parse_url_format_hint(f'#{vid}/mp4')
+    assert u2 == canonical
+    assert f2 == 'mp4'
+
+    # Bare #ID
+    u3, f3 = parse_url_format_hint(f'#{vid}')
+    assert u3 == canonical
+    assert f3 is None
+
+    # Full URL with format hash suffix
+    u4, f4 = parse_url_format_hint(f'https://www.youtube.com/watch?v={vid}#mp3')
+    assert u4 == f'https://www.youtube.com/watch?v={vid}'
+    assert f4 == 'mp3'
+
+    # Full URL with audio hash
+    u5, f5 = parse_url_format_hint(f'https://youtu.be/{vid}#audio')
+    assert u5 == f'https://youtu.be/{vid}'
+    assert f5 == 'audio'
+
+    # detect_target carries format_hint
+    target = detect_target(f'https://www.youtube.com/watch?v={vid}#mp3')
+    assert target.normalized_url == canonical
+    assert target.format_hint == 'mp3'

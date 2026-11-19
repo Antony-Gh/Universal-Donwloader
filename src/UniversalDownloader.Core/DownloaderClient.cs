@@ -107,9 +107,10 @@ public class DownloaderClient
                     switch (eventName)
                     {
                         case "stage":
+                            var stageName = root.TryGetProperty("stage", out var stProp) ? stProp.GetString() : "stage";
                             var stageMsg = root.TryGetProperty("message", out var msgProp) ? msgProp.GetString() : "Preparing...";
                             StatusChanged?.Invoke(this, stageMsg ?? "Preparing...");
-                            RawOutputReceived?.Invoke(this, $"[{root.TryGetProperty("stage", out var stProp) ? stProp.GetString() : "stage"}] {stageMsg}");
+                            RawOutputReceived?.Invoke(this, $"[{stageName}] {stageMsg}");
                             return;
 
                         case "progress":

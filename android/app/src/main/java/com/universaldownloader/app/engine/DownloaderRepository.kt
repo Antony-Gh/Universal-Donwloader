@@ -84,14 +84,58 @@ class DownloaderRepository(private val appContext: Context) {
             """(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:embed/|live/|shorts/|v/)|[?&]v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])""",
             RegexOption.IGNORE_CASE,
         )
+        private val DEEP_LINK_HASH_REGEX = Regex(
+            """^#?([A-Za-z0-9_-]{11})(?:/([A-Za-z0-9]+))?$"""
+        )
+        private val KNOWN_FORMAT_HINTS = setOf(
+            "mp3", "mp4", "audio", "video", "m4a", "flac", "opus", "wav", "aac", "best"
+        )
 
         /** Returns the 11-character YouTube video ID found in [value], or null. */
         fun extractYoutubeVideoId(value: String): String? =
             YOUTUBE_ID_REGEX.find(value.trim())?.groupValues?.get(1)
+
+        /** Parse direct deep-link format shortcuts (#ID/format, url#format, etc). */
+        fun extractFormatHint(rawInput: String): Pair<String, String?> {
+            val trimmed = rawInput.trim().trim('"', '\'')
+            if (trimmed.isEmpty()) return Pair("", null)
+
+            val m = DEEP_LINK_HASH_REGEX.matchEntire(trimmed)
+            if (m != null) {
+                val vid = m.groupValues[1]
+                val fmt = m.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.lowercase(Locale.US)
+                return Pair("https://www.youtube.com/watch?v=$vid", fmt)
+            }
+
+            if (trimmed.contains('#')) {
+                val parts = trimmed.split('#', limit = 2)
+                val base = parts[0].trim()
+                val fragment = parts[1].trim().lowercase(Locale.US)
+
+                val subM = DEEP_LINK_HASH_REGEX.matchEntire(fragment)
+                if (subM != null) {
+                    val vid = subM.groupValues[1]
+                    val fmt = subM.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.lowercase(Locale.US)
+                    return Pair("https://www.youtube.com/watch?v=$vid", fmt)
+                }
+
+                if (fragment in KNOWN_FORMAT_HINTS) {
+                    val resolvedBase = if (base.matches(Regex("^[A-Za-z0-9_-]{11}$"))) {
+                        "https://www.youtube.com/watch?v=$base"
+                    } else {
+                        base
+                    }
+                    return Pair(resolvedBase, fragment)
+                }
+            }
+
+            return Pair(trimmed, null)
+        }
     }
 
     fun normalizeUrl(rawInput: String): String {
-        val trimmed = rawInput.trim().trim('"', '\'')
+        val (cleanedHint, _) = extractFormatHint(rawInput)
+        val trimmed = (if (cleanedHint.isNotEmpty()) cleanedHint else rawInput).trim().trim('"', '\'')
         if (trimmed.isEmpty()) return ""
 
         // Extract first URL if user shared text containing a title + link (e.g. from YouTube/TikTok Share Sheet)

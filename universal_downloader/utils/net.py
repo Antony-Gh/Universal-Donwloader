@@ -122,6 +122,57 @@ YOUTUBE_VIDEO_ID_RE = re.compile(
     re.IGNORECASE,
 )
 YOUTUBE_BARE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+DEEP_LINK_HASH_RE = re.compile(
+    r"^#?(?P<id>[A-Za-z0-9_-]{11})(?:/(?P<format>[A-Za-z0-9]+))?$",
+    re.IGNORECASE,
+)
+KNOWN_FORMAT_HINTS = {
+    "mp3",
+    "mp4",
+    "audio",
+    "video",
+    "m4a",
+    "flac",
+    "opus",
+    "wav",
+    "aac",
+    "best",
+}
+
+
+def parse_url_format_hint(raw: str) -> tuple[str, Optional[str]]:
+    """Parse direct deep link format hashes (#ID/format, url#format, etc).
+
+    Returns (cleaned_url, format_hint).
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return "", None
+
+    # Pattern: #ID/format or #ID
+    m = DEEP_LINK_HASH_RE.match(raw)
+    if m:
+        video_id = m.group("id")
+        fmt = (m.group("format") or "").lower() or None
+        return f"https://www.youtube.com/watch?v={video_id}", fmt
+
+    if "#" in raw:
+        base, _, fragment = raw.partition("#")
+        base = base.strip()
+        fragment = fragment.strip().lower()
+
+        sub_m = DEEP_LINK_HASH_RE.match(fragment)
+        if sub_m:
+            vid = sub_m.group("id")
+            fmt = (sub_m.group("format") or "").lower() or None
+            return f"https://www.youtube.com/watch?v={vid}", fmt
+
+        if fragment in KNOWN_FORMAT_HINTS:
+            if YOUTUBE_BARE_ID_RE.match(base):
+                base = f"https://www.youtube.com/watch?v={base}"
+            return base, fragment
+
+    return raw, None
 
 
 def extract_youtube_video_id(value: str) -> Optional[str]:
@@ -394,7 +445,10 @@ def detect_content_type(url: str, platform: Platform) -> ContentType:
 
 
 def detect_target(url: str, timeout: int = 30) -> DetectedTarget:
-    normalized = normalize_url(url)
+    cleaned_url, format_hint = parse_url_format_hint(url)
+    target_url = cleaned_url if cleaned_url else url
+
+    normalized = normalize_url(target_url)
     platform = detect_platform(normalized)
 
     if platform == Platform.TIKTOK:
@@ -412,4 +466,5 @@ def detect_target(url: str, timeout: int = 30) -> DetectedTarget:
         platform=platform,
         content_type=content_type,
         is_profile_candidate=content_type == ContentType.PROFILE,
+        format_hint=format_hint,
     )
