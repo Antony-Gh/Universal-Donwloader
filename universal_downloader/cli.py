@@ -447,6 +447,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Suppress HTTPS certificate validation (useful behind proxies or missing Windows certs).",
     )
 
+    # Smart Scheduling & Power Conditions
+    sched_group = parser.add_argument_group("Smart Scheduling & Power Conditions")
+    sched_group.add_argument(
+        "--schedule",
+        type=str,
+        default=None,
+        metavar="HH:MM",
+        help="Schedule download to begin at a specific 24-hour time (e.g. '02:00', '23:30').",
+    )
+    sched_group.add_argument(
+        "--pause-on-battery",
+        action="store_true",
+        help="Pause or postpone downloads if running on battery below 20% capacity.",
+    )
+    sched_group.add_argument(
+        "--only-wifi",
+        action="store_true",
+        help="Restrict downloads to unmetered connections.",
+    )
+
     # Authentication & Cookies
     auth_group = parser.add_argument_group("Authentication & Cookies")
     auth_group.add_argument(
@@ -1421,6 +1441,30 @@ def main() -> int:
                 else:
                     failure(f"Profile picture download failed: {exc}", config)
                 return 1
+
+        # Smart Scheduling Gate
+        if config.schedule:
+            try:
+                from universal_downloader.smart_scheduler import seconds_until_schedule, wait_until_schedule
+                secs = seconds_until_schedule(config.schedule)
+                if not config.json_output and not config.json_stream:
+                    info(f"Scheduled download: Waiting until {config.schedule} ({secs}s remaining)...", config)
+                wait_until_schedule(config.schedule)
+                if not config.json_output and not config.json_stream:
+                    success(f"Scheduled time {config.schedule} reached! Starting download...", config)
+            except Exception as exc:
+                error(f"Scheduling failed: {exc}", config)
+                return 1
+
+        # Smart Power / Battery Saver Gate
+        if config.pause_on_battery:
+            from universal_downloader.smart_scheduler import check_smart_download_conditions
+            can_proceed, reason = check_smart_download_conditions(pause_on_battery=True)
+            if not can_proceed:
+                warning(reason, config)
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": "battery_low", "message": reason}))
+                return 2
 
         # Batch mode
         if args.batch:

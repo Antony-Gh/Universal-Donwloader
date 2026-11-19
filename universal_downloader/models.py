@@ -108,6 +108,9 @@ class AppConfig:
     cookies_file: Optional[Path] = None
     cookies_from_browser: Optional[str] = None
     force_deprecated: bool = False
+    schedule: Optional[str] = None
+    pause_on_battery: bool = False
+    only_wifi: bool = False
 
 
 @dataclass

@@ -53,6 +53,9 @@ data class DownloadOptions(
     val cleanFilenames: Boolean = false,
     val recordDuration: String = "",
     val liveFromStart: Boolean = false,
+    val pauseOnBattery: Boolean = false,
+    val onlyWifi: Boolean = false,
+    val scheduleTime: String = "",
 )
 
 data class MediaMetadata(

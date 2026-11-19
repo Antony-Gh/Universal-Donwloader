@@ -669,6 +669,10 @@ public partial class MainWindow : Window
             ConcurrentFragments = (int)(FragmentsNumeric.Value ?? 4),
             Quality = GetSelectedQualityString(),
             PreferCodec = GetSelectedCodecString(),
+            PauseOnBattery = QueueBatterySaverCheck?.IsChecked == true,
+            ScheduleTime = QueueScheduleCheck?.IsChecked == true && !string.IsNullOrWhiteSpace(QueueScheduleTimeBox?.Text)
+                ? QueueScheduleTimeBox.Text.Trim()
+                : null,
         };
 
         var effectiveDir = GetEffectiveOutputDirectory();
@@ -1042,6 +1046,38 @@ public partial class MainWindow : Window
         if (_isQueueRunning) return;
         var pending = _queueItems.Where(q => q.Status == QueueItemStatus.Queued || q.Status == QueueItemStatus.Failed || q.Status == QueueItemStatus.Canceled).ToList();
         if (pending.Count == 0) return;
+
+        // Smart Scheduling check: wait until target wall-clock time if enabled
+        if (QueueScheduleCheck.IsChecked == true && !string.IsNullOrWhiteSpace(QueueScheduleTimeBox.Text))
+        {
+            var timeStr = QueueScheduleTimeBox.Text.Trim();
+            if (TimeOnly.TryParse(timeStr, out var scheduledTime))
+            {
+                var now = TimeOnly.FromDateTime(DateTime.Now);
+                var delay = scheduledTime > now
+                    ? scheduledTime.ToTimeSpan() - now.ToTimeSpan()
+                    : (TimeSpan.FromDays(1) - (now.ToTimeSpan() - scheduledTime.ToTimeSpan()));
+
+                GlobalStatusText.Text = $"Queue scheduled for {timeStr} ({delay.Hours}h {delay.Minutes}m remaining).";
+                _isQueueRunning = true;
+                _queueCts = new CancellationTokenSource();
+                StartQueueButton.IsEnabled = false;
+                StopQueueButton.IsEnabled = true;
+
+                try
+                {
+                    await Task.Delay(delay, _queueCts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    _isQueueRunning = false;
+                    StartQueueButton.IsEnabled = true;
+                    StopQueueButton.IsEnabled = false;
+                    GlobalStatusText.Text = "Scheduled queue cancelled.";
+                    return;
+                }
+            }
+        }
 
         foreach (var item in pending)
         {

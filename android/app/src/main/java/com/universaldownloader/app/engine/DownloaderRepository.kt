@@ -701,6 +701,13 @@ class DownloaderRepository(private val appContext: Context) {
         onLog: (String) -> Unit,
     ): Result<File?> = withContext(Dispatchers.IO) {
         runCatching {
+            if (options.onlyWifi && !isWifiConnected()) {
+                throw IllegalStateException("Download paused: 'Only Wi-Fi' is active and device is not on Wi-Fi/Ethernet.")
+            }
+            if (options.pauseOnBattery && isBatteryLow()) {
+                throw IllegalStateException("Download paused: Battery is below 20% and discharging.")
+            }
+
             val url = normalizeUrl(rawUrl)
             val isAudioOnly = options.quality == QualityOption.AUDIO_MP3 && options.explicitFormatId == null
             val outDir = getOutputDirectory(isAudioOnly)
@@ -1538,6 +1545,26 @@ class DownloaderRepository(private val appContext: Context) {
         } catch (_: Exception) {
             false
         }
+    }
+
+    fun isWifiConnected(): Boolean {
+        val connMgr = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        val activeNet = connMgr?.activeNetwork
+        val caps = connMgr?.getNetworkCapabilities(activeNet)
+        return caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true ||
+               caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) == true
+    }
+
+    fun isBatteryLow(): Boolean {
+        val ifilter = android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)
+        val batteryStatus = appContext.registerReceiver(null, ifilter)
+        val level = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val pct = if (level >= 0 && scale > 0) (level * 100 / scale) else 100
+        val status = batteryStatus?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val isCharging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+                         status == android.os.BatteryManager.BATTERY_STATUS_FULL
+        return !isCharging && pct < 20
     }
 }
 

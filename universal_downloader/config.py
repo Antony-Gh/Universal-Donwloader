@@ -464,6 +464,9 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         cookies_file=Path(cookies_file_value).expanduser() if cookies_file_value else None,
         cookies_from_browser=cookies_browser_value.strip() if cookies_browser_value else None,
         force_deprecated=getattr(args, "force_deprecated", False) or parse_config_bool(env_value(dotenv, "FORCE_DEPRECATED")),
+        schedule=getattr(args, "schedule", None) or json_config.get("schedule"),
+        pause_on_battery=getattr(args, "pause_on_battery", False) or parse_config_bool(json_config.get("pause_on_battery")),
+        only_wifi=getattr(args, "only_wifi", False) or parse_config_bool(json_config.get("only_wifi")),
     )
 
     if config.retries > 20:

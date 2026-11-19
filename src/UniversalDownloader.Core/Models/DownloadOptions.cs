@@ -52,6 +52,10 @@ public class DownloadOptions
     public bool NoHistory { get; set; }
     public bool Notify { get; set; }
 
+    public string? ScheduleTime { get; set; }
+    public bool PauseOnBattery { get; set; }
+    public bool OnlyWifi { get; set; }
+
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
     /// </summary>
@@ -193,6 +197,15 @@ public class DownloadOptions
             args.Add("--cookies-from-browser");
             args.Add(CookiesFromBrowser);
         }
+
+        if (!string.IsNullOrWhiteSpace(ScheduleTime))
+        {
+            args.Add("--schedule");
+            args.Add(ScheduleTime.Trim());
+        }
+
+        if (PauseOnBattery) args.Add("--pause-on-battery");
+        if (OnlyWifi) args.Add("--only-wifi");
 
         return args;
     }
