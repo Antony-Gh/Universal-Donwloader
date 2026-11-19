@@ -461,6 +461,132 @@ public class DownloaderClient
     }
 
     /// <summary>
+    /// Scan an arbitrary webpage for embedded video, audio, HLS (.m3u8), and DASH (.mpd) streams.
+    /// </summary>
+    public async Task<List<SniffedMediaModel>> SniffPageMediaAsync(
+        string pageUrl,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(pageUrl)) return new();
+
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        arguments.Add("--sniff");
+        arguments.Add($"\"{pageUrl.Trim()}\"");
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output)) return new();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(output);
+            if (doc.RootElement.TryGetProperty("media", out var mediaEl) && mediaEl.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<SniffedMediaModel>();
+                foreach (var el in mediaEl.EnumerateArray())
+                {
+                    list.Add(new SniffedMediaModel
+                    {
+                        Url = el.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "",
+                        MediaType = el.TryGetProperty("media_type", out var mt) ? mt.GetString() ?? "video" : "video",
+                        Source = el.TryGetProperty("source", out var src) ? src.GetString() ?? "" : "",
+                        MimeType = el.TryGetProperty("mime_type", out var mime) && mime.ValueKind == JsonValueKind.String ? mime.GetString() : null,
+                        Title = el.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null,
+                    });
+                }
+                return list;
+            }
+        }
+        catch
+        {
+            // Parse error fallback
+        }
+
+        return new();
+    }
+
+    /// <summary>
+    /// Convert or remux a local media file using the bundled FFmpeg engine.
+    /// </summary>
+    public async Task<string> ConvertLocalMediaAsync(
+        string inputFilePath,
+        string targetFormat,
+        bool remuxOnly = false,
+        string? outputDirectory = null,
+        CancellationToken cancellationToken = default)
+    {
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+
+        if (remuxOnly)
+        {
+            arguments.Add("--remux-video");
+            arguments.Add(targetFormat.Trim().ToLowerInvariant());
+        }
+        else
+        {
+            arguments.Add("--convert");
+            arguments.Add(targetFormat.Trim().ToLowerInvariant());
+        }
+
+        if (!string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            arguments.Add("--output");
+            arguments.Add($"\"{outputDirectory}\"");
+        }
+
+        arguments.Add("--json");
+        arguments.Add($"\"{inputFilePath}\"");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            throw new Exception("Local conversion returned no output.");
+        }
+
+        using var doc = JsonDocument.Parse(output);
+        if (doc.RootElement.TryGetProperty("success", out var okProp) && okProp.GetBoolean())
+        {
+            return doc.RootElement.TryGetProperty("output", out var outProp) ? outProp.GetString() ?? "" : "";
+        }
+
+        var errMsg = doc.RootElement.TryGetProperty("error", out var errProp)
+            ? errProp.GetString()
+            : "Local media conversion failed.";
+        throw new Exception(errMsg);
+    }
+
+    /// <summary>
+    /// Register the Browser Native Messaging Host (CoApp) for Chrome, Edge, and Firefox.
+    /// </summary>
+    public async Task<(bool Success, string Message)> RegisterNativeHostAsync(CancellationToken cancellationToken = default)
+    {
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        arguments.Add("--register-native-host");
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return (false, "No response from backend.");
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(output);
+            var ok = doc.RootElement.TryGetProperty("success", out var okProp) && okProp.GetBoolean();
+            var msg = doc.RootElement.TryGetProperty("message", out var msgProp) ? msgProp.GetString() ?? "" : "";
+            return (ok, msg);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Download a public or cookie-authorized profile picture (accepts profile URL or platform:username).
     /// </summary>
     public async Task<string> DownloadProfilePictureAsync(
