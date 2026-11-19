@@ -1,0 +1,46 @@
+name: Daily Extractor Health Monitor
+
+on:
+  schedule:
+    # Run every day at 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    # Allow manual execution anytime from GitHub Actions UI
+
+jobs:
+  check-extractors:
+    name: Probe Extractors & Generate Health Report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run extractor health checks
+        id: health_check
+        continue-on-error: true
+        run: |
+          python scripts/check_extractor_health.py --output-markdown health_report.md
+
+      - name: Upload health report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extractor-health-report
+          path: health_report.md
+          retention-days: 14
+
+      - name: Fail workflow if extractors broke
+        if: steps.health_check.outcome == 'failure'
+        run: |
+          echo "::error::One or more core media extractors failed health checks! Check the step summary above for details."
+          exit 1
