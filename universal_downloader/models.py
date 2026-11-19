@@ -66,6 +66,8 @@ class AppConfig:
     output_template: Optional[str] = None
     organize: str = "platform"
     clean_filenames: bool = False
+    verify_integrity: bool = False
+    write_checksum: bool = False
     download_archive: Optional[Path] = None
     concurrency: int = 1
     limit_rate: Optional[str] = None

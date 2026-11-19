@@ -20,6 +20,11 @@ from universal_downloader.exceptions import (
 from universal_downloader.extractor import YTDLPExtractor
 from universal_downloader.formats import quality_to_selector
 from universal_downloader.history import get_db_path, record_download
+from universal_downloader.integrity import (
+    compute_sha256,
+    verify_media_integrity,
+    write_sha256_sidecar,
+)
 from universal_downloader.logging_utils import (
     TIKTOK_INTERNAL_RETRIES,
     TIKTOK_RETRY_DELAYS,
@@ -272,6 +277,17 @@ class DownloadEngine:
             if getattr(self.config, "clean_filenames", False):
                 path = rename_with_clean_title(path, info_dict.get("title"))
                 ensure_inside_directory(self.config.output_dir, path)
+
+            if getattr(self.config, "verify_integrity", False):
+                ok_integrity, reason = verify_media_integrity(path)
+                if not ok_integrity:
+                    raise DownloadError(f"Media integrity check failed for '{path.name}': {reason}")
+
+            if getattr(self.config, "write_checksum", False):
+                digest = compute_sha256(path)
+                write_sha256_sidecar(path, digest=digest)
+                info_dict["sha256"] = digest
+                downloaded_info["sha256"] = digest
 
             unique_files.append(path)
 

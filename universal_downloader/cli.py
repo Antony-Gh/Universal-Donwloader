@@ -318,6 +318,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Strip clickbait tags (e.g. [Official Video], (Lyrics), 4K) and emojis from downloaded filenames.",
     )
     out_group.add_argument(
+        "--verify",
+        "--verify-integrity",
+        dest="verify_integrity",
+        action="store_true",
+        help="Verify post-download media container integrity and decodable stream headers via FFmpeg.",
+    )
+    out_group.add_argument(
+        "--write-checksum",
+        action="store_true",
+        help="Compute SHA-256 digest and write a <file>.sha256 sidecar alongside downloaded media.",
+    )
+    out_group.add_argument(
         "--download-archive",
         type=Path,
         help="Track and skip previously downloaded files using an archive text file.",

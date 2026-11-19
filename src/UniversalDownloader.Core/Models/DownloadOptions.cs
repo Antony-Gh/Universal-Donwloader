@@ -24,6 +24,8 @@ public class DownloadOptions
     public string? OutputTemplate { get; set; }
     public string? Organize { get; set; }
     public bool CleanFilenames { get; set; }
+    public bool VerifyIntegrity { get; set; }
+    public bool WriteChecksum { get; set; }
 
     public string? DownloadSections { get; set; }
     public string? StartTime { get; set; }
@@ -111,6 +113,8 @@ public class DownloadOptions
         }
 
         if (CleanFilenames) args.Add("--clean-filenames");
+        if (VerifyIntegrity) args.Add("--verify");
+        if (WriteChecksum) args.Add("--write-checksum");
 
         if (!string.IsNullOrWhiteSpace(DownloadSections))
         {

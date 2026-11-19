@@ -254,6 +254,18 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         or parse_config_bool(json_config.get("clean_filenames"))
     )
 
+    verify_integrity = (
+        getattr(args, "verify_integrity", False)
+        or parse_config_bool(env_value(dotenv, "VERIFY_INTEGRITY"))
+        or parse_config_bool(json_config.get("verify_integrity"))
+    )
+
+    write_checksum = (
+        getattr(args, "write_checksum", False)
+        or parse_config_bool(env_value(dotenv, "WRITE_CHECKSUM"))
+        or parse_config_bool(json_config.get("write_checksum"))
+    )
+
     download_archive_val = (
         getattr(args, "download_archive", None)
         or env_value(dotenv, "DOWNLOAD_ARCHIVE")
@@ -382,6 +394,8 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         output_template=output_template,
         organize=organize,
         clean_filenames=clean_filenames,
+        verify_integrity=verify_integrity,
+        write_checksum=write_checksum,
         download_archive=Path(download_archive_val).expanduser() if download_archive_val else None,
         concurrency=max(1, min(16, concurrency_val)),
         limit_rate=limit_rate,
