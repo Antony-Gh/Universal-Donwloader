@@ -21,6 +21,15 @@ data class AppUpdateInfo(
     val releaseNotes: String,
 )
 
+data class VersionPolicyResult(
+    val isSupported: Boolean = true,
+    val minSupportedVersion: String = "3.6.0",
+    val latestVersion: String = "3.6.0",
+    val sunsetMessage: String = "",
+    val downloadUrl: String = "https://github.com/Antony-Gh/Universal-Donwloader/releases/latest",
+    val enforcementMode: String = "block",
+)
+
 class AppUpdateChecker {
 
     companion object {
@@ -28,6 +37,46 @@ class AppUpdateChecker {
         val REPO_NAME: String = BuildConfig.GITHUB_REPO
         val LATEST_RELEASE_API: String = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
         val LATEST_RELEASE_WEB: String = "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest"
+    }
+
+    suspend fun checkVersionPolicy(): VersionPolicyResult = withContext(Dispatchers.IO) {
+        val currentVersion = normalizeVersion(BuildConfig.VERSION_NAME)
+        var minSupported = "3.6.0"
+        var latestVersion = "3.6.0"
+        var sunsetMsg = "This version is deprecated. Please download the latest update."
+        var downloadUrl = LATEST_RELEASE_WEB
+        var mode = "block"
+
+        try {
+            val rawUrl = "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/master/version_policy.json"
+            val conn = (URL(rawUrl).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 5000
+                readTimeout = 5000
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "UniversalDownloader-Android/$currentVersion")
+            }
+            if (conn.responseCode in 200..299) {
+                val json = conn.inputStream.bufferedReader().use { it.readText() }
+                val root = JSONObject(json)
+                minSupported = root.optString("min_supported_version", minSupported)
+                latestVersion = root.optString("latest_version", latestVersion)
+                sunsetMsg = root.optString("sunset_message", sunsetMsg)
+                downloadUrl = root.optString("download_url", downloadUrl)
+                mode = root.optString("enforcement_mode", mode)
+            }
+        } catch (_: Exception) {}
+
+        val isSupported = compareVersions(currentVersion, minSupported) >= 0
+
+        VersionPolicyResult(
+            isSupported = isSupported,
+            minSupportedVersion = minSupported,
+            latestVersion = latestVersion,
+            sunsetMessage = sunsetMsg,
+            downloadUrl = downloadUrl,
+            enforcementMode = mode,
+        )
     }
 
     suspend fun checkForUpdates(): Result<AppUpdateInfo> = withContext(Dispatchers.IO) {

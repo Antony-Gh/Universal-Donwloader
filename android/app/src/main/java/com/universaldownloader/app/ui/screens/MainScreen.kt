@@ -255,6 +255,56 @@ fun MainScreen(viewModel: MainViewModel) {
                     },
                 )
 
+                // End of Life / Deprecated Version Banner
+                val policy = state.versionPolicy
+                if (policy != null && !policy.isSupported) {
+                    Surface(
+                        color = Color(0xFF450A0A),
+                        border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(10.dp)),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xFFEF4444))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Text("END OF LIFE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Text(
+                                text = "v${com.universaldownloader.app.BuildConfig.VERSION_NAME} deprecated (min v${policy.minSupportedVersion} required)",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                onClick = {
+                                    try {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(policy.downloadUrl))
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {}
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            ) {
+                                Text("Upgrade", color = Color(0xFFFCA5A5), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
                 // App Update Available Banner
                 val update = state.appUpdateInfo
                 if (update != null && update.isUpdateAvailable && !state.isUpdateBannerDismissed) {

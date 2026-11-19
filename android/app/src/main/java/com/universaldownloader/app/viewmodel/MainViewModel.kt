@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.universaldownloader.app.UniversalDownloaderApp
 import com.universaldownloader.app.engine.AppUpdateChecker
 import com.universaldownloader.app.engine.AppUpdateInfo
+import com.universaldownloader.app.engine.VersionPolicyResult
 import com.universaldownloader.app.engine.DownloaderRepository
 import com.universaldownloader.app.engine.SearchResultItem
 import com.universaldownloader.app.model.CodecOption
@@ -67,6 +68,7 @@ data class MainUiState(
     val appUpdateDownloadProgress: Float = 0f,
     val readyToInstallApkPath: String? = null,
     val appUpdateInfo: AppUpdateInfo? = null,
+    val versionPolicy: VersionPolicyResult? = null,
     val isUpdateBannerDismissed: Boolean = false,
     val detectedClipboardUrl: String? = null,
     val queue: List<QueueItem> = emptyList(),
@@ -141,6 +143,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     globalStatus = if (silent) it.globalStatus else "Checking GitHub Releases for app updates...",
                 )
             }
+            val policy = updateChecker.checkVersionPolicy()
+            if (!policy.isSupported) {
+                appendLog("[Critical] App version v${com.universaldownloader.app.BuildConfig.VERSION_NAME} is deprecated (minimum required: v${policy.minSupportedVersion}). Please update.")
+            }
+
             val result = updateChecker.checkForUpdates()
             result.fold(
                 onSuccess = { info ->
@@ -153,8 +160,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         it.copy(
                             isCheckingAppUpdate = false,
                             appUpdateInfo = info,
+                            versionPolicy = policy,
                             isUpdateBannerDismissed = if (info.isUpdateAvailable) false else it.isUpdateBannerDismissed,
                             globalStatus = when {
+                                !policy.isSupported -> "Version deprecated: min v${policy.minSupportedVersion} required"
                                 info.isUpdateAvailable -> "App update available: v${info.latestVersion}"
                                 !silent -> "App is up to date (v${info.currentVersion})"
                                 else -> it.globalStatus
@@ -169,7 +178,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update {
                         it.copy(
                             isCheckingAppUpdate = false,
-                            globalStatus = if (silent) it.globalStatus else "Update check failed",
+                            versionPolicy = policy,
+                            globalStatus = if (!policy.isSupported) "Version deprecated: min v${policy.minSupportedVersion} required" else if (silent) it.globalStatus else "Update check failed",
                         )
                     }
                 },
