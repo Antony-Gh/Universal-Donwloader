@@ -235,14 +235,123 @@ def is_telemetry_enabled(config: Optional[Any] = None) -> bool:
     return True
 
 
+def detect_locale() -> str:
+    """Retrieve system regional locale/language (e.g. en_US, ar_EG)."""
+    try:
+        import locale
+        loc = locale.getdefaultlocale()[0]
+        if loc:
+            return loc
+    except Exception:
+        pass
+    lang = os.environ.get("LANG", "Unknown")
+    return lang.split(".")[0] if "." in lang else lang
+
+
+def detect_timezone() -> str:
+    """Retrieve system timezone or standard offset (e.g. Egypt Standard Time, UTC+02:00)."""
+    try:
+        import datetime
+        tz = datetime.datetime.now().astimezone().tzname()
+        if tz:
+            return tz
+    except Exception:
+        pass
+    return "Unknown"
+
+
+def detect_cpu_specs() -> tuple[int, str]:
+    """Retrieve logical CPU cores and architecture without elevated permissions."""
+    cores = os.cpu_count() or 1
+    arch = platform.machine() or "Unknown"
+    return cores, arch
+
+
+def detect_total_ram_gb() -> Optional[float]:
+    """Retrieve installed physical RAM in Gigabytes."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import Structure, byref, c_ulong, c_ulonglong
+
+            class MEMORYSTATUSEX(Structure):
+                _fields_ = [
+                    ("dwLength", c_ulong),
+                    ("dwMemoryLoad", c_ulong),
+                    ("ullTotalPhys", c_ulonglong),
+                    ("ullAvailPhys", c_ulonglong),
+                    ("ullTotalPageFile", c_ulonglong),
+                    ("ullAvailPageFile", c_ulonglong),
+                    ("ullTotalVirtual", c_ulonglong),
+                    ("ullAvailVirtual", c_ulonglong),
+                    ("ullAvailExtendedVirtual", c_ulonglong),
+                ]
+
+            m = MEMORYSTATUSEX()
+            m.dwLength = ctypes.sizeof(m)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(byref(m)):
+                return round(m.ullTotalPhys / (1024 ** 3), 1)
+        except Exception:
+            pass
+
+    if sys.platform.startswith("linux"):
+        try:
+            meminfo = Path("/proc/meminfo")
+            if meminfo.is_file():
+                for line in meminfo.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("MemTotal:"):
+                        parts = line.split()
+                        kb = float(parts[1])
+                        return round(kb / (1024 * 1024), 1)
+        except Exception:
+            pass
+
+    return None
+
+
+def detect_screen_resolution() -> Optional[str]:
+    """Retrieve primary display resolution (e.g. 1920x1080)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            w = ctypes.windll.user32.GetSystemMetrics(0)
+            h = ctypes.windll.user32.GetSystemMetrics(1)
+            if w > 0 and h > 0:
+                return f"{w}x{h}"
+        except Exception:
+            pass
+    return None
+
+
+def detect_connection_type() -> str:
+    """Check network connectivity status."""
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.5)
+        s.connect(("8.8.8.8", 80))
+        s.close()
+        return "Connected"
+    except Exception:
+        return "Offline"
+
+
 def build_heartbeat_payload(data_dir: Optional[Path] = None) -> dict[str, Any]:
-    """Construct the anonymous telemetry payload."""
+    """Construct the anonymous telemetry payload with extended legal hardware metrics."""
+    cores, arch = detect_cpu_specs()
     return {
         "install_id": get_or_create_install_id(data_dir),
         "device_type": detect_device_type(),
         "os_name": detect_os_name(),
         "device_model": detect_device_model() or "Unknown Model",
         "app_version": __version__,
+        "locale": detect_locale(),
+        "timezone": detect_timezone(),
+        "cpu_cores": cores,
+        "cpu_arch": arch,
+        "total_ram_gb": detect_total_ram_gb(),
+        "screen_res": detect_screen_resolution() or "Unknown",
+        "connection_type": detect_connection_type(),
     }
 
 
@@ -266,6 +375,14 @@ def push_heartbeat_to_neon(
         esc_os = _sql_escape(payload.get("os_name"))
         esc_model = _sql_escape(payload.get("device_model"))
         esc_ver = _sql_escape(payload.get("app_version"))
+        esc_locale = _sql_escape(payload.get("locale"))
+        esc_tz = _sql_escape(payload.get("timezone"))
+        esc_cores = int(payload.get("cpu_cores") or 0)
+        esc_arch = _sql_escape(payload.get("cpu_arch"))
+        ram_val = payload.get("total_ram_gb")
+        esc_ram = f"{float(ram_val):.1f}" if ram_val is not None else "NULL"
+        esc_screen = _sql_escape(payload.get("screen_res"))
+        esc_conn = _sql_escape(payload.get("connection_type"))
 
         sql_query = (
             f"SELECT record_device_heartbeat("
@@ -273,7 +390,14 @@ def push_heartbeat_to_neon(
             f"'{esc_type}', "
             f"'{esc_os}', "
             f"'{esc_model}', "
-            f"'{esc_ver}'"
+            f"'{esc_ver}', "
+            f"'{esc_locale}', "
+            f"'{esc_tz}', "
+            f"{esc_cores}, "
+            f"'{esc_arch}', "
+            f"{esc_ram}, "
+            f"'{esc_screen}', "
+            f"'{esc_conn}'"
             ");"
         )
 
