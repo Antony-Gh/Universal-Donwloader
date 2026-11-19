@@ -83,6 +83,8 @@ class AppConfig:
     download_sections: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    record_duration: Optional[str] = None
+    live_from_start: bool = False
     concurrent_fragments: int = 4
     prefer_codec: Optional[str] = None
     min_filesize: Optional[str] = None

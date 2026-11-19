@@ -27,6 +27,8 @@ public class DownloadOptions
     public string? DownloadSections { get; set; }
     public string? StartTime { get; set; }
     public string? EndTime { get; set; }
+    public string? RecordDuration { get; set; }
+    public bool LiveFromStart { get; set; }
     public string? PlaylistItems { get; set; }
     public string? SponsorBlockRemove { get; set; }
 
@@ -125,6 +127,14 @@ public class DownloadOptions
             args.Add("--end-time");
             args.Add(EndTime);
         }
+
+        if (!string.IsNullOrWhiteSpace(RecordDuration))
+        {
+            args.Add("--record-duration");
+            args.Add(RecordDuration);
+        }
+
+        if (LiveFromStart) args.Add("--live-from-start");
 
         if (!string.IsNullOrWhiteSpace(PlaylistItems))
         {

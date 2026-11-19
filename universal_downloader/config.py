@@ -392,6 +392,8 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         download_sections=getattr(args, "download_sections", None) or env_value(dotenv, "DOWNLOAD_SECTIONS") or json_config.get("download_sections"),
         start_time=getattr(args, "start_time", None) or env_value(dotenv, "START_TIME") or json_config.get("start_time"),
         end_time=getattr(args, "end_time", None) or env_value(dotenv, "END_TIME") or json_config.get("end_time"),
+        record_duration=getattr(args, "record_duration", None) or env_value(dotenv, "RECORD_DURATION") or json_config.get("record_duration"),
+        live_from_start=getattr(args, "live_from_start", False) or parse_config_bool(env_value(dotenv, "LIVE_FROM_START")) or parse_config_bool(json_config.get("live_from_start")),
         min_filesize=getattr(args, "min_filesize", None) or env_value(dotenv, "MIN_FILESIZE") or json_config.get("min_filesize"),
         max_filesize=getattr(args, "max_filesize", None) or env_value(dotenv, "MAX_FILESIZE") or json_config.get("max_filesize"),
         write_thumbnail=getattr(args, "write_thumbnail", False) or parse_config_bool(env_value(dotenv, "WRITE_THUMBNAIL")) or parse_config_bool(json_config.get("write_thumbnail")),

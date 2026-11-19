@@ -244,6 +244,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="End time slice for video download (e.g. '00:03:15').",
     )
     post_group.add_argument(
+        "--record-duration",
+        "--record",
+        dest="record_duration",
+        metavar="DURATION",
+        help="Cap live stream recording duration (e.g. '00:10:00', '300', or '5m') and finalize cleanly with FFmpeg.",
+    )
+    post_group.add_argument(
+        "--live-from-start",
+        action="store_true",
+        help="Start recording live streams from the beginning when supported by the platform.",
+    )
+    post_group.add_argument(
         "--remux-video",
         choices=["mp4", "mkv", "mov", "webm"],
         help="Remux downloaded or local video into chosen container format.",

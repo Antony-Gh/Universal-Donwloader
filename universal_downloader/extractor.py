@@ -69,6 +69,36 @@ def parse_timestamp_seconds(val: Optional[str]) -> Optional[float]:
     return None
 
 
+_HUMAN_DURATION_RE = re.compile(
+    r"^\s*(?:(?P<h>\d+(?:\.\d+)?)\s*h)?\s*(?:(?P<m>\d+(?:\.\d+)?)\s*m)?\s*(?:(?P<s>\d+(?:\.\d+)?)\s*s)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def parse_duration_seconds(val: Optional[str]) -> Optional[float]:
+    """Parse recording duration specs like '00:10:00', '5:00', '300', '5m', or '1h30m' into positive seconds."""
+    if not val:
+        return None
+    raw = str(val).strip()
+    if not raw:
+        return None
+
+    seconds = parse_timestamp_seconds(raw)
+    if seconds is None:
+        match = _HUMAN_DURATION_RE.match(raw)
+        if match and any(match.group(k) for k in ("h", "m", "s")):
+            hours = float(match.group("h") or 0)
+            minutes = float(match.group("m") or 0)
+            secs = float(match.group("s") or 0)
+            seconds = hours * 3600 + minutes * 60 + secs
+
+    if seconds is None or seconds <= 0:
+        raise ValueError(
+            f"Invalid record duration '{val}'. Use HH:MM:SS, MM:SS, seconds (e.g. '300'), or shorthand (e.g. '5m', '1h30m')."
+        )
+    return seconds
+
+
 def parse_rate_limit(rate_str: Optional[str]) -> Optional[int]:
     """Parse strings like '5M', '500K', '1024' into bytes per second."""
     if not rate_str:
@@ -353,6 +383,22 @@ class YTDLPExtractor:
             start_val = range_start or 0.0
             options["download_ranges"] = download_range_func(None, [(start_val, range_end)])
             options["force_keyframes_at_cuts"] = True
+
+        # Live stream recording duration cap
+        if getattr(self.config, "live_from_start", False):
+            options["live_from_start"] = True
+
+        if getattr(self.config, "record_duration", None):
+            cap_seconds = parse_duration_seconds(self.config.record_duration)
+            if cap_seconds is not None:
+                duration_str = str(int(cap_seconds)) if cap_seconds.is_integer() else f"{cap_seconds:.2f}"
+                options["hls_use_mpegts"] = True
+                options["external_downloader"] = "ffmpeg"
+                ext_args = dict(options.get("external_downloader_args") or {})
+                ffmpeg_out_args = list(ext_args.get("ffmpeg") or [])
+                ffmpeg_out_args.extend(["-t", duration_str])
+                ext_args["ffmpeg"] = ffmpeg_out_args
+                options["external_downloader_args"] = ext_args
 
         wants_audio = (
             self.config.audio_only
