@@ -370,6 +370,40 @@ public static class PlatformUtils
     }
 
     /// <summary>
+    /// Identify which friend/contributor downloaded the tool from settings, env, or binary filename.
+    /// </summary>
+    public static string? DetectFriendTag(UserSettings? settings = null)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(settings?.FriendTag))
+                return settings.FriendTag.Trim().ToLowerInvariant();
+
+            var envTag = Environment.GetEnvironmentVariable("UD_FRIEND_TAG") 
+                ?? Environment.GetEnvironmentVariable("UD_REF");
+            if (!string.IsNullOrWhiteSpace(envTag))
+                return envTag.Trim().ToLowerInvariant();
+
+            var processPath = Environment.ProcessPath;
+            if (!string.IsNullOrWhiteSpace(processPath))
+            {
+                var stem = Path.GetFileNameWithoutExtension(processPath);
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    stem,
+                    @"(?:universal[_-]?downloader|downloader)[_-]([a-zA-Z0-9_\-]+)$",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                );
+                if (match.Success)
+                {
+                    return match.Groups[1].Value.Trim().ToLowerInvariant();
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>
     /// Sends an anonymous heartbeat to Neon Serverless Postgres via SQL-over-HTTPS.
     /// Safe, non-blocking, zero personal data.
     /// </summary>
@@ -404,6 +438,7 @@ public static class PlatformUtils
             var ramGb = DetectTotalRamGb();
             var screenRes = DetectScreenResolution();
             var connType = System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable() ? "Connected" : "Offline";
+            var friendTag = DetectFriendTag(settings);
 
             var escId = installId.Replace("'", "''");
             var escType = deviceType.Replace("'", "''");
@@ -416,8 +451,9 @@ public static class PlatformUtils
             var escScreen = screenRes.Replace("'", "''");
             var escConn = connType.Replace("'", "''");
             var escRam = ramGb > 0 ? ramGb.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) : "NULL";
+            var escFriend = !string.IsNullOrWhiteSpace(friendTag) ? $"'{friendTag.Replace("'", "''")}'" : "NULL";
 
-            var sql = $"SELECT record_device_heartbeat('{escId}'::UUID, '{escType}', '{escOs}', '{escModel}', '{escVer}', '{escLocale}', '{escTz}', {cpuCores}, '{escArch}', {escRam}, '{escScreen}', '{escConn}');";
+            var sql = $"SELECT record_device_heartbeat('{escId}'::UUID, '{escType}', '{escOs}', '{escModel}', '{escVer}', '{escLocale}', '{escTz}', {cpuCores}, '{escArch}', {escRam}, '{escScreen}', '{escConn}', {escFriend});";
             var jsonPayload = $"{{\"query\":\"{sql}\"}}";
 
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
