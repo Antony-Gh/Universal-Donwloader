@@ -206,3 +206,63 @@ SELECT
 FROM device_installs
 GROUP BY app_version
 ORDER BY install_count DESC;
+
+
+-- 4. Dynamic Remote Version Policy (End of Life & Deprecation Gate)
+CREATE TABLE IF NOT EXISTS app_version_policy (
+    id INT PRIMARY KEY DEFAULT 1,
+    min_supported_version VARCHAR(32) NOT NULL DEFAULT '3.6.0',
+    latest_version VARCHAR(32) NOT NULL DEFAULT '3.6.0',
+    blocked_versions TEXT[] DEFAULT ARRAY[]::TEXT[],
+    sunset_message TEXT NOT NULL DEFAULT 'This version has reached End of Life and is no longer supported. Please update to the latest release.',
+    download_url TEXT NOT NULL DEFAULT 'https://github.com/Antony-Gh/Universal-Donwloader/releases/latest',
+    enforcement_mode VARCHAR(16) NOT NULL DEFAULT 'block', -- 'block', 'warn', 'allow'
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Insert or keep singleton policy row
+INSERT INTO app_version_policy (id, min_supported_version, latest_version, blocked_versions, sunset_message, download_url, enforcement_mode, updated_at)
+VALUES (
+    1,
+    '3.6.0',
+    '3.6.0',
+    ARRAY[]::TEXT[],
+    'This version of Universal Media Downloader is deprecated and no longer supported. Please update to continue downloading media.',
+    'https://github.com/Antony-Gh/Universal-Donwloader/releases/latest',
+    'block',
+    NOW()
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- Function to query active policy over Neon HTTP API
+CREATE OR REPLACE FUNCTION get_version_policy()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_rec RECORD;
+BEGIN
+    SELECT * INTO v_rec FROM app_version_policy WHERE id = 1;
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+            'min_supported_version', '3.6.0',
+            'latest_version', '3.6.0',
+            'blocked_versions', '[]'::JSONB,
+            'sunset_message', 'This version is deprecated. Please update.',
+            'download_url', 'https://github.com/Antony-Gh/Universal-Donwloader/releases/latest',
+            'enforcement_mode', 'block'
+        );
+    END IF;
+
+    RETURN jsonb_build_object(
+        'min_supported_version', v_rec.min_supported_version,
+        'latest_version', v_rec.latest_version,
+        'blocked_versions', to_jsonb(v_rec.blocked_versions),
+        'sunset_message', v_rec.sunset_message,
+        'download_url', v_rec.download_url,
+        'enforcement_mode', v_rec.enforcement_mode,
+        'updated_at', v_rec.updated_at
+    );
+END;
+$$;

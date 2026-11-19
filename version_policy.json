@@ -1,0 +1,8 @@
+{
+  "min_supported_version": "3.6.0",
+  "latest_version": "3.6.0",
+  "blocked_versions": [],
+  "sunset_message": "This version of Universal Media Downloader is deprecated and no longer supported. Please update to v3.6.0+ to continue downloading media.",
+  "download_url": "https://github.com/Antony-Gh/Universal-Donwloader/releases/latest",
+  "enforcement_mode": "block"
+}
