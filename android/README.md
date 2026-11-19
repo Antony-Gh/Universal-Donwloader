@@ -29,3 +29,25 @@ Native Android application built with **Kotlin**, **Jetpack Compose (Material 3)
 ## Automated GitHub Releases
 
 Every tagged release (`v*`) automatically builds `UniversalDownloader-android-arm64.apk` and `UniversalDownloader-android-universal.apk` via `.github/workflows/release.yml`.
+
+## Installation & Automatic Updates (Obtainium / IzzyOnDroid)
+
+Since Google Play restricts YouTube downloading applications under section 4.4 of the Developer Distribution Agreement, Universal Media Downloader is distributed directly through open-source channels:
+
+### 1. Obtainium (Recommended for Seamless Updates)
+[Obtainium](https://github.com/ImranR98/Obtainium) allows you to install and receive background update notifications directly from this GitHub repository.
+- Open Obtainium on your Android device.
+- Tap **Add App**.
+- Paste URL: `https://github.com/Antony-Gh/Universal-Donwloader`
+- Tap **Add** → Obtainium will automatically install and keep your app updated.
+
+Or open this deep link directly on your phone:
+- [`obtainium://add/https://github.com/Antony-Gh/Universal-Donwloader`](obtainium://add/https://github.com/Antony-Gh/Universal-Donwloader)
+
+### 2. Direct APK Download
+Download the latest signed APK directly from [GitHub Releases](https://github.com/Antony-Gh/Universal-Donwloader/releases/latest):
+- `UniversalDownloader-android-arm64.apk` (Recommended for modern phones)
+- `UniversalDownloader-android-universal.apk` (Compatible with all devices)
+
+### 3. IzzyOnDroid & F-Droid Compatibility
+This repository includes standard Fastlane metadata in `fastlane/metadata/android/` for automated indexing by IzzyOnDroid and F-Droid package managers (Droid-ify, Neo Store).

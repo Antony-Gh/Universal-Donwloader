@@ -1,0 +1,10 @@
+Universal Media Downloader is a high-performance, privacy-focused open source video and audio downloader powered by yt-dlp.
+
+Key Features:
+• Download videos and playlists in up to 4K resolution (MP4, MKV, WebM)
+• High-quality MP3 / M4A audio extraction with automatic cover art & metadata
+• Channel Subscriptions: Automatically sync and download new uploads from your favorite creators
+• Smart Downloads: Schedule queue runs, download only on unmetered Wi-Fi, and pause on battery saver
+• Built-in background download manager with pause/resume support
+• Native Android system Share Sheet integration: share any link from YouTube, TikTok, Twitter/X, Instagram, Facebook, Reddit to download in 1 click
+• Zero advertisements, zero trackers, and 100% open source
