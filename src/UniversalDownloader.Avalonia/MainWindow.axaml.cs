@@ -633,21 +633,8 @@ public partial class MainWindow : Window
             EmbedSubs = EmbedSubsCheck.IsChecked ?? false,
             WriteThumbnail = WriteThumbnailCheck.IsChecked ?? false,
             ConcurrentFragments = (int)(FragmentsNumeric.Value ?? 4),
-            Quality = QualityComboBox.SelectedIndex switch
-            {
-                1 => "1080p",
-                2 => "720p",
-                3 => "480p",
-                4 => "audio",
-                _ => "best",
-            },
-            PreferCodec = CodecComboBox.SelectedIndex switch
-            {
-                1 => "h264",
-                2 => "vp9",
-                3 => "av01",
-                _ => null,
-            }
+            Quality = GetSelectedQualityString(),
+            PreferCodec = GetSelectedCodecString(),
         };
 
         var effectiveDir = GetEffectiveOutputDirectory();
@@ -673,7 +660,7 @@ public partial class MainWindow : Window
             options.SponsorBlockRemove = "sponsor,intro,outro,selfpromo";
         }
 
-        if (QualityComboBox.SelectedIndex == 4)
+        if (GetSelectedQualityString() == "audio")
         {
             options.AudioOnly = true;
             options.AudioFormat = "mp3";
@@ -692,6 +679,137 @@ public partial class MainWindow : Window
             "Downloads"
         );
         return Directory.Exists(defaultDownloads) ? defaultDownloads : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+    }
+
+    private string GetSelectedQualityString()
+    {
+        var item = QualityComboBox.SelectedItem;
+        var text = (item is ComboBoxItem cbi ? cbi.Content?.ToString() : item?.ToString()) ?? "";
+        if (text.Contains("Audio", StringComparison.OrdinalIgnoreCase)) return "audio";
+        if (text.Contains("2160", StringComparison.OrdinalIgnoreCase)) return "2160p";
+        if (text.Contains("1440", StringComparison.OrdinalIgnoreCase)) return "1440p";
+        if (text.Contains("1080", StringComparison.OrdinalIgnoreCase)) return "1080p";
+        if (text.Contains("720", StringComparison.OrdinalIgnoreCase)) return "720p";
+        if (text.Contains("480", StringComparison.OrdinalIgnoreCase)) return "480p";
+        if (text.Contains("360", StringComparison.OrdinalIgnoreCase)) return "360p";
+        return "best";
+    }
+
+    private string? GetSelectedCodecString()
+    {
+        var item = CodecComboBox.SelectedItem;
+        var text = (item is ComboBoxItem cbi ? cbi.Content?.ToString() : item?.ToString()) ?? "";
+        if (text.Contains("H.264", StringComparison.OrdinalIgnoreCase) || text.Contains("avc", StringComparison.OrdinalIgnoreCase)) return "h264";
+        if (text.Contains("VP9", StringComparison.OrdinalIgnoreCase)) return "vp9";
+        if (text.Contains("AV1", StringComparison.OrdinalIgnoreCase)) return "av01";
+        return null; // Auto
+    }
+
+    public static bool IsProfileUrl(string? rawUrl)
+    {
+        if (string.IsNullOrWhiteSpace(rawUrl)) return false;
+        var trimmed = rawUrl.Trim().Trim('"', '\'');
+        if (trimmed.Contains(':') && !trimmed.Contains("://"))
+        {
+            var parts = trimmed.Split(':', 2);
+            var platform = parts[0].Trim().ToLowerInvariant();
+            if (new[] { "instagram", "facebook", "tiktok", "twitter", "x", "threads", "bluesky", "bsky", "reddit" }.Contains(platform))
+                return true;
+        }
+        var target = (!trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && !trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            ? "https://" + trimmed
+            : trimmed;
+        if (!Uri.TryCreate(target, UriKind.Absolute, out var uri)) return false;
+        var host = (uri.Host ?? "").ToLowerInvariant().Replace("www.", "").Replace("m.", "");
+        var path = (uri.AbsolutePath ?? "").ToLowerInvariant().TrimEnd('/');
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        if (host.Contains("facebook.com"))
+        {
+            if (path.Contains("/watch") || path.Contains("/reel") || path.Contains("/videos/")) return false;
+            if (path.Contains("/profile.php") || path.Contains("/people/")) return true;
+            var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "watch", "reel", "reels", "videos", "share", "story.php", "photo", "photo.php", "groups", "events", "marketplace", "login", "pages", "hashtag", "posts", "stories", "live"
+            };
+            return segments.Length == 1 && !reserved.Contains(segments[0]);
+        }
+        if (host.Contains("instagram.com"))
+        {
+            var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reel", "reels", "p", "tv", "stories", "explore" };
+            return segments.Length == 1 && !reserved.Contains(segments[0]);
+        }
+        if (host == "x.com" || host == "twitter.com")
+        {
+            return segments.Length == 1 && !path.Contains("/status/");
+        }
+        if (host.Contains("threads.net"))
+        {
+            return segments.Length == 1;
+        }
+        if (host.Contains("tiktok.com"))
+        {
+            return segments.Length == 1 && segments[0].StartsWith("@") && !path.Contains("/video/") && !path.Contains("/photo/");
+        }
+        if (host.Contains("bsky.app"))
+        {
+            return path.Contains("/profile/");
+        }
+        if (host.Contains("reddit.com"))
+        {
+            return path.Contains("/user/") || path.Contains("/u/");
+        }
+        return false;
+    }
+
+    private void PopulateSupportedQualities(List<string>? qualities)
+    {
+        var items = new List<string> { "Best Available (Max)" };
+        if (qualities != null && qualities.Count > 0)
+        {
+            var heights = new HashSet<int>();
+            foreach (var q in qualities)
+            {
+                var numStr = new string(q.Where(char.IsDigit).ToArray());
+                if (int.TryParse(numStr, out var h) && h > 0)
+                {
+                    heights.Add(h);
+                }
+            }
+            if (heights.Any(h => h >= 2160)) items.Add("4K (2160p)");
+            if (heights.Any(h => h is >= 1440 and < 2160)) items.Add("2K (1440p)");
+            if (heights.Any(h => h is >= 1080 and < 1440)) items.Add("1080p Full HD");
+            if (heights.Any(h => h is >= 720 and < 1080)) items.Add("720p HD");
+            if (heights.Any(h => h is >= 480 and < 720)) items.Add("480p SD");
+            if (heights.Any(h => h is >= 360 and < 480)) items.Add("360p");
+        }
+        else
+        {
+            items.AddRange(new[] { "1080p Full HD", "720p HD", "480p SD" });
+        }
+        items.Add("Audio Only (MP3)");
+        QualityComboBox.ItemsSource = items;
+        QualityComboBox.SelectedIndex = 0;
+    }
+
+    private void PopulateSupportedCodecs(List<string>? codecs)
+    {
+        var items = new List<string> { "Default (Auto)" };
+        if (codecs != null && codecs.Count > 0)
+        {
+            if (codecs.Any(c => c.Contains("h264", StringComparison.OrdinalIgnoreCase) || c.Contains("avc", StringComparison.OrdinalIgnoreCase)))
+                items.Add("H.264 / AVC1 (Universal)");
+            if (codecs.Any(c => c.Contains("vp9", StringComparison.OrdinalIgnoreCase)))
+                items.Add("VP9 (High Quality)");
+            if (codecs.Any(c => c.Contains("av01", StringComparison.OrdinalIgnoreCase) || c.Contains("av1", StringComparison.OrdinalIgnoreCase)))
+                items.Add("AV1 (Ultra Compressed)");
+        }
+        else
+        {
+            items.AddRange(new[] { "H.264 / AVC1 (Universal)", "VP9 (High Quality)", "AV1 (Ultra Compressed)" });
+        }
+        CodecComboBox.ItemsSource = items;
+        CodecComboBox.SelectedIndex = 0;
     }
 
     private async void DownloadButton_Click(object? sender, RoutedEventArgs e)
@@ -1289,6 +1407,7 @@ public partial class MainWindow : Window
         {
             ClearPlaylistCards();
             MetadataCard.IsVisible = false;
+            DownloadOptionsCard.IsVisible = false;
             _lastInspectedMetadataUrl = null;
             return;
         }
@@ -1301,8 +1420,14 @@ public partial class MainWindow : Window
             {
                 ClearPlaylistCards();
                 MetadataCard.IsVisible = false;
+                DownloadOptionsCard.IsVisible = false;
             }
             return;
+        }
+
+        if (IsProfileUrl(rawUrl))
+        {
+            DownloadOptionsCard.IsVisible = false;
         }
 
         if (rawUrl == _lastInspectedMetadataUrl)
@@ -1373,11 +1498,20 @@ public partial class MainWindow : Window
 
             if (meta != null && meta.IsPlaylist && meta.Entries.Count > 0)
             {
+                DownloadOptionsCard.IsVisible = true;
                 DisplayPlaylistCards(meta, uri, cookiesBrowser, cookiesFile);
                 GlobalStatusText.Text = $"Loaded playlist ({meta.Entries.Count} videos): {meta.Title}";
             }
             else if (meta != null && !string.IsNullOrWhiteSpace(meta.Title))
             {
+                bool isProfile = IsProfileUrl(rawUrl) || meta.IsProfile || !string.IsNullOrWhiteSpace(meta.ProfileId) || meta.ProfileInfo.Count > 0 || meta.ProfileLocked || (meta.Qualities.Count > 0 && meta.Qualities.All(q => q.Contains("x")));
+                DownloadOptionsCard.IsVisible = !isProfile;
+                if (!isProfile)
+                {
+                    PopulateSupportedQualities(meta.Qualities);
+                    PopulateSupportedCodecs(meta.Codecs);
+                }
+
                 MetadataLoadingText.IsVisible = false;
                 MetadataHeaderSpinner.IsVisible = false;
                 VideoTitleLabel.Text = meta.Title;

@@ -4,12 +4,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-enum class QualityOption(val label: String, val value: String) {
-    BEST("Best Available (Max)", "best"),
-    P1080("1080p Full HD", "1080p"),
-    P720("720p HD", "720p"),
-    P480("480p SD", "480p"),
-    AUDIO_MP3("Audio Only (MP3)", "audio"),
+enum class QualityOption(val label: String, val value: String, val minHeight: Int) {
+    BEST("Best Available (Max)", "best", 0),
+    P2160("4K (2160p)", "2160p", 2160),
+    P1440("2K (1440p)", "1440p", 1440),
+    P1080("1080p Full HD", "1080p", 1080),
+    P720("720p HD", "720p", 720),
+    P480("480p SD", "480p", 480),
+    P360("360p", "360p", 360),
+    AUDIO_MP3("Audio Only (MP3)", "audio", 0),
 }
 
 enum class CodecOption(val label: String, val value: String?) {
@@ -70,6 +73,66 @@ data class MediaMetadata(
                 else -> ""
             }
         }
+
+    val isProfileMode: Boolean
+        get() = formats.isNotEmpty() && formats.all { it.isImage }
+
+    val hasVideoStreams: Boolean
+        get() = formats.any { it.isVideo }
+
+    val hasAudioStreams: Boolean
+        get() = formats.any { it.isAudioOnly || it.isVideo }
+
+    fun getSupportedQualities(): List<QualityOption> {
+        if (isProfileMode) return emptyList()
+        val videoFormats = formats.filter { it.isVideo && (it.height ?: 0) > 0 }
+        if (videoFormats.isEmpty()) {
+            return listOf(QualityOption.BEST, QualityOption.AUDIO_MP3)
+        }
+
+        // Support both horizontal and vertical/portrait (Reels/TikTok/Shorts) orientations
+        val effectiveMaxHeight = videoFormats.maxOfOrNull {
+            val w = it.width ?: 0
+            val h = it.height ?: 0
+            if (w > 0 && h > 0) minOf(w, h) else maxOf(w, h)
+        } ?: 0
+
+        val list = mutableListOf<QualityOption>()
+        list.add(QualityOption.BEST)
+        if (effectiveMaxHeight >= 2160) list.add(QualityOption.P2160)
+        if (effectiveMaxHeight >= 1440) list.add(QualityOption.P1440)
+        if (effectiveMaxHeight >= 1080) list.add(QualityOption.P1080)
+        if (effectiveMaxHeight >= 720) list.add(QualityOption.P720)
+        if (effectiveMaxHeight >= 480) list.add(QualityOption.P480)
+        if (effectiveMaxHeight >= 360) list.add(QualityOption.P360)
+        list.add(QualityOption.AUDIO_MP3)
+        return list
+    }
+
+    fun getSupportedCodecs(): List<CodecOption> {
+        if (isProfileMode) return emptyList()
+        val list = mutableListOf<CodecOption>()
+        list.add(CodecOption.AUTO)
+
+        val hasH264 = formats.any {
+            val vc = it.vcodec?.lowercase(Locale.US) ?: ""
+            vc.contains("avc") || vc.contains("h264") || vc.contains("h.264")
+        }
+        val hasVp9 = formats.any {
+            val vc = it.vcodec?.lowercase(Locale.US) ?: ""
+            vc.contains("vp9") || vc.contains("vp09")
+        }
+        val hasAv1 = formats.any {
+            val vc = it.vcodec?.lowercase(Locale.US) ?: ""
+            vc.contains("av01") || vc.contains("av1")
+        }
+
+        if (hasH264) list.add(CodecOption.H264)
+        if (hasVp9) list.add(CodecOption.VP9)
+        if (hasAv1) list.add(CodecOption.AV1)
+
+        return list
+    }
 }
 
 data class StreamFormat(
@@ -86,6 +149,12 @@ data class StreamFormat(
 ) {
     val isImage: Boolean
         get() = vcodec.equals("image", ignoreCase = true)
+
+    val isVideo: Boolean
+        get() = !isImage && !vcodec.isNullOrBlank() && !vcodec.equals("none", ignoreCase = true)
+
+    val isAudioOnly: Boolean
+        get() = !isImage && (vcodec.isNullOrBlank() || vcodec.equals("none", ignoreCase = true)) && !acodec.isNullOrBlank() && !acodec.equals("none", ignoreCase = true)
 
     val resolutionFormatted: String
         get() {

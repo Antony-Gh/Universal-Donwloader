@@ -364,8 +364,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun isValidUrl(url: String): Boolean = repo.isValidUrl(url)
+    fun isProfileUrl(url: String): Boolean = repo.isProfileUrl(url)
+
     private fun triggerMetadataFetch(rawInput: String, immediate: Boolean) {
         metadataJob?.cancel()
+
+        if (!repo.isValidUrl(rawInput)) {
+            lastFetchedUrl = null
+            _uiState.update {
+                it.copy(
+                    isFetchingMetadata = false,
+                    metadata = null,
+                    preliminaryPlatform = "",
+                )
+            }
+            return
+        }
 
         val cleaned = repo.normalizeUrl(rawInput)
         if (cleaned.isBlank() || (!cleaned.startsWith("http://") && !cleaned.startsWith("https://"))) {
@@ -406,6 +421,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val result = repo.fetchMetadataAndFormats(cleaned, _uiState.value.options.cookiesFilePath)
             result.fold(
                 onSuccess = { meta ->
+                    val supportedQualities = meta.getSupportedQualities()
+                    val supportedCodecs = meta.getSupportedCodecs()
+
+                    val currentQuality = _uiState.value.options.quality
+                    val adjustedQuality = if (supportedQualities.isNotEmpty() && currentQuality !in supportedQualities) {
+                        QualityOption.BEST
+                    } else {
+                        currentQuality
+                    }
+
+                    val currentCodec = _uiState.value.options.codec
+                    val adjustedCodec = if (supportedCodecs.isNotEmpty() && currentCodec !in supportedCodecs) {
+                        CodecOption.AUTO
+                    } else {
+                        currentCodec
+                    }
+
+                    if (adjustedQuality != currentQuality || adjustedCodec != currentCodec) {
+                        updateAndPersistOptions { it.copy(quality = adjustedQuality, codec = adjustedCodec) }
+                    }
+
                     _uiState.update {
                         it.copy(
                             isFetchingMetadata = false,

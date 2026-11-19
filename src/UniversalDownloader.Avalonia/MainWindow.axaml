@@ -361,7 +361,7 @@
                         </Border>
 
                         <!-- Options Card -->
-                        <Border Background="#1E1E24" CornerRadius="8" Padding="16">
+                        <Border x:Name="DownloadOptionsCard" IsVisible="False" Background="#1E1E24" CornerRadius="8" Padding="16">
                             <StackPanel Spacing="12">
                                 <TextBlock x:Name="DownloadOptionsHeader" Text="Download Options" FontWeight="SemiBold" Foreground="#F4F4F8"/>
                                 <Grid ColumnDefinitions="*,*,*">

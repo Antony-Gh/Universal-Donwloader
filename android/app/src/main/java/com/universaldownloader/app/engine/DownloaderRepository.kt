@@ -129,8 +129,48 @@ class DownloaderRepository(private val appContext: Context) {
         }
     }
 
-    private fun isProfileUrl(url: String): Boolean {
-        val uri = runCatching { URI(url) }.getOrNull() ?: return false
+    fun isValidUrl(rawUrl: String): Boolean {
+        val trimmed = rawUrl.trim().trim('"', '\'')
+        if (trimmed.length < 4) return false
+        if (trimmed.contains(':') && !trimmed.contains("://")) {
+            val parts = trimmed.split(':', limit = 2)
+            val platform = parts[0].trim().lowercase(Locale.US)
+            val identifier = parts[1].trim()
+            if (platform in setOf("instagram", "facebook", "tiktok", "twitter", "x", "threads", "bluesky", "bsky", "reddit", "youtube") && identifier.isNotBlank()) {
+                return true
+            }
+        }
+        val target = if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+            trimmed
+        } else if (trimmed.contains('.')) {
+            "https://$trimmed"
+        } else {
+            return false
+        }
+        return runCatching {
+            val uri = URI(target)
+            val host = uri.host
+            !host.isNullOrBlank() && host.contains('.') && host.length >= 4
+        }.getOrDefault(false)
+    }
+
+    fun isProfileUrl(url: String): Boolean {
+        val trimmed = url.trim().trim('"', '\'')
+        if (trimmed.isBlank()) return false
+        if (trimmed.contains(':') && !trimmed.contains("://")) {
+            val parts = trimmed.split(':', limit = 2)
+            val platform = parts[0].trim().lowercase(Locale.US)
+            val identifier = parts[1].trim()
+            if (platform in setOf("instagram", "facebook", "tiktok", "twitter", "x", "threads", "bluesky", "bsky", "reddit") && identifier.isNotBlank()) {
+                return true
+            }
+        }
+        val target = if (!trimmed.startsWith("http://", ignoreCase = true) && !trimmed.startsWith("https://", ignoreCase = true)) {
+            "https://$trimmed"
+        } else {
+            trimmed
+        }
+        val uri = runCatching { URI(target) }.getOrNull() ?: return false
         val host = (uri.host ?: "").lowercase(Locale.US).removePrefix("www.").removePrefix("m.")
         val path = (uri.path ?: "").lowercase(Locale.US).trimEnd('/')
         val segments = path.split('/').filter { it.isNotBlank() }
@@ -145,6 +185,9 @@ class DownloaderRepository(private val appContext: Context) {
             host.contains("instagram.com") -> segments.size == 1 && segments[0] !in setOf("reel", "reels", "p", "tv", "stories", "explore")
             host == "x.com" || host == "twitter.com" -> segments.size == 1 && !path.contains("/status/")
             host.contains("threads.net") -> segments.size == 1
+            host.contains("tiktok.com") -> segments.size == 1 && segments[0].startsWith("@") && !path.contains("/video/") && !path.contains("/photo/")
+            host.contains("bsky.app") -> path.contains("/profile/")
+            host.contains("reddit.com") -> path.contains("/user/") || path.contains("/u/")
             else -> false
         }
     }
@@ -1001,9 +1044,12 @@ class DownloaderRepository(private val appContext: Context) {
 
     private fun buildFormatSelector(quality: QualityOption, codec: CodecOption): String {
         val heightLimit = when (quality) {
+            QualityOption.P2160 -> "[height<=2160]"
+            QualityOption.P1440 -> "[height<=1440]"
             QualityOption.P1080 -> "[height<=1080]"
             QualityOption.P720 -> "[height<=720]"
             QualityOption.P480 -> "[height<=480]"
+            QualityOption.P360 -> "[height<=360]"
             else -> ""
         }
         val codecFilter = when (codec) {

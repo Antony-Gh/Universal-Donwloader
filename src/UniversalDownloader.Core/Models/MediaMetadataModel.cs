@@ -51,6 +51,12 @@ public record PlaylistEntryModel
     [JsonPropertyName("qualities")]
     public List<string> Qualities { get; init; } = new();
 
+    [JsonPropertyName("codecs")]
+    public List<string> Codecs { get; init; } = new();
+
+    [JsonPropertyName("is_profile")]
+    public bool IsProfile { get; init; }
+
     public string DurationFormatted
     {
         get
@@ -103,6 +109,12 @@ public record MediaMetadataModel
 
     [JsonPropertyName("qualities")]
     public List<string> Qualities { get; init; } = new();
+
+    [JsonPropertyName("codecs")]
+    public List<string> Codecs { get; init; } = new();
+
+    [JsonPropertyName("is_profile")]
+    public bool IsProfile { get; init; }
 
     [JsonPropertyName("entries")]
     public List<PlaylistEntryModel> Entries { get; init; } = new();

@@ -470,6 +470,14 @@ private fun DownloadTab(
     val strings = LocalAppStrings.current
     val scrollState = rememberScrollState()
 
+    val isProfileMode = remember(state.urlInput, state.metadata) {
+        viewModel.isProfileUrl(state.urlInput) || state.metadata?.isProfileMode == true
+    }
+    val isValidUrl = remember(state.urlInput) {
+        viewModel.isValidUrl(state.urlInput)
+    }
+    val showVideoOptions = isValidUrl && !isProfileMode && state.metadata != null && !state.metadata.isProfileMode
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -745,102 +753,191 @@ private fun DownloadTab(
             }
         }
 
-        // 3. Download Options Card
+        // 2.5 Cookies & Account Login Card
+        var showWebLoginDialog by remember { mutableStateOf(false) }
+        val cookiesPickerLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            if (uri != null) {
+                viewModel.importCookiesFromUri(uri)
+            }
+        }
+        val hasCookies = !state.options.cookiesFilePath.isNullOrBlank()
+
         Card(
             colors = CardDefaults.cardColors(containerColor = SurfaceCard),
             shape = RoundedCornerShape(12.dp),
         ) {
             Column(
                 modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(strings.downloadOptions, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
-
-                // Quality Dropdown
-                var qualityExpanded by remember { mutableStateOf(false) }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    InfoLabel(
-                        title = strings.quality,
-                        explanation = "Select the target video resolution (1080p, 720p, 480p) or Audio Only (MP3). 'Best Available' automatically downloads the highest resolution available.",
-                    )
-                    ExposedDropdownMenuBox(
-                        expanded = qualityExpanded,
-                        onExpandedChange = { qualityExpanded = !qualityExpanded },
-                    ) {
-                        OutlinedTextField(
-                            value = state.options.quality.label,
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = qualityExpanded) },
-                            modifier = Modifier
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                .fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AccentIndigo,
-                                unfocusedBorderColor = BorderSubtle,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                            ),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        InfoLabel(
+                            title = strings.cookiesTitle,
+                            explanation = "Sign in directly via the built-in WebView (Instagram, YouTube, TikTok, X, Facebook) or import a Netscape cookies.txt file to unlock login-gated Reels, private stories, and age-restricted videos.",
+                            color = TextPrimary,
+                            fontSize = 13.sp,
                         )
-                        ExposedDropdownMenu(
+                        Text(
+                            text = if (hasCookies) "Active: session cookies saved" else "Not configured (anonymous)",
+                            color = if (hasCookies) SuccessGreen else TextMuted,
+                            fontSize = 11.sp,
+                        )
+                    }
+                    if (hasCookies) {
+                        IconButton(
+                            onClick = { viewModel.clearCookiesFile() },
+                            modifier = Modifier.size(30.dp),
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear Cookies", tint = ErrorRed, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = { showWebLoginDialog = true },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                    ) {
+                        Text(strings.webLogin, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                    OutlinedButton(
+                        onClick = { cookiesPickerLauncher.launch(arrayOf("text/plain", "*/*")) },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        border = BorderStroke(1.dp, BorderSubtle),
+                    ) {
+                        Text(if (hasCookies) strings.replaceFile else strings.importCookies, fontSize = 12.sp, color = AccentSky)
+                    }
+                }
+            }
+        }
+
+        if (showWebLoginDialog) {
+            WebViewCookieLoginDialog(
+                onDismiss = { showWebLoginDialog = false },
+                onCookiesSaved = { lines, siteLabel ->
+                    showWebLoginDialog = false
+                    viewModel.saveWebViewCookies(lines, siteLabel)
+                },
+            )
+        }
+
+        // 3. Download Options Card (Shown only for valid video links after metadata is fetched)
+        if (showVideoOptions) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(strings.downloadOptions, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
+
+                    val supportedQualities = remember(state.metadata) {
+                        state.metadata?.getSupportedQualities() ?: QualityOption.entries
+                    }
+                    val supportedCodecs = remember(state.metadata) {
+                        state.metadata?.getSupportedCodecs() ?: CodecOption.entries
+                    }
+
+                    // Quality Dropdown
+                    var qualityExpanded by remember { mutableStateOf(false) }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        InfoLabel(
+                            title = strings.quality,
+                            explanation = "Select the target video resolution from the available streams for this video, or Audio Only (MP3). 'Best Available' automatically downloads the highest resolution available.",
+                        )
+                        ExposedDropdownMenuBox(
                             expanded = qualityExpanded,
-                            onDismissRequest = { qualityExpanded = false },
+                            onExpandedChange = { qualityExpanded = !qualityExpanded },
                         ) {
-                            QualityOption.entries.forEach { q ->
-                                DropdownMenuItem(
-                                    text = { Text(q.label) },
-                                    onClick = {
-                                        viewModel.updateQuality(q)
-                                        qualityExpanded = false
-                                    },
-                                )
+                            OutlinedTextField(
+                                value = state.options.quality.label,
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = qualityExpanded) },
+                                modifier = Modifier
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                    .fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = AccentIndigo,
+                                    unfocusedBorderColor = BorderSubtle,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                ),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = qualityExpanded,
+                                onDismissRequest = { qualityExpanded = false },
+                            ) {
+                                supportedQualities.forEach { q ->
+                                    DropdownMenuItem(
+                                        text = { Text(q.label) },
+                                        onClick = {
+                                            viewModel.updateQuality(q)
+                                            qualityExpanded = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                // Codec Dropdown
-                var codecExpanded by remember { mutableStateOf(false) }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    InfoLabel(
-                        title = "Codec Preference",
-                        explanation = "Preferred video compression codec:\n• Auto: Platform default.\n• H.264 / AVC1: Maximum compatibility on all phones, TVs, and players.\n• VP9: High efficiency for 2K/4K.\n• AV1: Next-gen ultra compression.",
-                    )
-                    ExposedDropdownMenuBox(
-                        expanded = codecExpanded,
-                        onExpandedChange = { codecExpanded = !codecExpanded },
-                    ) {
-                        OutlinedTextField(
-                            value = state.options.codec.label,
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = codecExpanded) },
-                            modifier = Modifier
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                .fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AccentIndigo,
-                                unfocusedBorderColor = BorderSubtle,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                            ),
+                    // Codec Dropdown
+                    var codecExpanded by remember { mutableStateOf(false) }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        InfoLabel(
+                            title = "Codec Preference",
+                            explanation = "Video compression codec available for this video:\n• Auto: Platform default stream.\n• H.264 / AVC1: Maximum compatibility on all phones, TVs, and players.\n• VP9: High efficiency for 2K/4K.\n• AV1: Next-gen ultra compression.",
                         )
-                        ExposedDropdownMenu(
+                        ExposedDropdownMenuBox(
                             expanded = codecExpanded,
-                            onDismissRequest = { codecExpanded = false },
+                            onExpandedChange = { codecExpanded = !codecExpanded },
                         ) {
-                            CodecOption.entries.forEach { c ->
-                                DropdownMenuItem(
-                                    text = { Text(c.label) },
-                                    onClick = {
-                                        viewModel.updateCodec(c)
-                                        codecExpanded = false
-                                    },
-                                )
+                            OutlinedTextField(
+                                value = state.options.codec.label,
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = codecExpanded) },
+                                modifier = Modifier
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                    .fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = AccentIndigo,
+                                    unfocusedBorderColor = BorderSubtle,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                ),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = codecExpanded,
+                                onDismissRequest = { codecExpanded = false },
+                            ) {
+                                supportedCodecs.forEach { c ->
+                                    DropdownMenuItem(
+                                        text = { Text(c.label) },
+                                        onClick = {
+                                            viewModel.updateCodec(c)
+                                            codecExpanded = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
                 // Concurrent Fragments Slider
                 Column {
@@ -897,78 +994,6 @@ private fun DownloadTab(
                     checked = state.options.writeThumbnail,
                     onCheckedChange = viewModel::updateWriteThumbnail,
                 )
-
-                // Cookies.txt Authentication Picker & In-App WebView Login
-                var showWebLoginDialog by remember { mutableStateOf(false) }
-                val cookiesPickerLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenDocument(),
-                ) { uri ->
-                    if (uri != null) {
-                        viewModel.importCookiesFromUri(uri)
-                    }
-                }
-                val hasCookies = !state.options.cookiesFilePath.isNullOrBlank()
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            InfoLabel(
-                                title = strings.cookiesTitle,
-                                explanation = "Sign in directly via the built-in WebView (Instagram, YouTube, TikTok, X, Facebook) or import a Netscape cookies.txt file to unlock login-gated Reels and age-restricted videos.",
-                                color = TextPrimary,
-                                fontSize = 13.sp,
-                            )
-                            Text(
-                                text = if (hasCookies) "Active: session cookies saved" else "Not configured (anonymous)",
-                                color = if (hasCookies) SuccessGreen else TextMuted,
-                                fontSize = 11.sp,
-                            )
-                        }
-                        if (hasCookies) {
-                            IconButton(
-                                onClick = { viewModel.clearCookiesFile() },
-                                modifier = Modifier.size(30.dp),
-                            ) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear Cookies", tint = ErrorRed, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Button(
-                            onClick = { showWebLoginDialog = true },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
-                        ) {
-                            Text(strings.webLogin, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-                        }
-                        OutlinedButton(
-                            onClick = { cookiesPickerLauncher.launch(arrayOf("text/plain", "*/*")) },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                            border = BorderStroke(1.dp, BorderSubtle),
-                        ) {
-                            Text(if (hasCookies) strings.replaceFile else strings.importCookies, fontSize = 12.sp, color = AccentSky)
-                        }
-                    }
-                }
-
-                if (showWebLoginDialog) {
-                    WebViewCookieLoginDialog(
-                        onDismiss = { showWebLoginDialog = false },
-                        onCookiesSaved = { lines, siteLabel ->
-                            showWebLoginDialog = false
-                            viewModel.saveWebViewCookies(lines, siteLabel)
-                        },
-                    )
-                }
 
                 // Collapsible Clip Trimmer, Playlist Picker & SponsorBlock Section
                 var showAdvanced by remember { mutableStateOf(false) }
@@ -1051,6 +1076,7 @@ private fun DownloadTab(
                 }
             }
         }
+        }
 
         // 4. Action Buttons (Download / Queue / Cancel)
         Row(
@@ -1058,38 +1084,60 @@ private fun DownloadTab(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Button(
-                onClick = { viewModel.startDownload() },
-                enabled = state.urlInput.isNotBlank() && state.engineStatus == EngineStatus.READY && !state.isDownloading && !state.isQueueRunning,
+                onClick = {
+                    if (isProfileMode) {
+                        viewModel.downloadProfilePicture()
+                    } else {
+                        viewModel.startDownload()
+                    }
+                },
+                enabled = state.urlInput.isNotBlank() && state.engineStatus == EngineStatus.READY && !state.isDownloading && !state.isDownloadingProfilePic && !state.isQueueRunning,
                 modifier = Modifier
                     .weight(1f)
                     .height(50.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
             ) {
-                Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
-                Spacer(Modifier.width(6.dp))
-                Text(strings.download, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
-            }
-
-            OutlinedButton(
-                onClick = { viewModel.downloadProfilePicture() },
-                enabled = state.urlInput.isNotBlank() && !state.isDownloadingProfilePic,
-                modifier = Modifier.height(50.dp),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp),
-                border = BorderStroke(1.dp, BorderSubtle),
-            ) {
                 if (state.isDownloadingProfilePic) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = AccentSky,
+                        color = Color.White,
                     )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Downloading Pic...", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                } else if (isProfileMode) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = Color.White)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Download Profile Pic", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
                 } else {
-                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp), tint = AccentSky)
+                    Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                    Spacer(Modifier.width(6.dp))
+                    Text(strings.download, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
                 }
-                Spacer(Modifier.width(4.dp))
-                Text(strings.profilePic, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextPrimary)
+            }
+
+            if (!isProfileMode) {
+                OutlinedButton(
+                    onClick = { viewModel.downloadProfilePicture() },
+                    enabled = state.urlInput.isNotBlank() && !state.isDownloadingProfilePic,
+                    modifier = Modifier.height(50.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    border = BorderStroke(1.dp, BorderSubtle),
+                ) {
+                    if (state.isDownloadingProfilePic) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = AccentSky,
+                        )
+                    } else {
+                        Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp), tint = AccentSky)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text(strings.profilePic, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextPrimary)
+                }
             }
 
             OutlinedButton(

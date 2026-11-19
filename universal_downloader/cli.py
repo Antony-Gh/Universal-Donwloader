@@ -558,6 +558,23 @@ def _extract_supported_qualities(info: dict[str, Any]) -> list[str]:
     return qualities
 
 
+def _extract_supported_codecs(info: dict[str, Any]) -> list[str]:
+    formats = parse_format(info)
+    if not formats:
+        return []
+    codecs: list[str] = []
+    has_h264 = any("avc" in (fmt.vcodec or "").lower() or "h264" in (fmt.vcodec or "").lower() for fmt in formats)
+    has_vp9 = any("vp9" in (fmt.vcodec or "").lower() or "vp09" in (fmt.vcodec or "").lower() for fmt in formats)
+    has_av1 = any("av01" in (fmt.vcodec or "").lower() or "av1" in (fmt.vcodec or "").lower() for fmt in formats)
+    if has_h264:
+        codecs.append("h264")
+    if has_vp9:
+        codecs.append("vp9")
+    if has_av1:
+        codecs.append("av01")
+    return codecs
+
+
 def _build_playlist_entries(
     raw_entries: list[dict[str, Any]],
     platform: Platform,
@@ -739,6 +756,8 @@ def main() -> int:
                         "is_playlist": False,
                         "playlist_count": 0,
                         "qualities": qualities,
+                        "codecs": [],
+                        "is_profile": True,
                         "entries": [],
                         "profile_locked": inspection.profile_locked,
                         "profile_notice": inspection.profile_notice,
@@ -789,6 +808,8 @@ def main() -> int:
                     "is_playlist": is_playlist_result,
                     "playlist_count": len(playlist_entries),
                     "qualities": _extract_supported_qualities(info_data),
+                    "codecs": _extract_supported_codecs(info_data),
+                    "is_profile": False,
                     "entries": playlist_entries if is_playlist_result else [],
                 }
                 if config.json_output or config.json_stream:
