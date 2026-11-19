@@ -472,6 +472,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="Restrict downloads to unmetered connections.",
     )
 
+    # Local AI Transcription & Whisper
+    ai_group = parser.add_argument_group("Local AI Transcription & Whisper")
+    ai_group.add_argument(
+        "--transcribe",
+        action="store_true",
+        help="Transcribe audio/video locally with Whisper and export subtitles/text.",
+    )
+    ai_group.add_argument(
+        "--whisper-model",
+        type=str,
+        default="base",
+        choices=["tiny", "base", "small", "medium", "large"],
+        help="Whisper model size (default: 'base').",
+    )
+    ai_group.add_argument(
+        "--whisper-lang",
+        type=str,
+        default=None,
+        metavar="LANG",
+        help="Spoken language code for transcription (e.g. 'en', 'ar', 'es') or 'auto'.",
+    )
+    ai_group.add_argument(
+        "--transcribe-format",
+        type=str,
+        default="srt,txt,vtt",
+        help="Comma-separated subtitle/transcript export formats: srt, vtt, txt (default: 'srt,txt,vtt').",
+    )
+    ai_group.add_argument(
+        "--summarize",
+        action="store_true",
+        help="Generate an extractive AI summary of the transcript (.summary.txt).",
+    )
+
     # Authentication & Cookies
     auth_group = parser.add_argument_group("Authentication & Cookies")
     auth_group.add_argument(
@@ -1512,6 +1545,25 @@ def main() -> int:
 
         # Single URL execution
         if requested_url:
+            # Standalone local file transcription
+            if getattr(args, "transcribe", False) and Path(requested_url).is_file():
+                from universal_downloader.transcriber import transcribe_media
+                formats_tuple = tuple(fmt.strip() for fmt in config.transcribe_format.split(",") if fmt.strip())
+                out_files = transcribe_media(
+                    Path(requested_url),
+                    model_name=config.whisper_model,
+                    language=config.whisper_lang,
+                    formats=formats_tuple,
+                    summarize=config.summarize,
+                )
+                if config.json_output:
+                    print(json.dumps({"success": True, "files": [str(p) for p in out_files.values()]}))
+                else:
+                    success("Transcription complete:", config)
+                    for fmt, p in out_files.items():
+                        print(f"  • {fmt.upper()}: {p}")
+                return 0
+
             if not config.json_output and not config.json_stream:
                 print_banner(config)
 

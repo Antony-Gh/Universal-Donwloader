@@ -57,6 +57,11 @@ public class DownloadOptions
     public bool OnlyWifi { get; set; }
     public bool UseAria2 { get; set; }
 
+    public bool TranscribeAudio { get; set; }
+    public string WhisperModel { get; set; } = "base";
+    public string? WhisperLanguage { get; set; }
+    public bool SummarizeTranscript { get; set; }
+
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
     /// </summary>
@@ -208,6 +213,25 @@ public class DownloadOptions
         if (PauseOnBattery) args.Add("--pause-on-battery");
         if (OnlyWifi) args.Add("--only-wifi");
         if (UseAria2) args.Add("--aria2");
+
+        if (TranscribeAudio)
+        {
+            args.Add("--transcribe");
+            if (!string.IsNullOrWhiteSpace(WhisperModel) && WhisperModel != "base")
+            {
+                args.Add("--whisper-model");
+                args.Add(WhisperModel);
+            }
+            if (!string.IsNullOrWhiteSpace(WhisperLanguage))
+            {
+                args.Add("--whisper-lang");
+                args.Add(WhisperLanguage);
+            }
+            if (SummarizeTranscript)
+            {
+                args.Add("--summarize");
+            }
+        }
 
         return args;
     }

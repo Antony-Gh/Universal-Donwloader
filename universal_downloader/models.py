@@ -112,6 +112,11 @@ class AppConfig:
     pause_on_battery: bool = False
     only_wifi: bool = False
     aria2: bool = False
+    transcribe: bool = False
+    whisper_model: str = "base"
+    whisper_lang: Optional[str] = None
+    transcribe_format: str = "srt,txt,vtt"
+    summarize: bool = False
 
 
 @dataclass

@@ -406,6 +406,34 @@ class DownloadEngine:
                         status="completed",
                     )
 
+                # Automatic Whisper transcription
+                if self.config.transcribe:
+                    try:
+                        from universal_downloader.transcriber import transcribe_media
+                        formats_tuple = tuple(fmt.strip() for fmt in self.config.transcribe_format.split(",") if fmt.strip())
+                        for f in list(res.files):
+                            if f.suffix.lower() in {".mp4", ".mkv", ".webm", ".avi", ".mov", ".mp3", ".m4a", ".wav", ".aac", ".flac", ".ogg", ".opus"}:
+                                if self.config.json_stream:
+                                    emit_json_event(
+                                        "stage",
+                                        {"stage": "transcribing", "message": f"Transcribing {f.name} with Whisper..."},
+                                    )
+                                out_files = transcribe_media(
+                                    f,
+                                    output_dir=f.parent,
+                                    model_name=self.config.whisper_model,
+                                    language=self.config.whisper_lang,
+                                    formats=formats_tuple,
+                                    summarize=self.config.summarize,
+                                )
+                                for tf in out_files.values():
+                                    if tf not in res.files:
+                                        res.files.append(tf)
+                    except Exception as texc:
+                        LOGGER.warning("Automatic transcription skipped or failed: %s", texc)
+                        if self.config.verbose:
+                            warning(f"Transcription failed: {texc}", self.config)
+
                 # Desktop notification
                 if self.config.notify:
                     title_str = res.metadata.get("title") or "Download Complete"

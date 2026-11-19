@@ -468,6 +468,11 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         pause_on_battery=getattr(args, "pause_on_battery", False) or parse_config_bool(json_config.get("pause_on_battery")),
         only_wifi=getattr(args, "only_wifi", False) or parse_config_bool(json_config.get("only_wifi")),
         aria2=getattr(args, "aria2", False) or parse_config_bool(json_config.get("aria2")),
+        transcribe=getattr(args, "transcribe", False) or parse_config_bool(json_config.get("transcribe")),
+        whisper_model=getattr(args, "whisper_model", None) or json_config.get("whisper_model") or "base",
+        whisper_lang=getattr(args, "whisper_lang", None) or json_config.get("whisper_lang"),
+        transcribe_format=getattr(args, "transcribe_format", None) or json_config.get("transcribe_format") or "srt,txt,vtt",
+        summarize=getattr(args, "summarize", False) or parse_config_bool(json_config.get("summarize")),
     )
 
     if config.retries > 20:
