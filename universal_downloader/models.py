@@ -117,6 +117,11 @@ class AppConfig:
     whisper_lang: Optional[str] = None
     transcribe_format: str = "srt,txt,vtt"
     summarize: bool = False
+    to_gif: bool = False
+    gif_fps: int = 15
+    gif_width: int = 480
+    frame_grab: Optional[str] = None
+    make_clip: bool = False
 
 
 @dataclass

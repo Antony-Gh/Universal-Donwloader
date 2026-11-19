@@ -111,3 +111,59 @@ def test_cli_convert_audio_and_local_remux(
 
     assert code2 == 0
     assert mock_convert.call_args.kwargs.get("remux_only") is True
+
+
+def test_build_ffmpeg_gif_and_frame_and_clip_cmds(tmp_path: Path) -> None:
+    from universal_downloader.converter import (
+        build_ffmpeg_clip_cmd,
+        build_ffmpeg_frame_cmd,
+        build_ffmpeg_gif_cmd,
+    )
+
+    ffmpeg = Path("ffmpeg")
+    src = tmp_path / "vid.mp4"
+    gif_out = tmp_path / "vid.gif"
+    frame_out = tmp_path / "frame.png"
+    clip_out = tmp_path / "clip.mp4"
+
+    gif_cmd = build_ffmpeg_gif_cmd(ffmpeg, src, gif_out, start_time="00:00:05", duration="3", fps=20, width=320)
+    assert "-ss" in gif_cmd and "00:00:05" in gif_cmd
+    assert "-t" in gif_cmd and "3" in gif_cmd
+    assert "fps=20,scale=320:-1:flags=lanczos" in " ".join(gif_cmd)
+    assert "palettegen" in " ".join(gif_cmd)
+
+    frame_cmd = build_ffmpeg_frame_cmd(ffmpeg, src, frame_out, timestamp="00:01:23")
+    assert "-ss" in frame_cmd and "00:01:23" in frame_cmd
+    assert "-vframes" in frame_cmd and "1" in frame_cmd
+
+    clip_cmd = build_ffmpeg_clip_cmd(ffmpeg, src, clip_out, start_time="00:00:10", end_time="00:00:20")
+    assert "-ss" in clip_cmd and "00:00:10" in clip_cmd
+    assert "-to" in clip_cmd and "00:00:20" in clip_cmd
+    assert "copy" in clip_cmd
+
+
+@patch("universal_downloader.converter.subprocess.run")
+def test_video_to_gif_and_extract_frame_execution(mock_run: MagicMock, tmp_path: Path) -> None:
+    from universal_downloader.converter import extract_frame, video_to_gif
+
+    src = tmp_path / "test.mp4"
+    src.write_bytes(b"sample video bytes")
+
+    def _fake_run(cmd, **_kwargs):
+        out_file = Path(cmd[-1])
+        out_file.write_bytes(b"dummy image output")
+        res = MagicMock()
+        res.returncode = 0
+        res.stderr = ""
+        return res
+
+    mock_run.side_effect = _fake_run
+
+    gif_path = video_to_gif(src, fps=12, width=360, ffmpeg_path=Path("ffmpeg"))
+    assert gif_path.suffix == ".gif"
+    assert gif_path.exists()
+
+    frame_path = extract_frame(src, timestamp="00:00:02", ffmpeg_path=Path("ffmpeg"))
+    assert frame_path.suffix == ".png"
+    assert frame_path.exists()
+

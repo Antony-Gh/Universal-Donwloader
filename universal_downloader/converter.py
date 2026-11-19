@@ -147,3 +147,232 @@ def convert_media_file(
         raise DownloadError(f"Media conversion failed: {err_detail}")
 
     return output_path.resolve()
+
+
+def build_ffmpeg_gif_cmd(
+    ffmpeg_bin: Path,
+    input_path: Path,
+    output_path: Path,
+    *,
+    start_time: Optional[str] = None,
+    duration: Optional[str] = None,
+    fps: int = 15,
+    width: int = 480,
+) -> list[str]:
+    """Build FFmpeg command for two-pass palette-optimized animated GIF generation."""
+    cmd: list[str] = [
+        str(ffmpeg_bin),
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+    ]
+    if start_time:
+        cmd.extend(["-ss", str(start_time)])
+    if duration:
+        cmd.extend(["-t", str(duration)])
+    cmd.extend(["-i", str(input_path)])
+
+    vf = f"fps={fps},scale={width}:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5"
+    cmd.extend(["-filter_complex", vf, str(output_path)])
+    return cmd
+
+
+def video_to_gif(
+    input_path: Path,
+    output_path: Optional[Path] = None,
+    *,
+    start_time: Optional[str] = None,
+    duration: Optional[str] = None,
+    fps: int = 15,
+    width: int = 480,
+    ffmpeg_path: Optional[Path] = None,
+) -> Path:
+    """Convert input video into a high-quality animated GIF using FFmpeg."""
+    src = Path(input_path).expanduser()
+    if not src.exists() or not src.is_file():
+        raise FileNotFoundError(f"Input media file not found: {src}")
+
+    ffmpeg_bin = ffmpeg_path or find_ffmpeg() or ensure_ffmpeg(auto_download=False)
+    if not ffmpeg_bin:
+        raise DependencyError("FFmpeg is required for GIF generation but was not found on PATH or in cache.")
+
+    dest = output_path or unique_path(src.parent / f"{src.stem}.gif")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = build_ffmpeg_gif_cmd(
+        ffmpeg_bin,
+        src,
+        dest,
+        start_time=start_time,
+        duration=duration,
+        fps=fps,
+        width=width,
+    )
+    LOGGER.debug("Running FFmpeg GIF command: %s", cmd)
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        raise DownloadError(f"Failed to launch FFmpeg: {exc}") from exc
+
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip() or f"FFmpeg exited with code {proc.returncode}"
+        if dest.exists():
+            try:
+                dest.unlink()
+            except OSError:
+                pass
+        raise DownloadError(f"GIF generation failed: {err}")
+
+    return dest.resolve()
+
+
+def build_ffmpeg_frame_cmd(
+    ffmpeg_bin: Path,
+    input_path: Path,
+    output_path: Path,
+    *,
+    timestamp: str = "00:00:01",
+) -> list[str]:
+    """Build FFmpeg command to capture a single frame at a specific timestamp."""
+    return [
+        str(ffmpeg_bin),
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        str(timestamp),
+        "-i",
+        str(input_path),
+        "-vframes",
+        "1",
+        "-q:v",
+        "2",
+        str(output_path),
+    ]
+
+
+def extract_frame(
+    input_path: Path,
+    output_path: Optional[Path] = None,
+    *,
+    timestamp: str = "00:00:01",
+    ffmpeg_path: Optional[Path] = None,
+) -> Path:
+    """Capture a single frame from video at timestamp and save as an image."""
+    src = Path(input_path).expanduser()
+    if not src.exists() or not src.is_file():
+        raise FileNotFoundError(f"Input media file not found: {src}")
+
+    ffmpeg_bin = ffmpeg_path or find_ffmpeg() or ensure_ffmpeg(auto_download=False)
+    if not ffmpeg_bin:
+        raise DependencyError("FFmpeg is required for frame extraction but was not found on PATH or in cache.")
+
+    dest = output_path or unique_path(src.parent / f"{src.stem}_frame.png")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = build_ffmpeg_frame_cmd(ffmpeg_bin, src, dest, timestamp=timestamp)
+    LOGGER.debug("Running FFmpeg frame capture command: %s", cmd)
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        raise DownloadError(f"Failed to launch FFmpeg: {exc}") from exc
+
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip() or f"FFmpeg exited with code {proc.returncode}"
+        if dest.exists():
+            try:
+                dest.unlink()
+            except OSError:
+                pass
+        raise DownloadError(f"Frame extraction failed: {err}")
+
+    return dest.resolve()
+
+
+def build_ffmpeg_clip_cmd(
+    ffmpeg_bin: Path,
+    input_path: Path,
+    output_path: Path,
+    *,
+    start_time: str,
+    end_time: Optional[str] = None,
+    duration: Optional[str] = None,
+    copy_codec: bool = True,
+) -> list[str]:
+    """Build FFmpeg command to extract a media clip."""
+    cmd: list[str] = [
+        str(ffmpeg_bin),
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        str(start_time),
+    ]
+    if end_time:
+        cmd.extend(["-to", str(end_time)])
+    elif duration:
+        cmd.extend(["-t", str(duration)])
+    cmd.extend(["-i", str(input_path)])
+
+    if copy_codec:
+        cmd.extend(["-c", "copy"])
+    else:
+        cmd.extend(["-c:v", "libx264", "-c:a", "aac"])
+
+    cmd.append(str(output_path))
+    return cmd
+
+
+def create_clip(
+    input_path: Path,
+    output_path: Optional[Path] = None,
+    *,
+    start_time: str,
+    end_time: Optional[str] = None,
+    duration: Optional[str] = None,
+    copy_codec: bool = True,
+    ffmpeg_path: Optional[Path] = None,
+) -> Path:
+    """Extract a time-range clip from a media file."""
+    src = Path(input_path).expanduser()
+    if not src.exists() or not src.is_file():
+        raise FileNotFoundError(f"Input media file not found: {src}")
+
+    ffmpeg_bin = ffmpeg_path or find_ffmpeg() or ensure_ffmpeg(auto_download=False)
+    if not ffmpeg_bin:
+        raise DependencyError("FFmpeg is required for clip extraction but was not found on PATH or in cache.")
+
+    dest = output_path or unique_path(src.parent / f"{src.stem}_clip{src.suffix}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = build_ffmpeg_clip_cmd(
+        ffmpeg_bin,
+        src,
+        dest,
+        start_time=start_time,
+        end_time=end_time,
+        duration=duration,
+        copy_codec=copy_codec,
+    )
+    LOGGER.debug("Running FFmpeg clip extraction command: %s", cmd)
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except OSError as exc:
+        raise DownloadError(f"Failed to launch FFmpeg: {exc}") from exc
+
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip() or f"FFmpeg exited with code {proc.returncode}"
+        if dest.exists():
+            try:
+                dest.unlink()
+            except OSError:
+                pass
+        raise DownloadError(f"Clip extraction failed: {err}")
+
+    return dest.resolve()

@@ -17,6 +17,9 @@ from universal_downloader.converter import (
     SUPPORTED_FORMATS,
     VIDEO_FORMATS,
     convert_media_file,
+    create_clip,
+    extract_frame,
+    video_to_gif,
 )
 from universal_downloader.engine import DownloadEngine
 from universal_downloader.exceptions import (
@@ -295,6 +298,35 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FORMAT",
         choices=sorted(VIDEO_FORMATS),
         help="Convert a local video file into the specified container format (mp4, mkv, mov, webm).",
+    )
+    post_group.add_argument(
+        "--to-gif",
+        action="store_true",
+        help="Convert video (local file or downloaded) to high-quality animated GIF.",
+    )
+    post_group.add_argument(
+        "--gif-fps",
+        type=int,
+        default=15,
+        help="Framerate for GIF conversion (default: 15).",
+    )
+    post_group.add_argument(
+        "--gif-width",
+        type=int,
+        default=480,
+        help="Width in pixels for GIF conversion (default: 480).",
+    )
+    post_group.add_argument(
+        "--frame-grab",
+        "--screenshot-at",
+        metavar="TIMESTAMP",
+        dest="frame_grab",
+        help="Grab a single frame/screenshot from video at given timestamp (e.g. '00:01:23').",
+    )
+    post_group.add_argument(
+        "--make-clip",
+        action="store_true",
+        help="Extract a video clip from local file using --start-time and --end-time / --record-duration.",
     )
     post_group.add_argument(
         "--split-chapters",
@@ -1240,6 +1272,76 @@ def main() -> int:
                     print(json.dumps({"success": False, "error": str(exc)}))
                 else:
                     failure(f"Media conversion failed: {exc}", config)
+                return 1
+
+        # Direct local GIF conversion
+        if getattr(args, "to_gif", False) and requested_url:
+            try:
+                local_path = Path(requested_url).expanduser()
+                if local_path.is_file():
+                    out_path = video_to_gif(
+                        local_path,
+                        start_time=config.start_time,
+                        duration=config.record_duration,
+                        fps=config.gif_fps,
+                        width=config.gif_width,
+                    )
+                    if config.json_output or config.json_stream:
+                        print(json.dumps({"success": True, "output": str(out_path)}))
+                    else:
+                        success(f"GIF created: {out_path}", config)
+                    return 0
+            except Exception as gexc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(gexc)}))
+                else:
+                    failure(f"GIF generation failed: {gexc}", config)
+                return 1
+
+        # Direct local frame grab / screenshot
+        if getattr(args, "frame_grab", None) and requested_url:
+            try:
+                local_path = Path(requested_url).expanduser()
+                if local_path.is_file():
+                    out_path = extract_frame(
+                        local_path,
+                        timestamp=str(args.frame_grab),
+                    )
+                    if config.json_output or config.json_stream:
+                        print(json.dumps({"success": True, "output": str(out_path)}))
+                    else:
+                        success(f"Frame extracted: {out_path}", config)
+                    return 0
+            except Exception as fexc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(fexc)}))
+                else:
+                    failure(f"Frame extraction failed: {fexc}", config)
+                return 1
+
+        # Direct local video clip extraction
+        if getattr(args, "make_clip", False) and requested_url:
+            try:
+                local_path = Path(requested_url).expanduser()
+                if local_path.is_file():
+                    if not config.start_time:
+                        raise ValueError("Clipping requires --start-time (e.g. --start-time 00:00:10)")
+                    out_path = create_clip(
+                        local_path,
+                        start_time=config.start_time,
+                        end_time=config.end_time,
+                        duration=config.record_duration,
+                    )
+                    if config.json_output or config.json_stream:
+                        print(json.dumps({"success": True, "output": str(out_path)}))
+                    else:
+                        success(f"Clip extracted: {out_path}", config)
+                    return 0
+            except Exception as cexc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(cexc)}))
+                else:
+                    failure(f"Clip extraction failed: {cexc}", config)
                 return 1
 
         # Metadata inspection mode

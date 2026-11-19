@@ -434,6 +434,35 @@ class DownloadEngine:
                         if self.config.verbose:
                             warning(f"Transcription failed: {texc}", self.config)
 
+                # Automatic GIF conversion & Frame Grab
+                if self.config.to_gif or self.config.frame_grab:
+                    from universal_downloader.converter import extract_frame, video_to_gif
+                    for f in list(res.files):
+                        if f.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov", ".avi"}:
+                            if self.config.to_gif:
+                                try:
+                                    gif_path = video_to_gif(
+                                        f,
+                                        start_time=self.config.start_time,
+                                        duration=self.config.record_duration,
+                                        fps=self.config.gif_fps,
+                                        width=self.config.gif_width,
+                                    )
+                                    if gif_path not in res.files:
+                                        res.files.append(gif_path)
+                                except Exception as gexc:
+                                    LOGGER.warning("GIF generation failed: %s", gexc)
+                            if self.config.frame_grab:
+                                try:
+                                    frame_path = extract_frame(
+                                        f,
+                                        timestamp=str(self.config.frame_grab),
+                                    )
+                                    if frame_path not in res.files:
+                                        res.files.append(frame_path)
+                                except Exception as fexc:
+                                    LOGGER.warning("Frame grab failed: %s", fexc)
+
                 # Desktop notification
                 if self.config.notify:
                     title_str = res.metadata.get("title") or "Download Complete"

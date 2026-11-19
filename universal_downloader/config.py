@@ -473,6 +473,11 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         whisper_lang=getattr(args, "whisper_lang", None) or json_config.get("whisper_lang"),
         transcribe_format=getattr(args, "transcribe_format", None) or json_config.get("transcribe_format") or "srt,txt,vtt",
         summarize=getattr(args, "summarize", False) or parse_config_bool(json_config.get("summarize")),
+        to_gif=getattr(args, "to_gif", False) or parse_config_bool(json_config.get("to_gif")),
+        gif_fps=int(getattr(args, "gif_fps", 15) or json_config.get("gif_fps") or 15),
+        gif_width=int(getattr(args, "gif_width", 480) or json_config.get("gif_width") or 480),
+        frame_grab=getattr(args, "frame_grab", None) or json_config.get("frame_grab"),
+        make_clip=getattr(args, "make_clip", False) or parse_config_bool(json_config.get("make_clip")),
     )
 
     if config.retries > 20:

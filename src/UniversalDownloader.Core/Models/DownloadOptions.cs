@@ -62,6 +62,11 @@ public class DownloadOptions
     public string? WhisperLanguage { get; set; }
     public bool SummarizeTranscript { get; set; }
 
+    public bool ToGif { get; set; }
+    public int GifFps { get; set; } = 15;
+    public int GifWidth { get; set; } = 480;
+    public string? FrameGrabTimestamp { get; set; }
+
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
     /// </summary>
@@ -231,6 +236,27 @@ public class DownloadOptions
             {
                 args.Add("--summarize");
             }
+        }
+
+        if (ToGif)
+        {
+            args.Add("--to-gif");
+            if (GifFps != 15)
+            {
+                args.Add("--gif-fps");
+                args.Add(GifFps.ToString());
+            }
+            if (GifWidth != 480)
+            {
+                args.Add("--gif-width");
+                args.Add(GifWidth.ToString());
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(FrameGrabTimestamp))
+        {
+            args.Add("--frame-grab");
+            args.Add(FrameGrabTimestamp.Trim());
         }
 
         return args;
