@@ -126,13 +126,46 @@ python downloader.py --history-clear
 python downloader.py --batch urls.txt --concurrency 3 --download-archive history.txt --limit-rate 5M
 ```
 
-### System Integration & Automation
+### Search, Autosuggest & Deep-Link Shortcuts
+```bash
+# Search YouTube directly by song/video name (table or JSON)
+python downloader.py --search "queen bohemian rhapsody" --search-limit 5
+python downloader.py --search "coldplay yellow" --json
+
+# Fetch real-time YouTube query autosuggestions
+python downloader.py --suggest "adele hel" --json
+
+# Instant deep-link format shortcuts (#ID/mp3, #ID/mp4, url#mp3)
+python downloader.py "#dQw4w9WgXcQ/mp3"
+python downloader.py "https://youtu.be/dQw4w9WgXcQ#audio"
+```
+
+### Smart Organization, Webpage Sniffer, Local Converter & Live Recording
+```bash
+# Route downloads into structured subfolders (none, platform, uploader, date) and strip clickbait tags/emojis
+python downloader.py --organize uploader --clean-filenames "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+# Scan any webpage HTML for embedded <video>, <audio>, OpenGraph, HLS (.m3u8), and DASH (.mpd) streams
+python downloader.py --sniff "https://example.com/article-with-video"
+
+# Convert local media files directly using bundled FFmpeg (no external tools required)
+python downloader.py --convert-audio mp3 "C:\Videos\lecture.mp4"
+python downloader.py --remux-video mp4 "C:\Videos\recording.mkv"
+
+# Record a live stream with an automatic FFmpeg duration cap
+python downloader.py --record-duration 00:15:00 --live-from-start "https://www.youtube.com/watch?v=LIVE_ID"
+```
+
+### System Integration & Browser Companion
 ```bash
 # Run clipboard monitor: automatically downloads media URLs when copied
 python downloader.py --watch-clipboard
 
-# Register downloader:// protocol in Windows Registry (for browser bookmarklets)
+# Register downloader:// protocol in Windows Registry (used by browser/universal_downloader.user.js)
 python downloader.py --register-protocol
+
+# Register Chrome/Edge/Firefox Native Messaging Host (CoApp) for browser extensions
+python downloader.py --register-native-host
 
 # Enable Windows desktop notification on completion
 python downloader.py --notify "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
@@ -316,7 +349,7 @@ Run the test suite using `pytest`:
 pytest -v
 ```
 
-All 43 unit and integration tests run in ~1.2 seconds across platforms.
+All 109 unit and integration tests run across platforms.
 
 ---
 
