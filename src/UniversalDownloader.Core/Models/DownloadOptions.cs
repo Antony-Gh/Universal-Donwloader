@@ -66,6 +66,7 @@ public class DownloadOptions
     public int GifFps { get; set; } = 15;
     public int GifWidth { get; set; } = 480;
     public string? FrameGrabTimestamp { get; set; }
+    public bool TagMusic { get; set; }
 
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
@@ -257,6 +258,11 @@ public class DownloadOptions
         {
             args.Add("--frame-grab");
             args.Add(FrameGrabTimestamp.Trim());
+        }
+
+        if (TagMusic)
+        {
+            args.Add("--tag-music");
         }
 
         return args;

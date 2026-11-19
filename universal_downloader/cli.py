@@ -329,6 +329,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Extract a video clip from local file using --start-time and --end-time / --record-duration.",
     )
     post_group.add_argument(
+        "--tag-music",
+        "--auto-tag",
+        action="store_true",
+        dest="tag_music",
+        help="Enrich audio files with metadata and cover art from MusicBrainz & Cover Art Archive.",
+    )
+    post_group.add_argument(
         "--split-chapters",
         action="store_true",
         help="Split video into multiple files based on internal chapters.",
@@ -1342,6 +1349,28 @@ def main() -> int:
                     print(json.dumps({"success": False, "error": str(cexc)}))
                 else:
                     failure(f"Clip extraction failed: {cexc}", config)
+                return 1
+
+        # Direct local music tagging
+        if getattr(args, "tag_music", False) and requested_url:
+            try:
+                local_path = Path(requested_url).expanduser()
+                if local_path.is_file():
+                    from universal_downloader.music_tagger import auto_tag_music
+                    meta = auto_tag_music(local_path)
+                    if config.json_output or config.json_stream:
+                        print(json.dumps({"success": True, "metadata": meta, "file": str(local_path)}))
+                    else:
+                        if meta:
+                            success(f"Tagged '{local_path.name}': {meta.get('artist')} - {meta.get('title')} ({meta.get('album')})", config)
+                        else:
+                            warning(f"No MusicBrainz match found for '{local_path.name}'.", config)
+                    return 0
+            except Exception as texc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(texc)}))
+                else:
+                    failure(f"Music tagging failed: {texc}", config)
                 return 1
 
         # Metadata inspection mode

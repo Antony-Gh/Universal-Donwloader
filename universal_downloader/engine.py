@@ -463,6 +463,25 @@ class DownloadEngine:
                                 except Exception as fexc:
                                     LOGGER.warning("Frame grab failed: %s", fexc)
 
+                # Automatic MusicBrainz music tagging
+                if self.config.tag_music:
+                    from universal_downloader.music_tagger import auto_tag_music
+                    for f in list(res.files):
+                        if f.suffix.lower() in {".mp3", ".m4a", ".flac", ".opus", ".wav", ".aac"}:
+                            try:
+                                if self.config.json_stream:
+                                    emit_json_event(
+                                        "stage",
+                                        {"stage": "tagging", "message": f"Tagging {f.name} with MusicBrainz..."},
+                                    )
+                                auto_tag_music(
+                                    f,
+                                    title_hint=res.metadata.get("title"),
+                                    artist_hint=res.metadata.get("uploader"),
+                                )
+                            except Exception as m_exc:
+                                LOGGER.warning("Music tagging skipped or failed: %s", m_exc)
+
                 # Desktop notification
                 if self.config.notify:
                     title_str = res.metadata.get("title") or "Download Complete"

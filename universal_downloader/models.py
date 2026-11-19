@@ -122,6 +122,7 @@ class AppConfig:
     gif_width: int = 480
     frame_grab: Optional[str] = None
     make_clip: bool = False
+    tag_music: bool = False
 
 
 @dataclass

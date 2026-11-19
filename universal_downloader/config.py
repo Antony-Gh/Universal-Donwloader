@@ -478,6 +478,7 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         gif_width=int(getattr(args, "gif_width", 480) or json_config.get("gif_width") or 480),
         frame_grab=getattr(args, "frame_grab", None) or json_config.get("frame_grab"),
         make_clip=getattr(args, "make_clip", False) or parse_config_bool(json_config.get("make_clip")),
+        tag_music=getattr(args, "tag_music", False) or parse_config_bool(json_config.get("tag_music")),
     )
 
     if config.retries > 20:
