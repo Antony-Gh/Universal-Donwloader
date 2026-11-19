@@ -83,7 +83,20 @@ public partial class MainWindow : Window
         Opened += async (s, e) =>
         {
             await LoadHistoryAsync();
-            _ = CheckForAppUpdatesAsync(silent: true);
+            var policy = await UpdateChecker.CheckVersionPolicyAsync(_settings);
+            if (!policy.IsSupported)
+            {
+                UpdateBannerMessage.Text = $"CRITICAL: Version v{UpdateChecker.GetCurrentVersion()} has reached End of Life. Minimum required: v{policy.MinSupportedVersion}. Please update to continue.";
+                UpdateBanner.IsVisible = true;
+                if (policy.EnforcementMode == "block")
+                {
+                    DownloadButton.IsEnabled = false;
+                }
+            }
+            else
+            {
+                _ = CheckForAppUpdatesAsync(silent: true);
+            }
             _ = PlatformUtils.SendTelemetryHeartbeatAsync(_settings);
             await CheckClipboardForMediaUrlAsync();
         };

@@ -21,6 +21,16 @@ public record AppUpdateInfo
     public string ReleaseNotes { get; init; } = string.Empty;
 }
 
+public record VersionPolicyResult
+{
+    public bool IsSupported { get; init; } = true;
+    public string MinSupportedVersion { get; init; } = "3.6.0";
+    public string LatestVersion { get; init; } = "3.6.0";
+    public string SunsetMessage { get; init; } = string.Empty;
+    public string DownloadUrl { get; init; } = "https://github.com/Antony-Gh/Universal-Donwloader/releases/latest";
+    public string EnforcementMode { get; init; } = "block";
+}
+
 /// <summary>
 /// Cross-platform update checker querying GitHub Releases for Windows, Linux, and macOS builds.
 /// Reads app version, version code, display name, and GitHub repo directly from app_config.json (embedded via Directory.Build.props).
@@ -108,6 +118,52 @@ public static class UpdateChecker
             ?? typeof(UpdateChecker).Assembly.GetName().Version;
         if (ver == null) return "3.6.0";
         return $"{ver.Major}.{ver.Minor}.{Math.Max(0, ver.Build)}";
+    }
+
+    public static async Task<VersionPolicyResult> CheckVersionPolicyAsync(UserSettings? settings = null)
+    {
+        var currentVersion = GetCurrentVersion();
+        var minSupported = "3.6.0";
+        var latestVersion = "3.6.0";
+        var sunsetMsg = "This version of Universal Media Downloader has reached End of Life and is no longer supported. Please update to continue.";
+        var downloadUrl = LatestReleaseWebUrl;
+        var mode = "block";
+
+        try
+        {
+            var rawUrl = $"https://raw.githubusercontent.com/{RepoOwner}/{RepoName}/master/version_policy.json";
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var resp = await ApiHttp.GetAsync(rawUrl, cts.Token).ConfigureAwait(false);
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("min_supported_version", out var minProp))
+                    minSupported = minProp.GetString() ?? minSupported;
+                if (root.TryGetProperty("latest_version", out var latProp))
+                    latestVersion = latProp.GetString() ?? latestVersion;
+                if (root.TryGetProperty("sunset_message", out var msgProp))
+                    sunsetMsg = msgProp.GetString() ?? sunsetMsg;
+                if (root.TryGetProperty("download_url", out var dlProp))
+                    downloadUrl = dlProp.GetString() ?? downloadUrl;
+                if (root.TryGetProperty("enforcement_mode", out var modeProp))
+                    mode = modeProp.GetString() ?? mode;
+            }
+        }
+        catch { }
+
+        var isSupported = CompareVersions(currentVersion, minSupported) >= 0;
+
+        return new VersionPolicyResult
+        {
+            IsSupported = isSupported,
+            MinSupportedVersion = minSupported,
+            LatestVersion = latestVersion,
+            SunsetMessage = sunsetMsg,
+            DownloadUrl = downloadUrl,
+            EnforcementMode = mode
+        };
     }
 
     public static async Task<AppUpdateInfo> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
