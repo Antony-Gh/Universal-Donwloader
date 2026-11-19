@@ -383,7 +383,18 @@ class DownloadEngine:
                     self.config.no_check_certificate = True
                     self.extractor.config.no_check_certificate = True
 
-                if is_non_retryable_error(message):
+                is_youtube_403 = (
+                    target.platform == Platform.YOUTUBE
+                    and ("http error 403" in lowered_err or "403: forbidden" in lowered_err)
+                )
+
+                if is_youtube_403 and attempt <= self.config.retries:
+                    LOGGER.info(
+                        "YouTube returned HTTP 403 on attempt %d; rotating player client and retrying...",
+                        attempt,
+                    )
+
+                if is_non_retryable_error(message) and not is_youtube_403:
                     break
 
                 if (

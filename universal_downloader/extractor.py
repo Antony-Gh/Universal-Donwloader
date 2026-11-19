@@ -177,16 +177,9 @@ class YTDLPExtractor:
         if ffmpeg_bin:
             options["ffmpeg_location"] = str(ffmpeg_bin.parent)
 
-        # Configure YouTube client and format extraction:
-        # 1. 'android_vr' and 'tv_embedded' avoid desktop SSAP, iOS SABR-only restrictions, and PO Token warnings.
-        # 2. 'missing_pot' ensures formats remain selectable when PO tokens are absent.
-        # 3. Webpage is NOT skipped so visitor data and JavaScript n-sig decryption stay available.
-        options["extractor_args"] = {
-            "youtube": {
-                "player_client": ["android_vr", "tv_embedded", "web"],
-                "formats": ["missing_pot"],
-            }
-        }
+        # Let yt-dlp use its native default YouTube client selection & PO-token format filtering
+        # (avoids deprecated 'tv_embedded' warnings and 'missing_pot' HTTP 403 Forbidden failures).
+        # Fallback client rotation is handled in platform_extra_options() on retry attempts.
 
         if self.config.cookies_file:
             options["cookiefile"] = str(self.config.cookies_file)
@@ -242,21 +235,35 @@ class YTDLPExtractor:
                 "sleep_interval_requests": 1,
             }
         if platform == Platform.YOUTUBE:
-            # Rotate client signatures across attempts to bypass bot checks, iOS SABR-only, & SSAP reload gates
+            # Attempt 1 uses yt-dlp's native default clients & PO-token filtering (no missing_pot)
+            # to avoid HTTP 403 Forbidden on PO-token-gated DASH formats and deprecated client warnings.
+            if attempt <= 1:
+                return {}
+
+            has_auth = bool(self.config.cookies_file or self.config.cookies_from_browser)
             if attempt == 2:
-                clients = ["web", "android_vr"]
+                clients = (
+                    ["tv_downgraded", "web_safari", "web_embedded", "web"]
+                    if has_auth
+                    else ["tv_simply", "tv", "web_safari", "web"]
+                )
             elif attempt == 3:
-                clients = ["android", "tv_embedded", "web"]
-            elif attempt >= 4:
-                clients = ["visionos", "web"]
+                clients = (
+                    ["mweb", "tv", "web"]
+                    if has_auth
+                    else ["web_embedded", "mweb", "ios", "web"]
+                )
             else:
-                clients = ["android_vr", "tv_embedded", "web"]
+                clients = (
+                    ["web_creator", "web"]
+                    if has_auth
+                    else ["android_vr", "android", "web"]
+                )
 
             return {
                 "extractor_args": {
                     "youtube": {
                         "player_client": clients,
-                        "formats": ["missing_pot"],
                     }
                 }
             }

@@ -242,7 +242,6 @@ class DownloaderRepository(private val appContext: Context) {
                 addOption("--socket-timeout", "25")
                 addOption("--retries", "3")
                 addOption("--extractor-retries", "3")
-                addOption("--extractor-args", "youtube:player_client=android_vr,tv_embedded,web;formats=missing_pot")
                 if (isTikTok) {
                     addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
                     addOption("--referer", "https://www.tiktok.com/")
@@ -356,11 +355,17 @@ class DownloaderRepository(private val appContext: Context) {
             val outDir = getOutputDirectory(isAudioOnly)
             val beforeFiles = outDir.listFiles()?.map { it.absolutePath }?.toSet() ?: emptySet()
 
-            val isTikTok = detectPlatformLabel(url) == "TIKTOK"
-            val request = YoutubeDLRequest(url).apply {
+            val platform = detectPlatformLabel(url)
+            val isTikTok = platform == "TIKTOK"
+            val cookiesPath = options.cookiesFilePath
+            val hasCookies = !cookiesPath.isNullOrBlank() && File(cookiesPath).exists()
+
+            fun buildRequest(youtubeExtractorArgs: String?): YoutubeDLRequest = YoutubeDLRequest(url).apply {
                 addOption("-o", "${outDir.absolutePath}/%(title).120B [%(id)s].%(ext)s")
                 addOption("--concurrent-fragments", options.concurrentFragments.coerceIn(1, 16).toString())
-                addOption("--extractor-args", "youtube:player_client=android_vr,tv_embedded,web;formats=missing_pot")
+                if (!youtubeExtractorArgs.isNullOrBlank()) {
+                    addOption("--extractor-args", youtubeExtractorArgs)
+                }
                 addOption("--no-warnings")
                 addOption("--no-update")
                 addOption("--no-check-certificates")
@@ -402,9 +407,8 @@ class DownloaderRepository(private val appContext: Context) {
                 if (options.writeThumbnail) {
                     addOption("--write-thumbnail")
                 }
-                val cookiesPath = options.cookiesFilePath
-                if (!cookiesPath.isNullOrBlank() && File(cookiesPath).exists()) {
-                    addOption("--cookies", cookiesPath)
+                if (hasCookies) {
+                    addOption("--cookies", cookiesPath!!)
                 }
                 val startTrim = options.startTime.trim()
                 val endTrim = options.endTime.trim()
@@ -425,7 +429,7 @@ class DownloaderRepository(private val appContext: Context) {
 
             onLog("Starting download to: ${outDir.absolutePath}")
 
-            val response = YoutubeDL.getInstance().execute(request, processId) { progress, etaInSeconds, line ->
+            val progressCallback: (Float, Long, String) -> Unit = { progress, etaInSeconds, line ->
                 val cleanLine = line.trim()
                 if (cleanLine.isNotEmpty() && !isIgnoredLine(cleanLine)) {
                     // Only log non-spam status lines; progress numbers update the progress bar smoothly
@@ -436,9 +440,36 @@ class DownloaderRepository(private val appContext: Context) {
                 onProgress(progress.coerceIn(0f, 100f), etaInSeconds, cleanLine)
             }
 
+            fun isYouTube403(text: String?): Boolean {
+                val lower = text.orEmpty().lowercase(Locale.US)
+                return platform == "YOUTUBE" && (lower.contains("http error 403") || lower.contains("403: forbidden"))
+            }
+
+            val fallbackArgs = if (hasCookies) {
+                "youtube:player_client=tv_downgraded,web_safari,web_embedded,web"
+            } else {
+                "youtube:player_client=tv_simply,tv,web_safari,web"
+            }
+
+            var response = try {
+                YoutubeDL.getInstance().execute(buildRequest(null), processId, progressCallback)
+            } catch (ex: Exception) {
+                if (isYouTube403(ex.message)) {
+                    onLog("[Retry] YouTube returned HTTP 403; rotating player client and retrying...")
+                    YoutubeDL.getInstance().execute(buildRequest(fallbackArgs), processId, progressCallback)
+                } else {
+                    throw ex
+                }
+            }
+
+            if (response.exitCode != 0 && isYouTube403(response.err)) {
+                onLog("[Retry] YouTube returned HTTP 403; rotating player client and retrying...")
+                response = YoutubeDL.getInstance().execute(buildRequest(fallbackArgs), processId, progressCallback)
+            }
+
             if (response.exitCode != 0) {
                 val errDetail = response.err.ifBlank { "Download exited with code ${response.exitCode}" }
-                throw RuntimeException(formatDownloadError(errDetail.trim(), detectPlatformLabel(url)))
+                throw RuntimeException(formatDownloadError(errDetail.trim(), platform))
             }
 
             val createdFile = outDir.listFiles()

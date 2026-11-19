@@ -140,3 +140,57 @@ def test_protocol_registration_dry_run(monkeypatch, tmp_path):
     assert isinstance(ok, bool)
     assert isinstance(msg, str)
 
+
+def test_youtube_extractor_uses_valid_clients_without_missing_pot(tmp_path):
+    from universal_downloader.config import AppConfig
+    from universal_downloader.extractor import YTDLPExtractor
+    from universal_downloader.models import Platform
+
+    extractor = YTDLPExtractor(AppConfig(output_dir=tmp_path))
+
+    # Base options and attempt 1 must rely on yt-dlp's native defaults (no deprecated tv_embedded or missing_pot)
+    base = extractor.base_options()
+    assert "extractor_args" not in base
+    assert extractor.platform_extra_options(Platform.YOUTUBE, attempt=1) == {}
+
+    # Fallback attempts must never include deprecated 'tv_embedded' or 'missing_pot'
+    for attempt in (2, 3, 4):
+        opts = extractor.platform_extra_options(Platform.YOUTUBE, attempt=attempt)
+        yt_args = opts["extractor_args"]["youtube"]
+        assert "tv_embedded" not in yt_args["player_client"]
+        assert "formats" not in yt_args
+
+    # Authenticated config selects cookie-supporting clients on fallback
+    cookie_file = tmp_path / "cookies.txt"
+    cookie_file.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    authed_extractor = YTDLPExtractor(AppConfig(output_dir=tmp_path, cookies_file=cookie_file))
+    authed_clients = authed_extractor.platform_extra_options(Platform.YOUTUBE, attempt=2)["extractor_args"]["youtube"]["player_client"]
+    assert "tv_downgraded" in authed_clients
+    assert "tv_simply" not in authed_clients
+
+
+def test_youtube_http_403_triggers_client_rotation_retry(monkeypatch, tmp_path):
+    from universal_downloader.config import AppConfig
+    from universal_downloader.engine import DownloadEngine
+    from universal_downloader.exceptions import DownloadError
+    from universal_downloader.models import DownloadResult
+
+    engine = DownloadEngine(AppConfig(output_dir=tmp_path, retries=2, no_history=True))
+    attempts: list[int] = []
+
+    def fake_download_once(target, attempt=1):
+        attempts.append(attempt)
+        if attempt == 1:
+            raise DownloadError("unable to download video data: HTTP Error 403: Forbidden")
+        dummy_file = tmp_path / "video.mp4"
+        dummy_file.write_bytes(b"ok")
+        return DownloadResult(success=True, url=target.normalized_url, files=[dummy_file], metadata={"title": "Test"})
+
+    monkeypatch.setattr(engine, "download_once", fake_download_once)
+    monkeypatch.setattr("universal_downloader.engine.time.sleep", lambda _s: None)
+
+    res = engine.download("https://youtu.be/t1m2-tt09zI")
+    assert res.success is True
+    assert attempts == [1, 2]
+
+
