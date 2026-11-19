@@ -94,6 +94,9 @@ class AppConfig:
     max_filesize: Optional[str] = None
     write_thumbnail: bool = False
     no_history: bool = False
+    no_telemetry: bool = False
+    telemetry_url: Optional[str] = None
+    telemetry_key: Optional[str] = None
     notify: bool = False
     watch_clipboard: bool = False
     watch_interval: float = 1.0

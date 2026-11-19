@@ -54,6 +54,12 @@ from universal_downloader.subscriptions import (
     remove_subscription,
     sync_subscriptions,
 )
+from universal_downloader.telemetry import (
+    fetch_github_release_stats,
+    fetch_neon_device_stats,
+    format_analytics_dashboard,
+    send_telemetry_heartbeat,
+)
 from universal_downloader.utils.net import detect_target
 from universal_downloader.watcher import watch_clipboard
 
@@ -570,6 +576,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable terminal colors.",
     )
     dev_group.add_argument(
+        "--no-telemetry",
+        action="store_true",
+        help="Disable anonymous installation and device telemetry.",
+    )
+    dev_group.add_argument(
+        "--analytics",
+        "--stats",
+        action="store_true",
+        dest="analytics",
+        help="Display aggregated GitHub release download counts and active device statistics.",
+    )
+    dev_group.add_argument(
+        "--release-stats",
+        action="store_true",
+        help="Display GitHub release asset download counts only.",
+    )
+    dev_group.add_argument(
         "--version",
         action="version",
         version=(
@@ -865,6 +888,35 @@ def main() -> int:
             return run_native_host(config)
 
         engine = DownloadEngine(config)
+
+        # Dispatch non-blocking anonymous heartbeat in background
+        send_telemetry_heartbeat(config=config, async_send=True)
+
+        # Maintainer Analytics & Release Stats
+        if getattr(args, "analytics", False) or getattr(args, "release_stats", False):
+            gh_stats = fetch_github_release_stats()
+            neon_stats = None
+            if not getattr(args, "release_stats", False) and config.telemetry_url:
+                neon_stats = fetch_neon_device_stats(
+                    config.telemetry_url,
+                    auth_token=config.telemetry_key,
+                )
+            if config.json_output or config.json_stream:
+                print(
+                    json.dumps(
+                        {
+                            "success": True,
+                            "github_releases": gh_stats,
+                            "neon_telemetry": neon_stats,
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                print_banner(config)
+                report = format_analytics_dashboard(gh_stats, neon_stats)
+                print(report)
+            return 0
 
         # History database operations
         db_path = get_db_path(config.output_dir)

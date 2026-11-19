@@ -374,6 +374,25 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         else:
             log_dir = get_default_log_dir()
 
+    no_telemetry_val = (
+        getattr(args, "no_telemetry", False)
+        or parse_config_bool(env_value(dotenv, "UD_NO_TELEMETRY"))
+        or parse_config_bool(env_value(dotenv, "NO_TELEMETRY"))
+        or parse_config_bool(json_config.get("no_telemetry"))
+        or (json_config.get("telemetry_enabled") is False)
+    )
+
+    telemetry_url_val = (
+        env_value(dotenv, "NEON_DATABASE_URL")
+        or env_value(dotenv, "UD_TELEMETRY_URL")
+        or json_config.get("telemetry_url")
+    )
+
+    telemetry_key_val = (
+        env_value(dotenv, "NEON_TELEMETRY_KEY")
+        or json_config.get("telemetry_key")
+    )
+
     config = AppConfig(
         output_dir=output_dir,
         log_dir=log_dir,
@@ -419,6 +438,9 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         max_filesize=getattr(args, "max_filesize", None) or env_value(dotenv, "MAX_FILESIZE") or json_config.get("max_filesize"),
         write_thumbnail=getattr(args, "write_thumbnail", False) or parse_config_bool(env_value(dotenv, "WRITE_THUMBNAIL")) or parse_config_bool(json_config.get("write_thumbnail")),
         no_history=getattr(args, "no_history", False) or parse_config_bool(env_value(dotenv, "NO_HISTORY")) or parse_config_bool(json_config.get("no_history")),
+        no_telemetry=no_telemetry_val,
+        telemetry_url=telemetry_url_val.strip() if telemetry_url_val else None,
+        telemetry_key=telemetry_key_val.strip() if telemetry_key_val else None,
         notify=getattr(args, "notify", False) or parse_config_bool(env_value(dotenv, "NOTIFY")) or parse_config_bool(json_config.get("notify")),
         watch_clipboard=getattr(args, "watch_clipboard", False),
         watch_interval=float(getattr(args, "watch_interval", 1.0) or 1.0),
