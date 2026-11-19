@@ -336,9 +336,79 @@ def detect_connection_type() -> str:
         return "Offline"
 
 
-def build_heartbeat_payload(data_dir: Optional[Path] = None) -> dict[str, Any]:
+def detect_friend_tag(
+    custom_tag: Optional[str] = None,
+    config: Optional[Any] = None,
+    data_dir: Optional[Path] = None,
+) -> Optional[str]:
+    """Identify which friend/beta-tester downloaded the tool.
+
+    Priority order:
+    1. Explicit custom_tag argument
+    2. Config / CLI option (--friend or --ref)
+    3. Environment variable UD_FRIEND_TAG or UD_REF
+    4. Persistent tag stored in device_id.json
+    5. Executable filename pattern (e.g. UniversalDownloader_ahmed.exe -> 'ahmed')
+    """
+    if custom_tag and custom_tag.strip():
+        return custom_tag.strip().lower()
+
+    if config is not None:
+        cfg_tag = getattr(config, "friend_tag", None)
+        if cfg_tag and str(cfg_tag).strip():
+            return str(cfg_tag).strip().lower()
+
+    env_tag = os.environ.get("UD_FRIEND_TAG") or os.environ.get("UD_REF")
+    if env_tag and env_tag.strip():
+        return env_tag.strip().lower()
+
+    directory = data_dir or get_default_data_dir()
+    id_file = directory / "device_id.json"
+
+    # Check already persisted friend tag
+    if id_file.is_file():
+        try:
+            saved = json.loads(id_file.read_text(encoding="utf-8"))
+            if saved.get("friend_tag"):
+                return str(saved["friend_tag"]).strip().lower()
+        except Exception:
+            pass
+
+    # Extract from binary filename (e.g. downloader_ahmed.exe, UniversalDownloader_sara)
+    try:
+        import re
+
+        prog_stem = Path(sys.argv[0]).stem
+        m = re.search(
+            r"(?:universal[_-]?downloader|downloader)[_-]([a-zA-Z0-9_\-]+)$",
+            prog_stem,
+            re.IGNORECASE,
+        )
+        if m:
+            found_tag = m.group(1).strip().lower()
+            # Persist tag in device_id.json so it is remembered permanently
+            if id_file.is_file():
+                try:
+                    data = json.loads(id_file.read_text(encoding="utf-8"))
+                    data["friend_tag"] = found_tag
+                    id_file.write_text(json.dumps(data), encoding="utf-8")
+                except Exception:
+                    pass
+            return found_tag
+    except Exception:
+        pass
+
+    return None
+
+
+def build_heartbeat_payload(
+    data_dir: Optional[Path] = None,
+    config: Optional[Any] = None,
+    friend_tag: Optional[str] = None,
+) -> dict[str, Any]:
     """Construct the anonymous telemetry payload with extended legal hardware metrics."""
     cores, arch = detect_cpu_specs()
+    tag = detect_friend_tag(custom_tag=friend_tag, config=config, data_dir=data_dir)
     return {
         "install_id": get_or_create_install_id(data_dir),
         "device_type": detect_device_type(),
@@ -352,6 +422,7 @@ def build_heartbeat_payload(data_dir: Optional[Path] = None) -> dict[str, Any]:
         "total_ram_gb": detect_total_ram_gb(),
         "screen_res": detect_screen_resolution() or "Unknown",
         "connection_type": detect_connection_type(),
+        "friend_tag": tag,
     }
 
 
@@ -383,6 +454,8 @@ def push_heartbeat_to_neon(
         esc_ram = f"{float(ram_val):.1f}" if ram_val is not None else "NULL"
         esc_screen = _sql_escape(payload.get("screen_res"))
         esc_conn = _sql_escape(payload.get("connection_type"))
+        esc_friend = _sql_escape(payload.get("friend_tag"))
+        esc_friend_sql = f"'{esc_friend}'" if esc_friend else "NULL"
 
         sql_query = (
             f"SELECT record_device_heartbeat("
@@ -397,7 +470,8 @@ def push_heartbeat_to_neon(
             f"'{esc_arch}', "
             f"{esc_ram}, "
             f"'{esc_screen}', "
-            f"'{esc_conn}'"
+            f"'{esc_conn}', "
+            f"{esc_friend_sql}"
             ");"
         )
 
@@ -450,7 +524,7 @@ def send_telemetry_heartbeat(
         or os.environ.get("NEON_TELEMETRY_KEY")
     )
 
-    payload = build_heartbeat_payload(data_dir)
+    payload = build_heartbeat_payload(data_dir=data_dir, config=config)
 
     def _worker() -> None:
         push_heartbeat_to_neon(url, token, payload, timeout=timeout)
@@ -555,6 +629,7 @@ def fetch_neon_device_stats(
             "breakdown": "SELECT * FROM v_device_breakdown LIMIT 10;",
             "geo": "SELECT * FROM v_geo_demographics LIMIT 5;",
             "hardware": "SELECT * FROM v_hardware_specs LIMIT 5;",
+            "friends": "SELECT * FROM v_friend_installs LIMIT 15;",
             "versions": "SELECT * FROM v_version_breakdown LIMIT 10;",
         }
         results: dict[str, Any] = {}
@@ -675,6 +750,22 @@ def format_analytics_dashboard(
                     res_name = h.get("screen_res") if isinstance(h, dict) else h[1]
                     cnt = h.get("count") if isinstance(h, dict) else h[3]
                     lines.append(f"  • {arch_name} / {res_name}: {cnt} devices")
+
+            # Identified Friends & Beta-Testers
+            friend_rows = neon_stats.get("friends", {}).get("rows", [])
+            if friend_rows:
+                lines.append("")
+                lines.append("👥 IDENTIFIED FRIENDS & BETA TESTERS (Neon)")
+                lines.append("-" * 80)
+                for f in friend_rows:
+                    f_name = f.get("friend_tag") if isinstance(f, dict) else f[0]
+                    f_type = f.get("device_type") if isinstance(f, dict) else f[1]
+                    f_os = f.get("os_name") if isinstance(f, dict) else f[2]
+                    f_model = f.get("device_model") if isinstance(f, dict) else f[3]
+                    f_seen = str(f.get("last_seen_at") if isinstance(f, dict) else f[7])[:19]
+                    f_runs = f.get("heartbeat_count") if isinstance(f, dict) else f[8]
+                    model_str = f" ({f_model})" if f_model and f_model != "Unknown Model" else ""
+                    lines.append(f"  • {f_name:<12} | {f_type}{model_str:<20} | {f_os:<16} | Runs: {f_runs:<3} | Last: {f_seen}")
 
         else:
             lines.append("Connected to Neon: No device heartbeats recorded yet.")
