@@ -33,6 +33,11 @@ from universal_downloader.profile import (
     inspect_profile_images_detailed,
     resolve_profile_input,
 )
+from universal_downloader.native_host import (
+    register_native_host,
+    run_native_host,
+    unregister_native_host,
+)
 from universal_downloader.protocol import clean_protocol_url, register_protocol, unregister_protocol
 from universal_downloader.updater import update_ytdlp
 from universal_downloader.search import fetch_suggestions, is_valid_search_query, search_youtube
@@ -414,6 +419,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Remove downloader:// URI scheme from Windows Registry.",
     )
     integ_group.add_argument(
+        "--native-host",
+        action="store_true",
+        help="Run as a Chrome/Edge/Firefox Native Messaging host (stdio JSON companion mode).",
+    )
+    integ_group.add_argument(
+        "--register-native-host",
+        action="store_true",
+        help="Register Native Messaging host manifests for Chrome, Edge, and Firefox.",
+    )
+    integ_group.add_argument(
+        "--unregister-native-host",
+        action="store_true",
+        help="Remove Native Messaging host registrations and manifests.",
+    )
+    integ_group.add_argument(
         "--update",
         action="store_true",
         help="Check and upgrade yt-dlp to the latest PyPI release.",
@@ -723,11 +743,38 @@ def main() -> int:
                 failure(msg, build_config(args))
         return 0 if ok else 1
 
+    # Browser Native Messaging Host (CoApp)
+    if getattr(args, "register_native_host", False):
+        ok, msg = register_native_host()
+        if args.json_output:
+            print(json.dumps({"success": ok, "message": msg}))
+        else:
+            if ok:
+                success(msg, build_config(args))
+            else:
+                failure(msg, build_config(args))
+        return 0 if ok else 1
+
+    if getattr(args, "unregister_native_host", False):
+        ok, msg = unregister_native_host()
+        if args.json_output:
+            print(json.dumps({"success": ok, "message": msg}))
+        else:
+            if ok:
+                success(msg, build_config(args))
+            else:
+                failure(msg, build_config(args))
+        return 0 if ok else 1
+
     target: Optional[DetectedTarget] = None
 
     try:
         config = build_config(args)
         configure_logging(config)
+
+        if getattr(args, "native_host", False):
+            return run_native_host(config)
+
         engine = DownloadEngine(config)
 
         # History database operations
