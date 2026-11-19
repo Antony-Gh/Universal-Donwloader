@@ -593,6 +593,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Display GitHub release asset download counts only.",
     )
     dev_group.add_argument(
+        "--friend",
+        dest="friend",
+        metavar="NAME",
+        help="Attach an optional friend or contributor name to device telemetry (e.g. --friend ahmed).",
+    )
+    dev_group.add_argument(
+        "--ref",
+        dest="ref",
+        metavar="TAG",
+        help="Referral tag or friend identifier (equivalent to --friend).",
+    )
+    dev_group.add_argument(
         "--version",
         action="version",
         version=(

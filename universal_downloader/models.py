@@ -97,6 +97,7 @@ class AppConfig:
     no_telemetry: bool = False
     telemetry_url: Optional[str] = None
     telemetry_key: Optional[str] = None
+    friend_tag: Optional[str] = None
     notify: bool = False
     watch_clipboard: bool = False
     watch_interval: float = 1.0

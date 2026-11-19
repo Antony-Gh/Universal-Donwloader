@@ -393,6 +393,15 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         or json_config.get("telemetry_key")
     )
 
+    friend_tag_val = (
+        getattr(args, "friend", None)
+        or getattr(args, "ref", None)
+        or env_value(dotenv, "UD_FRIEND_TAG")
+        or env_value(dotenv, "UD_REF")
+        or json_config.get("friend_tag")
+        or json_config.get("friend")
+    )
+
     config = AppConfig(
         output_dir=output_dir,
         log_dir=log_dir,
@@ -441,6 +450,7 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         no_telemetry=no_telemetry_val,
         telemetry_url=telemetry_url_val.strip() if telemetry_url_val else None,
         telemetry_key=telemetry_key_val.strip() if telemetry_key_val else None,
+        friend_tag=friend_tag_val.strip().lower() if friend_tag_val else None,
         notify=getattr(args, "notify", False) or parse_config_bool(env_value(dotenv, "NOTIFY")) or parse_config_bool(json_config.get("notify")),
         watch_clipboard=getattr(args, "watch_clipboard", False),
         watch_interval=float(getattr(args, "watch_interval", 1.0) or 1.0),
