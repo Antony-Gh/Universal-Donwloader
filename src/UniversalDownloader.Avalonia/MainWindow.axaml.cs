@@ -44,6 +44,8 @@ public partial class MainWindow : Window
     private int _activeTaskCount = 0;
     private AppUpdateInfo? _latestUpdateInfo;
     private UserSettings _settings = new();
+    private bool _versionBlocked = false;
+    private string? _versionBlockedMessage = null;
     private string? _detectedClipboardUrl;
     private string? _dismissedClipboardUrl;
     private static readonly string[] SupportedClipboardHosts =
@@ -86,12 +88,21 @@ public partial class MainWindow : Window
             var policy = await UpdateChecker.CheckVersionPolicyAsync(_settings);
             if (!policy.IsSupported)
             {
-                UpdateBannerMessage.Text = $"CRITICAL: Version v{UpdateChecker.GetCurrentVersion()} has reached End of Life. Minimum required: v{policy.MinSupportedVersion}. Please update to continue.";
+                var reason = policy.IsBlockedVersion
+                    ? $"Version v{UpdateChecker.GetCurrentVersion()} has been withdrawn."
+                    : $"Version v{UpdateChecker.GetCurrentVersion()} has reached End of Life. Minimum required: v{policy.MinSupportedVersion}.";
+                UpdateBannerMessage.Text = $"CRITICAL: {reason} Please update to continue.";
                 UpdateBanner.IsVisible = true;
                 if (policy.EnforcementMode == "block")
                 {
+                    _versionBlocked = true;
+                    _versionBlockedMessage = $"{reason} Download the latest release: {policy.DownloadUrl}";
                     DownloadButton.IsEnabled = false;
+                    StartQueueButton.IsEnabled = false;
+                    GlobalStatusText.Text = reason;
                 }
+                // Still look up the newest release so the banner's update action has a target
+                _ = CheckForAppUpdatesAsync(silent: true);
             }
             else
             {
@@ -371,7 +382,10 @@ public partial class MainWindow : Window
             if (info.IsUpdateAvailable)
             {
                 var sizeSuffix = info.AssetSizeBytes > 0 ? $" ({PlatformUtils.FormatBytes(info.AssetSizeBytes)})" : "";
-                UpdateBannerMessage.Text = $"New version v{info.LatestVersion} is available! (Current: v{info.CurrentVersion}){sizeSuffix}";
+                if (!_versionBlocked)
+                {
+                    UpdateBannerMessage.Text = $"New version v{info.LatestVersion} is available! (Current: v{info.CurrentVersion}){sizeSuffix}";
+                }
                 UpdateBanner.IsVisible = true;
                 CheckUpdatesText.Text = $"Update v{info.LatestVersion}";
                 if (!silent)
@@ -381,7 +395,10 @@ public partial class MainWindow : Window
             }
             else
             {
-                UpdateBanner.IsVisible = false;
+                if (!_versionBlocked)
+                {
+                    UpdateBanner.IsVisible = false;
+                }
                 if (!silent)
                 {
                     CheckUpdatesText.Text = "Up to date!";
@@ -841,6 +858,11 @@ public partial class MainWindow : Window
 
     private async void DownloadButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (_versionBlocked)
+        {
+            GlobalStatusText.Text = _versionBlockedMessage ?? "This version has reached End of Life. Please update to continue.";
+            return;
+        }
         var url = UrlTextBox.Text?.Trim();
         if (string.IsNullOrWhiteSpace(url)) return;
 
@@ -1009,6 +1031,11 @@ public partial class MainWindow : Window
 
     private async void StartQueueButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (_versionBlocked)
+        {
+            GlobalStatusText.Text = _versionBlockedMessage ?? "This version has reached End of Life. Please update to continue.";
+            return;
+        }
         if (_isQueueRunning) return;
         var pending = _queueItems.Where(q => q.Status == QueueItemStatus.Queued || q.Status == QueueItemStatus.Failed || q.Status == QueueItemStatus.Canceled).ToList();
         if (pending.Count == 0) return;
@@ -2217,7 +2244,7 @@ public partial class MainWindow : Window
 
     private void SetDownloading(bool active)
     {
-        DownloadButton.IsEnabled = !active;
+        DownloadButton.IsEnabled = !active && !_versionBlocked;
         InspectButton.IsEnabled = !active;
         CancelButton.IsEnabled = active;
     }

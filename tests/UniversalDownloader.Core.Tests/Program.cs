@@ -47,6 +47,35 @@ RunTest("UpdateChecker.CompareVersions orders semantic versions accurately", () 
     AssertTrue(UpdateChecker.CompareVersions("2.0", "1.9.9") > 0, "2.0 > 1.9.9");
 });
 
+RunTest("UpdateChecker.EvaluateVersionPolicy evaluates min_supported_version, blocked_versions, and allow mode", () =>
+{
+    var json = @"{
+        ""min_supported_version"": ""3.6.0"",
+        ""latest_version"": ""3.7.0"",
+        ""blocked_versions"": [""3.6.2"", ""v3.6.5""],
+        ""sunset_message"": ""EOL"",
+        ""enforcement_mode"": ""block""
+    }";
+
+    var belowMin = UpdateChecker.EvaluateVersionPolicy("3.5.9", json);
+    AssertTrue(!belowMin.IsSupported, "3.5.9 below min 3.6.0 is not supported");
+    AssertTrue(!belowMin.IsBlockedVersion, "3.5.9 is not on the blocked list");
+    AssertEqual("3.6.0", belowMin.MinSupportedVersion);
+
+    var atMin = UpdateChecker.EvaluateVersionPolicy("3.6.0", json);
+    AssertTrue(atMin.IsSupported, "3.6.0 meets min supported version");
+
+    var blocked = UpdateChecker.EvaluateVersionPolicy("3.6.2", json);
+    AssertTrue(!blocked.IsSupported, "3.6.2 is blocked");
+    AssertTrue(blocked.IsBlockedVersion, "3.6.2 marked as blocked version");
+
+    var allowedMode = UpdateChecker.EvaluateVersionPolicy("3.4.0", @"{ ""min_supported_version"": ""3.6.0"", ""enforcement_mode"": ""allow"" }");
+    AssertTrue(allowedMode.IsSupported, "'allow' mode permits older versions");
+
+    var fallback = UpdateChecker.EvaluateVersionPolicy("3.5.0", null);
+    AssertTrue(!fallback.IsSupported, "null json uses fallback min 3.6.0");
+});
+
 RunTest("UpdateChecker reads shared app_config.json assembly metadata", () =>
 {
     AssertTrue(!string.IsNullOrWhiteSpace(UpdateChecker.RepoOwner), "RepoOwner populated");

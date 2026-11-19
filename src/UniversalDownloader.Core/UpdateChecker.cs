@@ -24,6 +24,7 @@ public record AppUpdateInfo
 public record VersionPolicyResult
 {
     public bool IsSupported { get; init; } = true;
+    public bool IsBlockedVersion { get; init; }
     public string MinSupportedVersion { get; init; } = "3.6.0";
     public string LatestVersion { get; init; } = "3.7.0";
     public string SunsetMessage { get; init; } = string.Empty;
@@ -120,50 +121,91 @@ public static class UpdateChecker
         return $"{ver.Major}.{ver.Minor}.{Math.Max(0, ver.Build)}";
     }
 
+    /// <summary>
+    /// Fetches the public version_policy.json (the same file the CLI and Android app read)
+    /// and evaluates it for the running version. Falls back to embedded defaults when offline.
+    /// </summary>
     public static async Task<VersionPolicyResult> CheckVersionPolicyAsync(UserSettings? settings = null)
     {
-        var currentVersion = GetCurrentVersion();
+        string? json = null;
+        try
+        {
+            var rawUrl = Environment.GetEnvironmentVariable("UD_VERSION_POLICY_URL");
+            if (string.IsNullOrWhiteSpace(rawUrl))
+                rawUrl = $"https://raw.githubusercontent.com/{RepoOwner}/{RepoName}/master/version_policy.json";
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var resp = await ApiHttp.GetAsync(rawUrl, cts.Token).ConfigureAwait(false);
+            if (resp.IsSuccessStatusCode)
+                json = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+        }
+        catch { }
+
+        return EvaluateVersionPolicy(GetCurrentVersion(), json);
+    }
+
+    /// <summary>
+    /// Pure evaluation of a version_policy.json document. Same rules as the CLI and Android:
+    /// a version is unsupported if it is listed in blocked_versions or is below min_supported_version.
+    /// A null/invalid document uses the embedded defaults.
+    /// </summary>
+    public static VersionPolicyResult EvaluateVersionPolicy(string currentVersion, string? policyJson)
+    {
         var minSupported = "3.6.0";
         var latestVersion = "3.6.0";
         var sunsetMsg = "This version of Universal Media Downloader has reached End of Life and is no longer supported. Please update to continue.";
         var downloadUrl = LatestReleaseWebUrl;
         var mode = "block";
+        var blocked = new List<string>();
 
-        try
+        if (!string.IsNullOrWhiteSpace(policyJson))
         {
-            var rawUrl = $"https://raw.githubusercontent.com/{RepoOwner}/{RepoName}/master/version_policy.json";
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var resp = await ApiHttp.GetAsync(rawUrl, cts.Token).ConfigureAwait(false);
-            if (resp.IsSuccessStatusCode)
+            try
             {
-                var json = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
-                using var doc = JsonDocument.Parse(json);
+                using var doc = JsonDocument.Parse(policyJson);
                 var root = doc.RootElement;
-                if (root.TryGetProperty("min_supported_version", out var minProp))
-                    minSupported = minProp.GetString() ?? minSupported;
-                if (root.TryGetProperty("latest_version", out var latProp))
-                    latestVersion = latProp.GetString() ?? latestVersion;
-                if (root.TryGetProperty("sunset_message", out var msgProp))
-                    sunsetMsg = msgProp.GetString() ?? sunsetMsg;
-                if (root.TryGetProperty("download_url", out var dlProp))
-                    downloadUrl = dlProp.GetString() ?? downloadUrl;
-                if (root.TryGetProperty("enforcement_mode", out var modeProp))
-                    mode = modeProp.GetString() ?? mode;
+                if (root.ValueKind == JsonValueKind.Object)
+                {
+                    minSupported = ReadString(root, "min_supported_version") ?? minSupported;
+                    latestVersion = ReadString(root, "latest_version") ?? latestVersion;
+                    sunsetMsg = ReadString(root, "sunset_message") ?? sunsetMsg;
+                    downloadUrl = ReadString(root, "download_url") ?? downloadUrl;
+                    mode = ReadString(root, "enforcement_mode") ?? mode;
+                    if (root.TryGetProperty("blocked_versions", out var blockedProp) && blockedProp.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in blockedProp.EnumerateArray())
+                        {
+                            if (item.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(item.GetString()))
+                                blocked.Add(NormalizeVersion(item.GetString()!));
+                        }
+                    }
+                }
             }
+            catch (JsonException) { }
         }
-        catch { }
 
-        var isSupported = CompareVersions(currentVersion, minSupported) >= 0;
+        mode = mode.Trim().ToLowerInvariant();
+        var normalizedCurrent = NormalizeVersion(currentVersion);
+        var isBlocked = blocked.Any(b => CompareVersions(b, normalizedCurrent) == 0);
+        var belowMinimum = CompareVersions(normalizedCurrent, minSupported) < 0;
 
         return new VersionPolicyResult
         {
-            IsSupported = isSupported,
+            // 'allow' switches the gate off remotely
+            IsSupported = mode == "allow" || (!isBlocked && !belowMinimum),
+            IsBlockedVersion = isBlocked,
             MinSupportedVersion = minSupported,
             LatestVersion = latestVersion,
             SunsetMessage = sunsetMsg,
             DownloadUrl = downloadUrl,
             EnforcementMode = mode
         };
+    }
+
+    private static string? ReadString(JsonElement root, string name)
+    {
+        return root.TryGetProperty(name, out var prop) && prop.ValueKind == JsonValueKind.String
+            ? prop.GetString()
+            : null;
     }
 
     public static async Task<AppUpdateInfo> CheckForUpdatesAsync(CancellationToken cancellationToken = default)
