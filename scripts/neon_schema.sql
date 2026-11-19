@@ -2,12 +2,12 @@
 -- Universal Media Downloader - Neon Serverless Postgres Telemetry Schema
 -- ==============================================================================
 -- This schema tracks anonymous device installations and breakdown across
--- Desktop PCs, Laptops, Android phones/tablets, and operating systems.
+-- Desktop PCs, Laptops, Android devices, hardware specs, and regional demographics.
 --
 -- Privacy Guarantee:
 -- No personal information, IP addresses, downloaded URLs, filenames, or user
--- credentials are ever collected or stored. Only anonymous random install UUIDs
--- and hardware form factors (e.g., Desktop PC vs. Laptop vs. Android) are recorded.
+-- credentials are ever collected or stored. Only anonymous random install UUIDs,
+-- hardware capabilities, and regional locales are recorded (100% legal, 0 permission prompts).
 -- ==============================================================================
 
 -- 1. Device installations table
@@ -17,24 +17,48 @@ CREATE TABLE IF NOT EXISTS device_installs (
     os_name VARCHAR(64) NOT NULL DEFAULT 'Unknown',     -- e.g. 'Windows 11', 'Android 15', 'Ubuntu 24.04', 'macOS Sonoma'
     device_model VARCHAR(128) DEFAULT NULL,             -- e.g. 'Lenovo Legion', 'Samsung SM-S928B', 'Custom PC'
     app_version VARCHAR(32) NOT NULL DEFAULT '0.0.0',   -- e.g. '3.4.0'
+    locale VARCHAR(32) DEFAULT NULL,                    -- e.g. 'en_US', 'ar_EG', 'fr_FR'
+    timezone VARCHAR(64) DEFAULT NULL,                  -- e.g. 'America/New_York', 'Africa/Cairo', 'UTC+02:00'
+    cpu_cores INT DEFAULT NULL,                         -- e.g. 4, 8, 16
+    cpu_arch VARCHAR(32) DEFAULT NULL,                  -- e.g. 'x86_64', 'arm64-v8a', 'arm64'
+    total_ram_gb NUMERIC(5, 1) DEFAULT NULL,            -- e.g. 8.0, 16.0, 32.0
+    screen_res VARCHAR(32) DEFAULT NULL,                -- e.g. '1920x1080', '2560x1440', '1080x2340'
+    connection_type VARCHAR(32) DEFAULT NULL,           -- e.g. 'Wi-Fi', 'Ethernet', 'Cellular'
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     heartbeat_count INT NOT NULL DEFAULT 1
 );
 
--- Indexes for lightning-fast analytics queries on large installs
+-- Backward compatibility for existing tables
+ALTER TABLE device_installs ADD COLUMN IF NOT EXISTS locale VARCHAR(32) DEFAULT NULL;
+ALTER TABLE device_installs ADD COLUMN IF NOT EXISTS timezone VARCHAR(64) DEFAULT NULL;
+ALTER TABLE device_installs ADD COLUMN IF NOT EXISTS cpu_cores INT DEFAULT NULL;
+ALTER TABLE device_installs ADD COLUMN IF NOT EXISTS cpu_arch VARCHAR(32) DEFAULT NULL;
+ALTER TABLE device_installs ADD COLUMN IF NOT EXISTS total_ram_gb NUMERIC(5, 1) DEFAULT NULL;
+ALTER TABLE device_installs ADD COLUMN IF NOT EXISTS screen_res VARCHAR(32) DEFAULT NULL;
+ALTER TABLE device_installs ADD COLUMN IF NOT EXISTS connection_type VARCHAR(32) DEFAULT NULL;
+
+-- Indexes for fast analytics queries
 CREATE INDEX IF NOT EXISTS idx_device_installs_device_type ON device_installs (device_type);
 CREATE INDEX IF NOT EXISTS idx_device_installs_last_seen ON device_installs (last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_device_installs_app_version ON device_installs (app_version);
 CREATE INDEX IF NOT EXISTS idx_device_installs_os_name ON device_installs (os_name);
+CREATE INDEX IF NOT EXISTS idx_device_installs_locale ON device_installs (locale);
 
--- 2. Atomic Upsert Heartbeat Function (Callable directly over Neon HTTP API)
+-- 2. Atomic Upsert Heartbeat Function (Supports extended hardware & demographic metrics)
 CREATE OR REPLACE FUNCTION record_device_heartbeat(
     p_install_id UUID,
     p_device_type VARCHAR,
     p_os_name VARCHAR,
     p_device_model VARCHAR,
-    p_app_version VARCHAR
+    p_app_version VARCHAR,
+    p_locale VARCHAR DEFAULT NULL,
+    p_timezone VARCHAR DEFAULT NULL,
+    p_cpu_cores INT DEFAULT NULL,
+    p_cpu_arch VARCHAR DEFAULT NULL,
+    p_total_ram_gb NUMERIC DEFAULT NULL,
+    p_screen_res VARCHAR DEFAULT NULL,
+    p_connection_type VARCHAR DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -49,6 +73,13 @@ BEGIN
         os_name,
         device_model,
         app_version,
+        locale,
+        timezone,
+        cpu_cores,
+        cpu_arch,
+        total_ram_gb,
+        screen_res,
+        connection_type,
         first_seen_at,
         last_seen_at,
         heartbeat_count
@@ -58,6 +89,13 @@ BEGIN
         COALESCE(NULLIF(p_os_name, ''), 'Unknown'),
         NULLIF(p_device_model, ''),
         COALESCE(NULLIF(p_app_version, ''), '0.0.0'),
+        NULLIF(p_locale, ''),
+        NULLIF(p_timezone, ''),
+        NULLIF(p_cpu_cores, 0),
+        NULLIF(p_cpu_arch, ''),
+        NULLIF(p_total_ram_gb, 0),
+        NULLIF(p_screen_res, ''),
+        NULLIF(p_connection_type, ''),
         NOW(),
         NOW(),
         1
@@ -71,7 +109,14 @@ BEGIN
             WHEN EXCLUDED.device_type <> 'Unknown' THEN EXCLUDED.device_type 
             ELSE device_installs.device_type 
         END,
-        device_model = COALESCE(EXCLUDED.device_model, device_installs.device_model)
+        device_model = COALESCE(EXCLUDED.device_model, device_installs.device_model),
+        locale = COALESCE(EXCLUDED.locale, device_installs.locale),
+        timezone = COALESCE(EXCLUDED.timezone, device_installs.timezone),
+        cpu_cores = COALESCE(EXCLUDED.cpu_cores, device_installs.cpu_cores),
+        cpu_arch = COALESCE(EXCLUDED.cpu_arch, device_installs.cpu_arch),
+        total_ram_gb = COALESCE(EXCLUDED.total_ram_gb, device_installs.total_ram_gb),
+        screen_res = COALESCE(EXCLUDED.screen_res, device_installs.screen_res),
+        connection_type = COALESCE(EXCLUDED.connection_type, device_installs.connection_type)
     RETURNING (xmax = 0) INTO v_is_new;
 
     RETURN jsonb_build_object(
@@ -82,7 +127,7 @@ BEGIN
 END;
 $$;
 
--- 3. Analytics Aggregation Views for Owner Dashboard
+-- 3. Analytics Aggregation Views for Maintainer Dashboard
 CREATE OR REPLACE VIEW v_device_stats AS
 SELECT
     COUNT(*) AS total_unique_devices,
@@ -91,7 +136,9 @@ SELECT
     COUNT(*) FILTER (WHERE device_type = 'Android') AS android_devices,
     COUNT(*) FILTER (WHERE device_type NOT IN ('Desktop PC', 'Laptop', 'Android')) AS other_devices,
     COUNT(*) FILTER (WHERE last_seen_at >= NOW() - INTERVAL '7 days') AS active_last_7_days,
-    COUNT(*) FILTER (WHERE last_seen_at >= NOW() - INTERVAL '30 days') AS active_last_30_days
+    COUNT(*) FILTER (WHERE last_seen_at >= NOW() - INTERVAL '30 days') AS active_last_30_days,
+    ROUND(AVG(total_ram_gb), 1) AS avg_ram_gb,
+    ROUND(AVG(cpu_cores), 1) AS avg_cpu_cores
 FROM device_installs;
 
 CREATE OR REPLACE VIEW v_device_breakdown AS
@@ -104,6 +151,27 @@ SELECT
 FROM device_installs
 GROUP BY device_type, os_name
 ORDER BY install_count DESC;
+
+CREATE OR REPLACE VIEW v_geo_demographics AS
+SELECT
+    COALESCE(locale, 'Unknown') AS locale,
+    COALESCE(timezone, 'Unknown') AS timezone,
+    COUNT(*) AS count,
+    ROUND(COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM device_installs), 0), 2) AS percentage
+FROM device_installs
+GROUP BY locale, timezone
+ORDER BY count DESC;
+
+CREATE OR REPLACE VIEW v_hardware_specs AS
+SELECT
+    COALESCE(cpu_arch, 'Unknown') AS cpu_arch,
+    COALESCE(screen_res, 'Unknown') AS screen_res,
+    COALESCE(connection_type, 'Unknown') AS connection_type,
+    COUNT(*) AS count,
+    ROUND(COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM device_installs), 0), 2) AS percentage
+FROM device_installs
+GROUP BY cpu_arch, screen_res, connection_type
+ORDER BY count DESC;
 
 CREATE OR REPLACE VIEW v_version_breakdown AS
 SELECT

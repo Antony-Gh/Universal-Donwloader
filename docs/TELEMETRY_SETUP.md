@@ -3,9 +3,11 @@
 Universal Media Downloader includes an anonymous device telemetry system that enables the project maintainer to know:
 1. **Total Unique Device Installations**
 2. **Device Form Factor Breakdown**: Desktop PC vs. Laptop vs. Android
-3. **Operating System Distribution**: Windows (11/10), Android, macOS, Linux
-4. **App Version Adoption**: Active versions across the user base
-5. **Combined GitHub Download Stats**: Release asset download counts (.exe, .msi, .apk)
+3. **Regional Demographics**: System locale/language (e.g. `en_US`, `ar_EG`) and system timezone
+4. **Hardware Specs**: CPU cores, architecture (`x86_64`, `arm64`), total RAM, and primary screen resolution
+5. **Operating System Distribution**: Windows (11/10), Android, macOS, Linux
+6. **App Version Adoption**: Active versions across the user base
+7. **Combined GitHub Download Stats**: Release asset download counts (.exe, .msi, .apk)
 
 ---
 
