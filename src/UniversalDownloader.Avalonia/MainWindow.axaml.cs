@@ -660,6 +660,19 @@ public partial class MainWindow : Window
             options.SponsorBlockRemove = "sponsor,intro,outro,selfpromo";
         }
 
+        options.Organize = OrganizeComboBox.SelectedIndex switch
+        {
+            1 => "uploader",
+            2 => "date",
+            3 => "none",
+            _ => "platform",
+        };
+        options.CleanFilenames = CleanFilenamesCheck.IsChecked == true;
+
+        var recordDuration = RecordDurationBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(recordDuration)) options.RecordDuration = recordDuration;
+        options.LiveFromStart = LiveFromStartCheck.IsChecked == true;
+
         if (GetSelectedQualityString() == "audio")
         {
             options.AudioOnly = true;
@@ -1408,6 +1421,7 @@ public partial class MainWindow : Window
             ClearPlaylistCards();
             MetadataCard.IsVisible = false;
             DownloadOptionsCard.IsVisible = false;
+            SuggestionsCard.IsVisible = false;
             _lastInspectedMetadataUrl = null;
             return;
         }
@@ -1422,8 +1436,56 @@ public partial class MainWindow : Window
                 MetadataCard.IsVisible = false;
                 DownloadOptionsCard.IsVisible = false;
             }
+
+            // Plain-text query: fetch debounced YouTube autosuggestions
+            if (rawUrl.Length >= 2 && rawUrl.Length <= 64 && !rawUrl.Contains("://") && !rawUrl.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await Task.Delay(350, token);
+                    if (token.IsCancellationRequested) return;
+                    var suggestions = await _client.GetSuggestionsAsync(rawUrl, token);
+                    if (token.IsCancellationRequested) return;
+
+                    SuggestionsWrapPanel.Children.Clear();
+                    foreach (var s in suggestions)
+                    {
+                        var chip = new Button
+                        {
+                            Content = s,
+                            Margin = new global::Avalonia.Thickness(0, 0, 6, 4),
+                            Padding = new global::Avalonia.Thickness(8, 3),
+                            FontSize = 11,
+                            Background = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.Parse("#1E293B")),
+                            Foreground = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.Parse("#E2E8F0")),
+                        };
+                        chip.Click += async (_, _) =>
+                        {
+                            UrlTextBox.Text = s;
+                            SuggestionsCard.IsVisible = false;
+                            await RunSearchAsync(s);
+                        };
+                        SuggestionsWrapPanel.Children.Add(chip);
+                    }
+                    SuggestionsCard.IsVisible = suggestions.Count > 0;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Ignored on rapid typing
+                }
+                catch
+                {
+                    SuggestionsCard.IsVisible = false;
+                }
+            }
+            else
+            {
+                SuggestionsCard.IsVisible = false;
+            }
             return;
         }
+
+        SuggestionsCard.IsVisible = false;
 
         if (IsProfileUrl(rawUrl))
         {
@@ -2262,6 +2324,174 @@ public partial class MainWindow : Window
         else
         {
             _logWindow.Activate();
+        }
+    }
+
+    // ─── YouTube Text Search, Webpage Sniffer, Local Converter & Browser Companion ───
+
+    private async void SearchButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var query = UrlTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            GlobalStatusText.Text = "Enter a song or video name to search YouTube.";
+            return;
+        }
+        await RunSearchAsync(query);
+    }
+
+    private async Task RunSearchAsync(string query)
+    {
+        SearchButton.IsEnabled = false;
+        SuggestionsCard.IsVisible = false;
+        GlobalStatusText.Text = $"Searching YouTube for \"{query}\"...";
+        OnRawOutputReceived(this, $"[Search] Querying YouTube for: {query}");
+
+        try
+        {
+            var results = await _client.SearchAsync(query, limit: 10);
+            SearchResultsListBox.ItemsSource = results;
+            SearchResultsHeader.Text = results.Count > 0
+                ? $"YouTube Search Results ({results.Count})"
+                : $"No YouTube results found for \"{query}\"";
+            SearchResultsCard.IsVisible = true;
+            GlobalStatusText.Text = $"Found {results.Count} YouTube results.";
+        }
+        catch (Exception ex)
+        {
+            OnRawOutputReceived(this, $"[Error] YouTube search failed: {ex.Message}");
+            GlobalStatusText.Text = $"Search failed: {ex.Message}";
+        }
+        finally
+        {
+            SearchButton.IsEnabled = true;
+        }
+    }
+
+    private void SelectSearchResult_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: SearchResultModel item } && !string.IsNullOrWhiteSpace(item.Url))
+        {
+            SearchResultsCard.IsVisible = false;
+            SuggestionsCard.IsVisible = false;
+            UrlTextBox.Text = item.Url;
+            GlobalStatusText.Text = $"Selected: {item.Title}";
+        }
+    }
+
+    private void CloseSearchResults_Click(object? sender, RoutedEventArgs e)
+    {
+        SearchResultsCard.IsVisible = false;
+    }
+
+    private async void SniffButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var url = UrlTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            GlobalStatusText.Text = "Enter a webpage URL to sniff embedded media streams.";
+            return;
+        }
+
+        SniffButton.IsEnabled = false;
+        GlobalStatusText.Text = $"Sniffing embedded media on {url}...";
+        OnRawOutputReceived(this, $"[Sniffer] Scanning webpage HTML: {url}");
+
+        try
+        {
+            var items = await _client.SniffPageMediaAsync(url);
+            SniffedMediaListBox.ItemsSource = items;
+            SniffedMediaHeader.Text = items.Count > 0
+                ? $"Discovered Page Media ({items.Count})"
+                : "No embedded video/audio/HLS streams found on this page";
+            SniffedMediaCard.IsVisible = true;
+            GlobalStatusText.Text = $"Discovered {items.Count} embedded stream(s).";
+        }
+        catch (Exception ex)
+        {
+            OnRawOutputReceived(this, $"[Error] Media sniff failed: {ex.Message}");
+            GlobalStatusText.Text = $"Sniff failed: {ex.Message}";
+        }
+        finally
+        {
+            SniffButton.IsEnabled = true;
+        }
+    }
+
+    private void SelectSniffedMedia_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: SniffedMediaModel item } && !string.IsNullOrWhiteSpace(item.Url))
+        {
+            SniffedMediaCard.IsVisible = false;
+            UrlTextBox.Text = item.Url;
+            GlobalStatusText.Text = $"Loaded sniffed {item.MediaType.ToUpperInvariant()} stream.";
+        }
+    }
+
+    private void CloseSniffedMedia_Click(object? sender, RoutedEventArgs e)
+    {
+        SniffedMediaCard.IsVisible = false;
+    }
+
+    private async void ConvertLocalMp3Button_Click(object? sender, RoutedEventArgs e)
+    {
+        await ConvertLocalFileInteractiveAsync("mp3", remuxOnly: false);
+    }
+
+    private async void RemuxLocalMp4Button_Click(object? sender, RoutedEventArgs e)
+    {
+        await ConvertLocalFileInteractiveAsync("mp4", remuxOnly: true);
+    }
+
+    private async Task ConvertLocalFileInteractiveAsync(string targetFormat, bool remuxOnly)
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel == null) return;
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = remuxOnly ? $"Select video to remux to {targetFormat.ToUpperInvariant()}" : $"Select media file to convert to {targetFormat.ToUpperInvariant()}",
+            AllowMultiple = false,
+        });
+
+        var picked = files.FirstOrDefault();
+        var localPath = picked?.TryGetLocalPath();
+        if (string.IsNullOrWhiteSpace(localPath)) return;
+
+        GlobalStatusText.Text = $"Converting {Path.GetFileName(localPath)} → {targetFormat.ToUpperInvariant()}...";
+        OnRawOutputReceived(this, $"[Converter] Converting '{localPath}' to {targetFormat} (remuxOnly={remuxOnly})...");
+
+        try
+        {
+            var outputFile = await _client.ConvertLocalMediaAsync(localPath, targetFormat, remuxOnly, GetEffectiveOutputDirectory());
+            OnRawOutputReceived(this, $"[Success] Converted media saved: {outputFile}");
+            GlobalStatusText.Text = $"Saved converted file: {Path.GetFileName(outputFile)}";
+        }
+        catch (Exception ex)
+        {
+            OnRawOutputReceived(this, $"[Error] Conversion failed: {ex.Message}");
+            GlobalStatusText.Text = $"Conversion failed: {ex.Message}";
+        }
+    }
+
+    private async void RegisterNativeHostButton_Click(object? sender, RoutedEventArgs e)
+    {
+        RegisterNativeHostButton.IsEnabled = false;
+        GlobalStatusText.Text = "Registering Browser Native Messaging Host...";
+        try
+        {
+            var (ok, msg) = await _client.RegisterNativeHostAsync();
+            OnRawOutputReceived(this, ok ? $"[Success] {msg}" : $"[Error] {msg}");
+            GlobalStatusText.Text = string.IsNullOrWhiteSpace(msg) ? (ok ? "Browser Companion registered!" : "Registration failed.") : msg;
+        }
+        catch (Exception ex)
+        {
+            OnRawOutputReceived(this, $"[Error] Native host registration failed: {ex.Message}");
+            GlobalStatusText.Text = $"Registration failed: {ex.Message}";
+        }
+        finally
+        {
+            RegisterNativeHostButton.IsEnabled = true;
         }
     }
 }

@@ -124,15 +124,21 @@
                                     <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                               ToolTip.Tip="Enter or paste any media URL, playlist, or public post from 1,000+ supported platforms (YouTube, TikTok, Instagram, Facebook, X/Twitter, SoundCloud, Vimeo, Reddit, Twitch, etc.)."/>
                                 </StackPanel>
-                                <Grid ColumnDefinitions="*,Auto,Auto">
-                                    <TextBox x:Name="UrlTextBox" Grid.Column="0" FlowDirection="LeftToRight" Watermark="Paste video, audio, or playlist URL here..." TextChanged="UrlTextBox_TextChanged"/>
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+                                    <TextBox x:Name="UrlTextBox" Grid.Column="0" FlowDirection="LeftToRight" Watermark="Paste video/playlist URL or type a YouTube search query..." TextChanged="UrlTextBox_TextChanged"/>
                                     <Button x:Name="PasteButton" Grid.Column="1" Margin="8,0,0,0" Padding="12,8" Click="PasteButton_Click">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
                                             <PathIcon Data="{StaticResource PasteIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
                                             <TextBlock x:Name="PasteButtonText" Text="Paste" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button x:Name="InspectButton" Grid.Column="2" Margin="8,0,0,0" Padding="12,8" Background="#374151" Click="InspectButton_Click">
+                                    <Button x:Name="SearchButton" Grid.Column="2" Margin="8,0,0,0" Padding="12,8" Background="#1E3A8A" Foreground="White" Click="SearchButton_Click" ToolTip.Tip="Search YouTube by text query">
+                                        <TextBlock x:Name="SearchButtonText" Text="Search" VerticalAlignment="Center"/>
+                                    </Button>
+                                    <Button x:Name="SniffButton" Grid.Column="3" Margin="8,0,0,0" Padding="12,8" Background="#0F766E" Foreground="White" Click="SniffButton_Click" ToolTip.Tip="Scan any webpage HTML for embedded video, audio, HLS (.m3u8), and DASH (.mpd) streams">
+                                        <TextBlock x:Name="SniffButtonText" Text="Sniff Page" VerticalAlignment="Center"/>
+                                    </Button>
+                                    <Button x:Name="InspectButton" Grid.Column="4" Margin="8,0,0,0" Padding="12,8" Background="#374151" Click="InspectButton_Click">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
                                             <PathIcon x:Name="InspectIconPath" Data="{StaticResource InspectIcon}" Width="13" Height="13" Foreground="#94A3B8"/>
                                             <PathIcon x:Name="InspectSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="13" Height="13" Foreground="#38BDF8" IsVisible="False"/>
@@ -140,6 +146,61 @@
                                         </StackPanel>
                                     </Button>
                                 </Grid>
+                                <!-- Live Autosuggest Chips -->
+                                <Border x:Name="SuggestionsCard" IsVisible="False" Background="#141824" BorderBrush="#2E3A59" BorderThickness="1" CornerRadius="6" Padding="8,6">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="Suggestions" Foreground="#94A3B8" FontSize="11" FontWeight="SemiBold"/>
+                                        <WrapPanel x:Name="SuggestionsWrapPanel" Orientation="Horizontal"/>
+                                    </StackPanel>
+                                </Border>
+                                <!-- YouTube Text Search Results -->
+                                <Border x:Name="SearchResultsCard" IsVisible="False" Background="#141824" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="6" Padding="10">
+                                    <StackPanel Spacing="8">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock x:Name="SearchResultsHeader" Grid.Column="0" Text="Search Results" Foreground="#E2E8F0" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1" Content="✕" Padding="6,2" Background="Transparent" Foreground="#94A3B8" Click="CloseSearchResults_Click"/>
+                                        </Grid>
+                                        <ListBox x:Name="SearchResultsListBox" MaxHeight="220" Background="Transparent" BorderThickness="0">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate x:DataType="models:SearchResultModel">
+                                                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="2">
+                                                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Title}" Foreground="#F8FAFC" FontWeight="Medium" TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding Uploader}" Foreground="#94A3B8" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="1" Text="{Binding DurationString}" Foreground="#94A3B8" FontSize="11" Margin="8,0" VerticalAlignment="Center"/>
+                                                        <Button Grid.Column="2" Content="Select" Padding="10,4" Background="#2563EB" Foreground="White" FontSize="11" Click="SelectSearchResult_Click"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </StackPanel>
+                                </Border>
+                                <!-- Sniffed Webpage Media Results -->
+                                <Border x:Name="SniffedMediaCard" IsVisible="False" Background="#111C1D" BorderBrush="#14B8A6" BorderThickness="1" CornerRadius="6" Padding="10">
+                                    <StackPanel Spacing="8">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock x:Name="SniffedMediaHeader" Grid.Column="0" Text="Discovered Page Media" Foreground="#CCFBF1" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="1" Content="✕" Padding="6,2" Background="Transparent" Foreground="#94A3B8" Click="CloseSniffedMedia_Click"/>
+                                        </Grid>
+                                        <ListBox x:Name="SniffedMediaListBox" MaxHeight="200" Background="Transparent" BorderThickness="0">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate x:DataType="models:SniffedMediaModel">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="2">
+                                                        <Border Grid.Column="0" Background="#0F766E" CornerRadius="4" Padding="6,2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding MediaType}" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Url}" Foreground="#F8FAFC" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding Source}" Foreground="#94A3B8" FontSize="10"/>
+                                                        </StackPanel>
+                                                        <Button Grid.Column="2" Content="Load" Padding="10,4" Margin="8,0,0,0" Background="#0D9488" Foreground="White" FontSize="11" Click="SelectSniffedMedia_Click"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </StackPanel>
+                                </Border>
                                 <!-- Smart Clipboard Suggestion Banner -->
                                 <Border x:Name="ClipboardBanner" IsVisible="False" Background="#162032" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="6" Padding="10,6">
                                     <Grid ColumnDefinitions="*,Auto,Auto">
@@ -532,6 +593,34 @@
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Automatically cuts out crowd-sourced sponsored segments, intros, outros, and self-promotions from YouTube videos using SponsorBlock."/>
                                         </StackPanel>
+
+                                        <Grid ColumnDefinitions="*,*,*" Margin="0,4,0,0">
+                                            <StackPanel Grid.Column="0" Margin="0,0,10,0" Spacing="5">
+                                                <TextBlock Text="Subfolder Organization" Foreground="#9CA3AF" FontSize="12"/>
+                                                <ComboBox x:Name="OrganizeComboBox" HorizontalAlignment="Stretch" SelectedIndex="0">
+                                                    <ComboBoxItem Content="Platform (Default)"/>
+                                                    <ComboBoxItem Content="Platform / Uploader"/>
+                                                    <ComboBoxItem Content="Platform / Date (YYYY-MM)"/>
+                                                    <ComboBoxItem Content="None (Flat)"/>
+                                                </ComboBox>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="1" Margin="0,0,10,0" Spacing="5">
+                                                <TextBlock Text="Live Record Cap" Foreground="#9CA3AF" FontSize="12"/>
+                                                <TextBox x:Name="RecordDurationBox" FlowDirection="LeftToRight" Watermark="e.g. 00:10:00 or 5m"/>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="2" Spacing="5" VerticalAlignment="Bottom">
+                                                <CheckBox x:Name="CleanFilenamesCheck" Content="Clean Clickbait Filenames" IsChecked="False"/>
+                                                <CheckBox x:Name="LiveFromStartCheck" Content="Live From Start" IsChecked="False"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                            <Button x:Name="ConvertLocalMp3Button" Margin="0,0,8,4" Padding="10,6" Background="#374151" Foreground="#F8FAFC" FontSize="12" Content="Convert Local File → MP3" Click="ConvertLocalMp3Button_Click"/>
+                                            <Button x:Name="RemuxLocalMp4Button" Margin="0,0,8,4" Padding="10,6" Background="#374151" Foreground="#F8FAFC" FontSize="12" Content="Remux Local File → MP4" Click="RemuxLocalMp4Button_Click"/>
+                                            <Button x:Name="RegisterNativeHostButton" Margin="0,0,0,4" Padding="10,6" Background="#1E293B" Foreground="#93C5FD" FontSize="12" Content="Register Browser Companion" Click="RegisterNativeHostButton_Click"/>
+                                        </WrapPanel>
                                     </StackPanel>
                                 </Expander>
                             </StackPanel>
