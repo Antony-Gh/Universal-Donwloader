@@ -394,6 +394,54 @@ class DownloaderRepository(private val appContext: Context) {
         }
     }
 
+    suspend fun fetchSuggestions(query: String, language: String = "en"): List<String> = withContext(Dispatchers.IO) {
+        val trimmed = query.trim()
+        if (trimmed.length < 2 || trimmed.contains("://") || trimmed.startsWith("www.")) {
+            return@withContext emptyList()
+        }
+        try {
+            val encodedQuery = Uri.encode(trimmed)
+            val url = URL("https://suggestqueries-clients6.youtube.com/complete/search?client=youtube&ds=yt&hl=$language&q=$encodedQuery")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 4000
+                readTimeout = 4000
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+            }
+            if (conn.responseCode !in 200..299) {
+                conn.disconnect()
+                return@withContext emptyList()
+            }
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            val start = text.indexOf('[')
+            val end = text.lastIndexOf(']')
+            if (start == -1 || end == -1 || end <= start) return@withContext emptyList()
+            val jsonArray = JSONArray(text.substring(start, end + 1))
+            val suggestions = mutableListOf<String>()
+            if (jsonArray.length() > 1) {
+                val itemsArray = jsonArray.optJSONArray(1)
+                if (itemsArray != null) {
+                    for (i in 0 until itemsArray.length()) {
+                        val item = itemsArray.opt(i)
+                        val phrase = when (item) {
+                            is JSONArray -> item.optString(0, "")
+                            is String -> item
+                            else -> ""
+                        }.trim()
+                        if (phrase.isNotEmpty() && !suggestions.contains(phrase)) {
+                            suggestions.add(phrase)
+                        }
+                        if (suggestions.size >= 8) break
+                    }
+                }
+            }
+            suggestions
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     fun getOutputDirectory(audioOnly: Boolean): File {
         val publicDir = Environment.getExternalStoragePublicDirectory(
             if (audioOnly) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_DOWNLOADS

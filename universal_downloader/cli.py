@@ -35,7 +35,7 @@ from universal_downloader.profile import (
 )
 from universal_downloader.protocol import clean_protocol_url, register_protocol, unregister_protocol
 from universal_downloader.updater import update_ytdlp
-from universal_downloader.search import is_valid_search_query, search_youtube
+from universal_downloader.search import fetch_suggestions, is_valid_search_query, search_youtube
 from universal_downloader.utils.net import detect_target
 from universal_downloader.watcher import watch_clipboard
 
@@ -125,6 +125,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=10,
         help="Maximum search results to return (1-25, default: 10).",
+    )
+    search_group.add_argument(
+        "--suggest",
+        metavar="QUERY",
+        help="Fetch real-time search autosuggestions for a query string.",
     )
 
     # Audio options
@@ -780,6 +785,24 @@ def main() -> int:
                     print(json.dumps({"success": False, "query": query, "error": str(exc)}))
                 else:
                     failure(f"Search failed: {exc}", config)
+                return 1
+
+        # Suggestions mode
+        if getattr(args, "suggest", None):
+            query = str(args.suggest).strip()
+            try:
+                suggestions = fetch_suggestions(query, timeout=config.timeout)
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": True, "query": query, "suggestions": suggestions}, indent=2))
+                else:
+                    for item in suggestions:
+                        print(item)
+                return 0
+            except Exception as exc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "query": query, "error": str(exc)}))
+                else:
+                    failure(f"Suggestion lookup failed: {exc}", config)
                 return 1
 
         # Metadata inspection mode

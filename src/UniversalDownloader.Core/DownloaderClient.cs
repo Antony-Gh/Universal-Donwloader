@@ -405,6 +405,55 @@ public class DownloaderClient
     }
 
     /// <summary>
+    /// Fetch query autosuggestions from YouTube suggest service.
+    /// </summary>
+    public async Task<List<string>> GetSuggestionsAsync(
+        string query,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return new();
+        }
+
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        arguments.Add("--suggest");
+        arguments.Add($"\"{query.Trim()}\"");
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return new();
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(output);
+            if (doc.RootElement.TryGetProperty("suggestions", out var suggEl) && suggEl.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<string>();
+                foreach (var el in suggEl.EnumerateArray())
+                {
+                    var str = el.GetString();
+                    if (!string.IsNullOrWhiteSpace(str))
+                    {
+                        list.Add(str);
+                    }
+                }
+                return list;
+            }
+        }
+        catch
+        {
+            // Parse error fallback
+        }
+
+        return new();
+    }
+
+    /// <summary>
     /// Download a public or cookie-authorized profile picture (accepts profile URL or platform:username).
     /// </summary>
     public async Task<string> DownloadProfilePictureAsync(

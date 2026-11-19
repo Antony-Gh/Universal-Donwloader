@@ -141,3 +141,54 @@ def test_cli_search_json(mock_search: MagicMock, capsys: pytest.CaptureFixture[s
     assert data["query"] == "test query"
     assert len(data["results"]) == 1
     assert data["results"][0]["id"] == "vid123"
+
+
+def test_parse_suggest_payload() -> None:
+    from universal_downloader.search import parse_suggest_payload
+
+    # Valid JSON payload
+    raw_json = '["coldplay", [["coldplay yellow", 0], ["coldplay viva la vida", 0], ["coldplay scientist", 0]]]'
+    suggs = parse_suggest_payload(raw_json)
+    assert suggs == ["coldplay yellow", "coldplay viva la vida", "coldplay scientist"]
+
+    # JSONP payload
+    raw_jsonp = 'window.google.ac.h(["queen", [["queen bohemian rhapsody", 0], ["queen radio gaga", 0]]])'
+    suggs_jsonp = parse_suggest_payload(raw_jsonp)
+    assert suggs_jsonp == ["queen bohemian rhapsody", "queen radio gaga"]
+
+    # Malformed / empty payloads
+    assert parse_suggest_payload("") == []
+    assert parse_suggest_payload("not json at all") == []
+    assert parse_suggest_payload("[]") == []
+
+
+@patch("urllib.request.urlopen")
+def test_fetch_suggestions(mock_urlopen: MagicMock) -> None:
+    from universal_downloader.search import fetch_suggestions
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = b'["adele", [["adele hello", 0], ["adele someone like you", 0]]]'
+    mock_resp.__enter__.return_value = mock_resp
+    mock_urlopen.return_value = mock_resp
+
+    res = fetch_suggestions("adele")
+    assert res == ["adele hello", "adele someone like you"]
+
+    # Invalid query returns empty list without calling network
+    assert fetch_suggestions("") == []
+    assert fetch_suggestions("https://youtube.com") == []
+
+
+@patch("universal_downloader.cli.fetch_suggestions")
+def test_cli_suggest_json(mock_suggest: MagicMock, capsys: pytest.CaptureFixture[str]) -> None:
+    mock_suggest.return_value = ["suggest 1", "suggest 2"]
+
+    with patch("sys.argv", ["downloader.py", "--suggest", "suggest test", "--json"]):
+        code = main()
+
+    assert code == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["success"] is True
+    assert data["query"] == "suggest test"
+    assert data["suggestions"] == ["suggest 1", "suggest 2"]
