@@ -23,8 +23,8 @@ val androidCfg = (sharedAppConfig["android"] as? Map<String, Any>) ?: emptyMap()
 
 val cfgAppName = (sharedAppConfig["app_name"] as? String) ?: "Universal Media Downloader"
 val cfgShortName = (sharedAppConfig["short_name"] as? String) ?: "Universal Downloader"
-val cfgVersionName = (sharedAppConfig["version_name"] as? String) ?: "3.7.0"
-val cfgVersionCode = (sharedAppConfig["version_code"] as? Number)?.toInt() ?: 370
+val cfgVersionName = (sharedAppConfig["version_name"] as? String) ?: "3.8.0"
+val cfgVersionCode = (sharedAppConfig["version_code"] as? Number)?.toInt() ?: 380
 val cfgGithubOwner = (sharedAppConfig["github_owner"] as? String) ?: "Antony-Gh"
 val cfgGithubRepo = (sharedAppConfig["github_repo"] as? String) ?: "Universal-Donwloader"
 val cfgAppId = (androidCfg["application_id"] as? String) ?: "com.universaldownloader.app"

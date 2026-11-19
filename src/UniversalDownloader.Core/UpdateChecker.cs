@@ -9,8 +9,8 @@ namespace UniversalDownloader.Core;
 
 public record AppUpdateInfo
 {
-    public string CurrentVersion { get; init; } = "3.7.0";
-    public string LatestVersion { get; init; } = "3.7.0";
+    public string CurrentVersion { get; init; } = "3.8.0";
+    public string LatestVersion { get; init; } = "3.8.0";
     public bool IsUpdateAvailable { get; init; }
     public string ReleaseTitle { get; init; } = string.Empty;
     public string ReleaseUrl { get; init; } = "https://github.com/Antony-Gh/Universal-Donwloader/releases/latest";
@@ -26,7 +26,7 @@ public record VersionPolicyResult
     public bool IsSupported { get; init; } = true;
     public bool IsBlockedVersion { get; init; }
     public string MinSupportedVersion { get; init; } = "3.6.0";
-    public string LatestVersion { get; init; } = "3.7.0";
+    public string LatestVersion { get; init; } = "3.8.0";
     public string SunsetMessage { get; init; } = string.Empty;
     public string DownloadUrl { get; init; } = "https://github.com/Antony-Gh/Universal-Donwloader/releases/latest";
     public string EnforcementMode { get; init; } = "block";
@@ -41,7 +41,7 @@ public static class UpdateChecker
     public static string RepoOwner => GetAssemblyMetadata("GitHubOwner") ?? "Antony-Gh";
     public static string RepoName => GetAssemblyMetadata("GitHubRepo") ?? "Universal-Donwloader";
     public static string AppDisplayName => GetAssemblyMetadata("AppDisplayName") ?? "Universal Media Downloader";
-    public static int AppVersionCode => int.TryParse(GetAssemblyMetadata("AppVersionCode"), out var code) ? code : 370;
+    public static int AppVersionCode => int.TryParse(GetAssemblyMetadata("AppVersionCode"), out var code) ? code : 380;
     public static string LatestReleaseApiUrl => $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest";
     public static string LatestReleaseWebUrl => $"https://github.com/{RepoOwner}/{RepoName}/releases/latest";
 
@@ -117,7 +117,7 @@ public static class UpdateChecker
     {
         var ver = Assembly.GetEntryAssembly()?.GetName().Version
             ?? typeof(UpdateChecker).Assembly.GetName().Version;
-        if (ver == null) return "3.7.0";
+        if (ver == null) return "3.8.0";
         return $"{ver.Major}.{ver.Minor}.{Math.Max(0, ver.Build)}";
     }
 
