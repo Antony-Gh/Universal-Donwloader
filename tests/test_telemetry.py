@@ -261,3 +261,58 @@ def test_format_analytics_dashboard_rendering():
     assert "Average Installed RAM:  16.0 GB" in report
     assert "en_US (America/New_York): 250 (50.0%)" in report
     assert "x86_64 / 1920x1080: 300 devices" in report
+
+
+def test_detect_friend_tag_sources(tmp_path: Path, monkeypatch):
+    from universal_downloader.telemetry import detect_friend_tag
+
+    # 1. Custom tag directly
+    assert detect_friend_tag(custom_tag="Ahmed") == "ahmed"
+
+    # 2. Config object
+    cfg = AppConfig(friend_tag="Sara")
+    assert detect_friend_tag(config=cfg) == "sara"
+
+    # 3. Environment variable
+    monkeypatch.setenv("UD_FRIEND_TAG", "Mohamed")
+    assert detect_friend_tag() == "mohamed"
+    monkeypatch.delenv("UD_FRIEND_TAG")
+
+    # 4. Executable filename pattern (e.g. UniversalDownloader_john.exe)
+    monkeypatch.setattr(sys, "argv", ["C:\\Apps\\UniversalDownloader_john.exe"])
+    assert detect_friend_tag(data_dir=tmp_path) == "john"
+
+    # 5. Stored in device_id.json
+    id_file = tmp_path / "device_id.json"
+    assert id_file.is_file()
+    saved = json.loads(id_file.read_text(encoding="utf-8"))
+    assert saved.get("friend_tag") == "john"
+
+    # Even if argv changes to generic downloader.exe, persistent tag is remembered
+    monkeypatch.setattr(sys, "argv", ["C:\\Apps\\downloader.exe"])
+    assert detect_friend_tag(data_dir=tmp_path) == "john"
+
+
+def test_format_analytics_dashboard_with_friends():
+    gh_stats = {"success": True, "total_downloads": 0, "releases": []}
+    neon_stats = {
+        "stats": {"rows": [{"total_unique_devices": 1, "desktop_pcs": 1, "laptops": 0, "android_devices": 0, "other_devices": 0, "active_last_30_days": 1, "active_last_7_days": 1}]},
+        "friends": {
+            "rows": [
+                {
+                    "friend_tag": "ahmed",
+                    "device_type": "Laptop",
+                    "device_model": "Dell XPS 15",
+                    "os_name": "Windows 11",
+                    "last_seen_at": "2026-11-19 18:30:00",
+                    "heartbeat_count": 5,
+                }
+            ]
+        },
+    }
+
+    report = format_analytics_dashboard(gh_stats, neon_stats)
+    assert "IDENTIFIED FRIENDS & BETA TESTERS" in report
+    assert "ahmed" in report
+    assert "Dell XPS 15" in report
+    assert "Runs: 5" in report

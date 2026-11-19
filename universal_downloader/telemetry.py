@@ -387,13 +387,13 @@ def detect_friend_tag(
         if m:
             found_tag = m.group(1).strip().lower()
             # Persist tag in device_id.json so it is remembered permanently
-            if id_file.is_file():
-                try:
-                    data = json.loads(id_file.read_text(encoding="utf-8"))
-                    data["friend_tag"] = found_tag
-                    id_file.write_text(json.dumps(data), encoding="utf-8")
-                except Exception:
-                    pass
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                data = json.loads(id_file.read_text(encoding="utf-8")) if id_file.is_file() else {}
+                data["friend_tag"] = found_tag
+                id_file.write_text(json.dumps(data), encoding="utf-8")
+            except Exception:
+                pass
             return found_tag
     except Exception:
         pass

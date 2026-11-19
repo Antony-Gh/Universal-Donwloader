@@ -24,9 +24,15 @@ All notable changes to **Universal Media Downloader** are documented in this fil
 - **Android Jetpack Compose App Telemetry**:
   - Persistent `install_id` via `PreferencesStore` and non-blocking heartbeat dispatch on Android launch via `DownloaderRepository.sendDeviceHeartbeat()`.
 
+- **Friend & Contributor Referral Identification**:
+  - Automatically identify specific friends/beta-testers via executable filename pattern (e.g. `UniversalDownloader_ahmed.exe` -> `friend_tag = "ahmed"`), CLI flags (`--friend <name>`, `--ref <tag>`), environment variable (`UD_FRIEND_TAG`), or `config.json`.
+  - Added `v_friend_installs` view and dedicated **Identified Friends & Beta Testers** section in maintainer `--analytics` CLI dashboard.
+- **Extended Hardware & Regional Demographics**:
+  - Automatic detection of system locale/language, system timezone, CPU cores, CPU architecture (`x86_64`, `arm64`), total physical RAM in GB, primary screen resolution, and network connection status with zero elevated permissions.
+
 ### Verification
 
-- 132 Python unit and integration tests passing (`pytest`).
+- 134 Python unit and integration tests passing (`pytest`).
 - `.NET Core` (`UniversalDownloader.Core`), Avalonia Desktop (`UniversalDownloader.Avalonia`), and Android Release Kotlin (`compileReleaseKotlin`) all build cleanly with 0 errors.
 
 ## [3.3.0] - 2026-11-19
