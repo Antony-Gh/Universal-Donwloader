@@ -16,6 +16,7 @@ import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -342,6 +343,54 @@ class DownloaderRepository(private val appContext: Context) {
                 viewCount = viewCount,
                 formats = sortedFormats,
             )
+        }
+    }
+
+    suspend fun searchYoutube(query: String, limit: Int = 10): Result<List<SearchResultItem>> = withContext(Dispatchers.IO) {
+        val trimmed = query.trim()
+        if (trimmed.length < 2) return@withContext Result.success(emptyList())
+        val boundedLimit = limit.coerceIn(1, 25)
+        runCatching {
+            val request = YoutubeDLRequest("ytsearch$boundedLimit:$trimmed").apply {
+                addOption("--dump-single-json")
+                addOption("--extract-flat")
+                addOption("--no-playlist")
+                addOption("--socket-timeout", 15)
+            }
+            val response = YoutubeDL.getInstance().execute(request)
+            val jsonText = response.out ?: ""
+            val json = JSONObject(jsonText)
+            val entries = json.optJSONArray("entries") ?: JSONArray()
+            val list = mutableListOf<SearchResultItem>()
+            for (i in 0 until entries.length()) {
+                val item = entries.optJSONObject(i) ?: continue
+                val id = item.optString("id").trim()
+                if (id.isEmpty()) continue
+                val title = item.optString("title").trim()
+                if (title.isEmpty() || (title.startsWith("[") && title.endsWith("]"))) continue
+                val uploader = item.optString("uploader", item.optString("channel", ""))
+                val duration = item.optLong("duration", 0L)
+                val durationStr = if (duration > 0) {
+                    val m = duration / 60
+                    val s = duration % 60
+                    "%d:%02d".format(m, s)
+                } else null
+                var thumb = item.optString("thumbnail", "")
+                if (thumb.isEmpty()) {
+                    thumb = "https://i.ytimg.com/vi/$id/hqdefault.jpg"
+                }
+                list.add(
+                    SearchResultItem(
+                        id = id,
+                        url = "https://www.youtube.com/watch?v=$id",
+                        title = title,
+                        uploader = uploader,
+                        durationString = durationStr,
+                        thumbnail = thumb,
+                    )
+                )
+            }
+            list
         }
     }
 
@@ -1118,3 +1167,12 @@ class DownloaderRepository(private val appContext: Context) {
         }
     }
 }
+
+data class SearchResultItem(
+    val id: String,
+    val url: String,
+    val title: String,
+    val uploader: String,
+    val durationString: String?,
+    val thumbnail: String?,
+)

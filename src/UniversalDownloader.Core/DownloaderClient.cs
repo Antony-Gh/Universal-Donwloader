@@ -347,6 +347,64 @@ public class DownloaderClient
     }
 
     /// <summary>
+    /// Search YouTube for videos matching a text query.
+    /// </summary>
+    public async Task<List<SearchResultModel>> SearchAsync(
+        string query,
+        int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return new();
+        }
+
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        arguments.Add("--search");
+        arguments.Add($"\"{query.Trim()}\"");
+        arguments.Add("--search-limit");
+        arguments.Add(Math.Clamp(limit, 1, 25).ToString());
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return new();
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(output);
+            if (doc.RootElement.TryGetProperty("results", out var resultsEl) && resultsEl.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<SearchResultModel>();
+                foreach (var el in resultsEl.EnumerateArray())
+                {
+                    list.Add(new SearchResultModel
+                    {
+                        Id = el.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "",
+                        Url = el.TryGetProperty("url", out var url) ? url.GetString() ?? "" : "",
+                        Title = el.TryGetProperty("title", out var title) ? title.GetString() ?? "" : "",
+                        Uploader = el.TryGetProperty("uploader", out var up) ? up.GetString() ?? "" : "",
+                        Duration = el.TryGetProperty("duration", out var dur) && dur.ValueKind == JsonValueKind.Number ? dur.GetDouble() : null,
+                        DurationString = el.TryGetProperty("duration_string", out var ds) ? ds.GetString() : null,
+                        Thumbnail = el.TryGetProperty("thumbnail", out var th) ? th.GetString() : null,
+                        ViewCount = el.TryGetProperty("view_count", out var vc) && vc.ValueKind == JsonValueKind.Number ? vc.GetInt64() : null,
+                    });
+                }
+                return list;
+            }
+        }
+        catch
+        {
+            // Parse error fallback
+        }
+
+        return new();
+    }
+
+    /// <summary>
     /// Download a public or cookie-authorized profile picture (accepts profile URL or platform:username).
     /// </summary>
     public async Task<string> DownloadProfilePictureAsync(

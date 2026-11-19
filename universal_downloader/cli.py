@@ -35,6 +35,7 @@ from universal_downloader.profile import (
 )
 from universal_downloader.protocol import clean_protocol_url, register_protocol, unregister_protocol
 from universal_downloader.updater import update_ytdlp
+from universal_downloader.search import is_valid_search_query, search_youtube
 from universal_downloader.utils.net import detect_target
 from universal_downloader.watcher import watch_clipboard
 
@@ -110,6 +111,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--metadata",
         metavar="URL",
         help="Fetch media metadata and thumbnail without downloading.",
+    )
+
+    # Search options
+    search_group = parser.add_argument_group("Search & Discovery")
+    search_group.add_argument(
+        "--search",
+        metavar="QUERY",
+        help="Search YouTube for videos/songs matching query and output results.",
+    )
+    search_group.add_argument(
+        "--search-limit",
+        type=int,
+        default=10,
+        help="Maximum search results to return (1-25, default: 10).",
     )
 
     # Audio options
@@ -475,6 +490,31 @@ def interactive_mode(engine: DownloadEngine) -> int:
                     success(f"Profile picture saved: {saved}", config)
                     continue
 
+            # Text search workflow
+            if is_valid_search_query(value) and "://" not in value and not value.startswith("www."):
+                info(f"Searching YouTube for '{value}'...", config)
+                try:
+                    search_results = search_youtube(value, limit=5, proxy=config.proxy, timeout=config.timeout)
+                except Exception as s_exc:
+                    warning(f"Search failed: {s_exc}", config)
+                    search_results = []
+                if search_results:
+                    print()
+                    print(f"Search results for '{value}':")
+                    for s_idx, s_item in enumerate(search_results, start=1):
+                        s_dur = f" ({s_item['duration_string']})" if s_item.get("duration_string") else ""
+                        s_up = f" • {s_item['uploader']}" if s_item.get("uploader") else ""
+                        print(f"{s_idx}. {s_item['title']}{s_up}{s_dur}")
+                    print(f"{len(search_results) + 1}. Cancel search")
+                    s_sel = input(f"Select result to download [1-{len(search_results)}] or Enter to cancel: ").strip()
+                    if s_sel.isdigit() and 1 <= int(s_sel) <= len(search_results):
+                        value = search_results[int(s_sel) - 1]["url"]
+                    else:
+                        continue
+                else:
+                    warning(f"No search results found for '{value}'.", config)
+                    continue
+
             target = detect_target(value, timeout=config.timeout)
 
             print()
@@ -712,6 +752,35 @@ def main() -> int:
         requested_url = validate_url_option(args)
         if requested_url:
             requested_url = clean_protocol_url(requested_url)
+
+        # Search mode
+        if getattr(args, "search", None):
+            query = str(args.search).strip()
+            limit = getattr(args, "search_limit", 10) or 10
+            try:
+                results = search_youtube(query, limit=limit, proxy=config.proxy, timeout=config.timeout)
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": True, "query": query, "count": len(results), "results": results}, indent=2))
+                else:
+                    print_banner(config)
+                    if not results:
+                        info(f"No results found for '{query}'.", config)
+                    else:
+                        info(f"Found {len(results)} results for '{query}':", config)
+                        print("-" * 80)
+                        for idx, r in enumerate(results, start=1):
+                            dur = f" ({r['duration_string']})" if r.get("duration_string") else ""
+                            uploader = f" • {r['uploader']}" if r.get("uploader") else ""
+                            print(f"[{idx:2d}] {r['title']}{uploader}{dur}")
+                            print(f"     URL: {r['url']}")
+                        print("-" * 80)
+                return 0
+            except Exception as exc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "query": query, "error": str(exc)}))
+                else:
+                    failure(f"Search failed: {exc}", config)
+                return 1
 
         # Metadata inspection mode
         if getattr(args, "metadata", None):
@@ -1033,6 +1102,29 @@ def main() -> int:
                 ProfileError,
                 DependencyError,
             ) as exc:
+                if target is None and is_valid_search_query(requested_url) and "://" not in requested_url and not requested_url.startswith("www."):
+                    try:
+                        results = search_youtube(
+                            requested_url,
+                            limit=getattr(args, "search_limit", 10) or 10,
+                            proxy=config.proxy,
+                            timeout=config.timeout,
+                        )
+                        if config.json_output or config.json_stream:
+                            print(json.dumps({"success": True, "query": requested_url, "count": len(results), "results": results}, indent=2))
+                        else:
+                            info(f"Input is not a URL. Found {len(results)} YouTube search results for '{requested_url}':", config)
+                            print("-" * 80)
+                            for s_idx, s_r in enumerate(results, start=1):
+                                s_dur = f" ({s_r['duration_string']})" if s_r.get("duration_string") else ""
+                                s_up = f" • {s_r['uploader']}" if s_r.get("uploader") else ""
+                                print(f"[{s_idx:2d}] {s_r['title']}{s_up}{s_dur}")
+                                print(f"     URL: {s_r['url']}")
+                            print("-" * 80)
+                        return 0
+                    except Exception:
+                        pass
+
                 platform_arg = target.platform if target else None
                 formatted_err = format_download_error(exc, platform_arg)
 
