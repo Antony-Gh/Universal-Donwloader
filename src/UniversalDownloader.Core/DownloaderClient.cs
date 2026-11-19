@@ -106,6 +106,12 @@ public class DownloaderClient
                     var eventName = eventProp.GetString();
                     switch (eventName)
                     {
+                        case "stage":
+                            var stageMsg = root.TryGetProperty("message", out var msgProp) ? msgProp.GetString() : "Preparing...";
+                            StatusChanged?.Invoke(this, stageMsg ?? "Preparing...");
+                            RawOutputReceived?.Invoke(this, $"[{root.TryGetProperty("stage", out var stProp) ? stProp.GetString() : "stage"}] {stageMsg}");
+                            return;
+
                         case "progress":
                             var prog = JsonSerializer.Deserialize(line, DownloaderJsonContext.Default.DownloadProgressEvent);
                             if (prog != null)

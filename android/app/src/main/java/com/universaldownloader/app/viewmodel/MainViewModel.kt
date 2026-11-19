@@ -652,7 +652,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isDownloading = true,
                 isIndeterminateProgress = true,
                 downloadProgress = 0f,
-                downloadStatusText = if (isAutoRetry) "Retrying download with updated extractor..." else "Resolving streams & starting download...",
+                downloadStatusText = if (isAutoRetry) "Retrying download with updated extractor..." else "Preparing download engine & options...",
                 downloadEtaText = "ETA: --:--",
                 globalStatus = "Starting download...",
             )
@@ -677,10 +677,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         "ETA: --:--"
                     }
 
+                    val isConverting = isPostProcessing || line.contains("[Fixup", ignoreCase = true) || (line.contains("Destination:", ignoreCase = true) && percent >= 100f)
+                    val isExtracting = line.contains("Extracting URL", ignoreCase = true) || line.contains("[info] Extracting", ignoreCase = true) || line.contains("Downloading webpage", ignoreCase = true)
+
                     val statusLabel = when {
-                        isPostProcessing -> "Processing & merging with FFmpeg..."
-                        percent > 0f -> String.format(Locale.US, "Downloading... %.1f%%", percent)
-                        else -> "Connecting & resolving stream..."
+                        isConverting -> "Converting & remuxing with FFmpeg..."
+                        percent > 0f -> String.format(Locale.US, "Downloading stream... %.1f%%", percent)
+                        isExtracting -> "Extracting stream formats & media..."
+                        else -> "Checking target & resolving stream..."
                     }
 
                     _uiState.update {

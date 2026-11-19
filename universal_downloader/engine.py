@@ -269,6 +269,12 @@ class DownloadEngine:
         progress: ProgressRenderer,
         attempt: int = 1,
     ) -> dict[str, Any]:
+        if self.config.json_stream:
+            emit_json_event(
+                "stage",
+                {"stage": "extracting", "message": "Extracting media streams and stream metadata..."},
+            )
+
         if target.platform != Platform.TIKTOK:
             return self.extractor.download(
                 target.normalized_url,
@@ -319,6 +325,12 @@ class DownloadEngine:
         raise DownloadError("TikTok download failed after internal retries.")
 
     def download(self, url: str) -> DownloadResult:
+        if self.config.json_stream:
+            emit_json_event(
+                "stage",
+                {"stage": "preparing", "message": "Initializing download engine and target validation..."},
+            )
+
         target = detect_target(url, timeout=self.config.timeout)
 
         LOGGER.info(
@@ -327,6 +339,16 @@ class DownloadEngine:
             target.content_type.value,
             target.normalized_url,
         )
+
+        if self.config.json_stream:
+            emit_json_event(
+                "stage",
+                {
+                    "stage": "checking",
+                    "message": f"Target verified ({target.platform.value}). Resolving streams...",
+                    "platform": target.platform.value,
+                },
+            )
 
         last_error: Optional[Exception] = None
 
@@ -351,6 +373,10 @@ class DownloadEngine:
 
                 # JSON streaming event
                 if self.config.json_stream:
+                    emit_json_event(
+                        "stage",
+                        {"stage": "completed", "message": "Download and conversion finished successfully."},
+                    )
                     emit_json_event(
                         "complete",
                         {

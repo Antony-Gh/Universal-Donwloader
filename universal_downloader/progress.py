@@ -102,6 +102,10 @@ class ProgressRenderer:
                     )
             elif status == "finished":
                 self.last_emit_time = 0.0
+                emit_json_event(
+                    "stage",
+                    {"stage": "converting", "message": "Converting, remuxing container and embedding tags..."},
+                )
                 emit_json_event("postprocess", {"status": "processing"})
             return
 
