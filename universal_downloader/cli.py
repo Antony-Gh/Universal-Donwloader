@@ -48,6 +48,12 @@ from universal_downloader.protocol import clean_protocol_url, register_protocol,
 from universal_downloader.updater import update_ytdlp
 from universal_downloader.search import fetch_suggestions, is_valid_search_query, search_youtube
 from universal_downloader.sniffer import sniff_page_media
+from universal_downloader.subscriptions import (
+    add_subscription,
+    list_subscriptions,
+    remove_subscription,
+    sync_subscriptions,
+)
 from universal_downloader.utils.net import detect_target
 from universal_downloader.watcher import watch_clipboard
 
@@ -345,6 +351,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-downloads",
         type=int,
         help="Maximum number of media items to download from a playlist/feed.",
+    )
+    pl_group.add_argument(
+        "--subscribe",
+        metavar="FEED_URL",
+        help="Add a channel or playlist URL to your persistent subscriptions watchlist.",
+    )
+    pl_group.add_argument(
+        "--unsubscribe",
+        metavar="URL_OR_ID",
+        help="Remove a channel or playlist subscription by URL or numeric ID.",
+    )
+    pl_group.add_argument(
+        "--list-subscriptions",
+        "--subscriptions",
+        dest="list_subscriptions",
+        action="store_true",
+        help="List all subscribed channels and playlists.",
+    )
+    pl_group.add_argument(
+        "--sync-subscriptions",
+        action="store_true",
+        help="Download new uploads from all subscribed channels/playlists using the subscription archive.",
     )
 
     # Performance & Networking
@@ -869,6 +897,66 @@ def main() -> int:
                         print(f"{r['id']:<6} {date_str:<20} {r.get('platform', ''):<12.12} {title_str:<45} {r.get('status', ''):<10}")
                     print("-" * 95)
             return 0
+
+        # Channel / Playlist Subscriptions
+        if getattr(args, "subscribe", None):
+            sub_url = clean_protocol_url(str(args.subscribe).strip())
+            sub = add_subscription(
+                db_path,
+                sub_url,
+                audio_only=config.audio_only,
+                quality=config.quality,
+                max_downloads=config.max_downloads or 5,
+            )
+            if config.json_output or config.json_stream:
+                print(json.dumps({"success": True, "subscription": sub}, indent=2))
+            else:
+                success(f"Subscribed (#{sub['id']}): {sub['url']}", config)
+            return 0
+
+        if getattr(args, "unsubscribe", None):
+            removed = remove_subscription(db_path, str(args.unsubscribe).strip())
+            if config.json_output or config.json_stream:
+                print(json.dumps({"success": removed, "target": str(args.unsubscribe)}))
+            else:
+                if removed:
+                    success(f"Removed subscription: {args.unsubscribe}", config)
+                else:
+                    warning(f"No matching subscription found for: {args.unsubscribe}", config)
+            return 0 if removed else 1
+
+        if getattr(args, "list_subscriptions", False):
+            subs = list_subscriptions(db_path)
+            if config.json_output or config.json_stream:
+                print(json.dumps({"success": True, "count": len(subs), "subscriptions": subs}, indent=2))
+            else:
+                print_banner(config)
+                if not subs:
+                    info("No active subscriptions configured.", config)
+                else:
+                    print(f"{'ID':<5} {'QUALITY':<10} {'MAX':<6} {'LAST SYNCED':<20} {'URL'}")
+                    print("-" * 90)
+                    for s in subs:
+                        q_label = "audio" if s["audio_only"] else s["quality"]
+                        synced_str = (s.get("last_synced_at") or "Never")[:19]
+                        print(f"{s['id']:<5} {q_label:<10} {s['max_downloads']:<6} {synced_str:<20} {s['url']}")
+                    print("-" * 90)
+            return 0
+
+        if getattr(args, "sync_subscriptions", False):
+            summary = sync_subscriptions(config, db_path)
+            if config.json_output or config.json_stream:
+                print(json.dumps({"success": summary["failed"] == 0, **summary}, indent=2))
+            else:
+                print_banner(config)
+                if summary["total"] == 0:
+                    info("No subscriptions configured. Add one with --subscribe <URL>.", config)
+                else:
+                    success(
+                        f"Subscriptions sync complete: {summary['synced']}/{summary['total']} succeeded ({summary['failed']} failed).",
+                        config,
+                    )
+            return 0 if summary["failed"] == 0 else 1
 
         # Clipboard Watcher Daemon
         if getattr(args, "watch_clipboard", False):
