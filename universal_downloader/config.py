@@ -467,6 +467,7 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         schedule=getattr(args, "schedule", None) or json_config.get("schedule"),
         pause_on_battery=getattr(args, "pause_on_battery", False) or parse_config_bool(json_config.get("pause_on_battery")),
         only_wifi=getattr(args, "only_wifi", False) or parse_config_bool(json_config.get("only_wifi")),
+        aria2=getattr(args, "aria2", False) or parse_config_bool(json_config.get("aria2")),
     )
 
     if config.retries > 20:

@@ -111,6 +111,7 @@ class AppConfig:
     schedule: Optional[str] = None
     pause_on_battery: bool = False
     only_wifi: bool = False
+    aria2: bool = False
 
 
 @dataclass

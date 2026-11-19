@@ -55,6 +55,7 @@ public class DownloadOptions
     public string? ScheduleTime { get; set; }
     public bool PauseOnBattery { get; set; }
     public bool OnlyWifi { get; set; }
+    public bool UseAria2 { get; set; }
 
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
@@ -206,6 +207,7 @@ public class DownloadOptions
 
         if (PauseOnBattery) args.Add("--pause-on-battery");
         if (OnlyWifi) args.Add("--only-wifi");
+        if (UseAria2) args.Add("--aria2");
 
         return args;
     }

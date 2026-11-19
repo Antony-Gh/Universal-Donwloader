@@ -446,6 +446,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Suppress HTTPS certificate validation (useful behind proxies or missing Windows certs).",
     )
+    net_group.add_argument(
+        "--aria2",
+        action="store_true",
+        help="Accelerate downloads using aria2c multi-connection engine (16 parallel segments like IDM).",
+    )
 
     # Smart Scheduling & Power Conditions
     sched_group = parser.add_argument_group("Smart Scheduling & Power Conditions")

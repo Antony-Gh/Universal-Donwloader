@@ -244,6 +244,24 @@ class YTDLPExtractor:
         if self.config.concurrent_fragments:
             options["concurrent_fragment_downloads"] = max(1, self.config.concurrent_fragments)
 
+        if getattr(self.config, "aria2", False):
+            import shutil
+            aria2_bin = shutil.which("aria2c")
+            if aria2_bin or Path("aria2c.exe").is_file():
+                options["external_downloader"] = {"default": "aria2c"}
+                options["external_downloader_args"] = {
+                    "aria2c": [
+                        "-j", str(max(4, self.config.concurrent_fragments * 2)),
+                        "-s", "16",
+                        "-x", "16",
+                        "-k", "1M",
+                        "--min-split-size=1M",
+                        "--summary-interval=0",
+                    ]
+                }
+            else:
+                LOGGER.debug("aria2c requested but executable not found on PATH; falling back to built-in multi-connection engine")
+
         min_fs = parse_rate_limit(self.config.min_filesize)
         if min_fs:
             options["min_filesize"] = min_fs
