@@ -1,4 +1,4 @@
-# Universal Media Downloader — Android Edition (v3.6.0)
+# Universal Media Downloader — Android Edition (v3.7.0)
 
 Native Android application built with **Kotlin**, **Jetpack Compose (Material 3)**, and **`youtubedl-android`** (embedded Python 3 + `yt-dlp` + `FFmpeg` runtime — zero external tools or Termux required).
 

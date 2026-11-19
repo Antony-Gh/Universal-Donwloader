@@ -11,8 +11,8 @@
     <GitHubRepo Condition="'$(_AppConfigText)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_AppConfigText)', '"github_repo"\s*:\s*"([^"]+)"').Groups[1].Value)</GitHubRepo>
 
     <!-- Fallback defaults -->
-    <Version Condition="'$(Version)' == ''">3.6.0</Version>
-    <AppVersionCode Condition="'$(AppVersionCode)' == ''">360</AppVersionCode>
+    <Version Condition="'$(Version)' == ''">3.7.0</Version>
+    <AppVersionCode Condition="'$(AppVersionCode)' == ''">370</AppVersionCode>
     <AppDisplayName Condition="'$(AppDisplayName)' == ''">Universal Media Downloader</AppDisplayName>
     <GitHubOwner Condition="'$(GitHubOwner)' == ''">Antony-Gh</GitHubOwner>
     <GitHubRepo Condition="'$(GitHubRepo)' == ''">Universal-Donwloader</GitHubRepo>
