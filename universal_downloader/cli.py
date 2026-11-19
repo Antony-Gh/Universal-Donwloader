@@ -12,6 +12,12 @@ from universal_downloader import __app_name__, __version__
 from universal_downloader.batch import print_batch_summary, read_batch_file, run_batch
 from universal_downloader.config import build_config, generate_default_config
 from universal_downloader.console import failure, info, print_banner, success, warning
+from universal_downloader.converter import (
+    AUDIO_FORMATS,
+    SUPPORTED_FORMATS,
+    VIDEO_FORMATS,
+    convert_media_file,
+)
 from universal_downloader.engine import DownloadEngine
 from universal_downloader.exceptions import (
     ConfigurationError,
@@ -240,7 +246,25 @@ def build_parser() -> argparse.ArgumentParser:
     post_group.add_argument(
         "--remux-video",
         choices=["mp4", "mkv", "mov", "webm"],
-        help="Remux downloaded video into chosen container format.",
+        help="Remux downloaded or local video into chosen container format.",
+    )
+    post_group.add_argument(
+        "--convert",
+        metavar="FORMAT",
+        choices=sorted(SUPPORTED_FORMATS),
+        help="Convert a local media file directly using FFmpeg (mp3, m4a, flac, opus, wav, aac, mp4, mkv, mov, webm).",
+    )
+    post_group.add_argument(
+        "--convert-audio",
+        metavar="FORMAT",
+        choices=sorted(AUDIO_FORMATS),
+        help="Extract audio from a local media file into the specified format (mp3, m4a, flac, opus, wav, aac).",
+    )
+    post_group.add_argument(
+        "--convert-video",
+        metavar="FORMAT",
+        choices=sorted(VIDEO_FORMATS),
+        help="Convert a local video file into the specified container format (mp4, mkv, mov, webm).",
     )
     post_group.add_argument(
         "--split-chapters",
@@ -904,6 +928,60 @@ def main() -> int:
                     print(json.dumps({"success": False, "url": page_url, "error": str(exc)}))
                 else:
                     failure(f"Media sniff failed: {exc}", config)
+                return 1
+
+        # Direct local media conversion / audio extraction mode
+        convert_fmt = (
+            getattr(args, "convert", None)
+            or getattr(args, "convert_audio", None)
+            or getattr(args, "convert_video", None)
+        )
+        local_remux_fmt = None
+        if not convert_fmt and requested_url and getattr(args, "remux_video", None):
+            try:
+                if Path(requested_url).expanduser().is_file():
+                    local_remux_fmt = args.remux_video
+            except OSError:
+                pass
+
+        if convert_fmt or local_remux_fmt:
+            target_fmt = convert_fmt or local_remux_fmt
+            if not requested_url:
+                err_msg = "Please provide a local media file path to convert."
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": err_msg}))
+                else:
+                    failure(err_msg, config)
+                return 1
+            try:
+                out_dir = Path(args.output).expanduser() if getattr(args, "output", None) else None
+                converted_path = convert_media_file(
+                    Path(requested_url),
+                    str(target_fmt),
+                    output_dir=out_dir,
+                    audio_quality=config.audio_quality,
+                    remux_only=bool(local_remux_fmt),
+                )
+                if config.json_output or config.json_stream:
+                    print(
+                        json.dumps(
+                            {
+                                "success": True,
+                                "input": str(Path(requested_url).expanduser()),
+                                "output": str(converted_path),
+                                "format": str(target_fmt),
+                            },
+                            indent=2,
+                        )
+                    )
+                else:
+                    success(f"Converted media saved: {converted_path}", config)
+                return 0
+            except Exception as exc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(exc)}))
+                else:
+                    failure(f"Media conversion failed: {exc}", config)
                 return 1
 
         # Metadata inspection mode
