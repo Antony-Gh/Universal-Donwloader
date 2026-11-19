@@ -52,14 +52,14 @@ def detect_device_type() -> str:
     if sys.platform == "win32":
         try:
             import ctypes
-            from ctypes import Structure, byref, c_byte, c_ulong
+            from ctypes import Structure, byref, c_ubyte, c_ulong
 
             class SYSTEM_POWER_STATUS(Structure):
                 _fields_ = [
-                    ("ACLineStatus", c_byte),
-                    ("BatteryFlag", c_byte),
-                    ("BatteryLifePercent", c_byte),
-                    ("SystemStatusFlag", c_byte),
+                    ("ACLineStatus", c_ubyte),
+                    ("BatteryFlag", c_ubyte),
+                    ("BatteryLifePercent", c_ubyte),
+                    ("SystemStatusFlag", c_ubyte),
                     ("BatteryLifeTime", c_ulong),
                     ("BatteryFullLifeTime", c_ulong),
                 ]
