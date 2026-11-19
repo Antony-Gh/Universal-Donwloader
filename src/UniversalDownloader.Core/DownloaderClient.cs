@@ -354,6 +354,128 @@ public class DownloaderClient
     }
 
     /// <summary>
+    /// Retrieve all configured channel/playlist subscriptions.
+    /// </summary>
+    public async Task<List<SubscriptionModel>> GetSubscriptionsAsync(CancellationToken cancellationToken = default)
+    {
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        arguments.Add("--list-subscriptions");
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output)) return new();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(output);
+            if (doc.RootElement.TryGetProperty("subscriptions", out var subsElement))
+            {
+                return JsonSerializer.Deserialize(subsElement.GetRawText(), DownloaderJsonContext.Default.ListSubscriptionModel) ?? new();
+            }
+            return new();
+        }
+        catch (JsonException)
+        {
+            return new();
+        }
+    }
+
+    /// <summary>
+    /// Add or update a channel/playlist subscription.
+    /// </summary>
+    public async Task<SubscriptionModel?> AddSubscriptionAsync(
+        string url,
+        bool audioOnly = false,
+        string quality = "best",
+        int maxDownloads = 5,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return null;
+
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        arguments.Add("--subscribe");
+        arguments.Add($"\"{url.Trim()}\"");
+        if (audioOnly) arguments.Add("--audio-only");
+        if (!string.IsNullOrWhiteSpace(quality) && quality != "best")
+        {
+            arguments.Add("--quality");
+            arguments.Add($"\"{quality}\"");
+        }
+        arguments.Add("--max-downloads");
+        arguments.Add(Math.Clamp(maxDownloads, 1, 500).ToString());
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output)) return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(output);
+            if (doc.RootElement.TryGetProperty("subscription", out var subElement))
+            {
+                return JsonSerializer.Deserialize(subElement.GetRawText(), DownloaderJsonContext.Default.SubscriptionModel);
+            }
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Remove a subscription by URL or numeric ID.
+    /// </summary>
+    public async Task<bool> RemoveSubscriptionAsync(string urlOrId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(urlOrId)) return false;
+
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        arguments.Add("--unsubscribe");
+        arguments.Add($"\"{urlOrId.Trim()}\"");
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        return output.Contains("\"success\": true");
+    }
+
+    /// <summary>
+    /// Sync all subscribed channels and playlists, downloading newly uploaded media.
+    /// </summary>
+    public async Task<SubscriptionSyncResult> SyncSubscriptionsAsync(
+        DownloadOptions? baseOptions = null,
+        CancellationToken cancellationToken = default)
+    {
+        var arguments = new List<string>();
+        if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
+        arguments.Add("--sync-subscriptions");
+        if (baseOptions != null)
+        {
+            arguments.AddRange(baseOptions.BuildCliArguments());
+        }
+        arguments.Add("--json");
+
+        var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return new SubscriptionSyncResult { Success = false, Total = 0, Synced = 0, Failed = 0 };
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize(output, DownloaderJsonContext.Default.SubscriptionSyncResult)
+                   ?? new SubscriptionSyncResult { Success = false };
+        }
+        catch (JsonException)
+        {
+            return new SubscriptionSyncResult { Success = false };
+        }
+    }
+
+    /// <summary>
     /// Search YouTube for videos matching a text query.
     /// </summary>
     public async Task<List<SearchResultModel>> SearchAsync(

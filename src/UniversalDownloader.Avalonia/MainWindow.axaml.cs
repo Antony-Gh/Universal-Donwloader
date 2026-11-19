@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<LogMessage> _filteredMainLogs = new();
     private readonly ObservableCollection<QueueItemModel> _queueItems = new();
     private readonly ObservableCollection<PlaylistVideoCardModel> _playlistCards = new();
+    private readonly ObservableCollection<SubscriptionModel> _subscriptions = new();
     private CancellationTokenSource? _queueCts;
     private CancellationTokenSource? _playlistQualityCts;
     private CancellationTokenSource? _streamPreviewCts;
@@ -66,6 +67,7 @@ public partial class MainWindow : Window
         MainLogListBox.ItemsSource = _filteredMainLogs;
         QueueListBox.ItemsSource = _queueItems;
         PlaylistCardsItemsControl.ItemsSource = _playlistCards;
+        SubscriptionListBox.ItemsSource = _subscriptions;
 
         // Background batch timer prevents UI thread saturation and keeps window 100% responsive
         _logBatchTimer = new DispatcherTimer(
@@ -85,6 +87,7 @@ public partial class MainWindow : Window
         Opened += async (s, e) =>
         {
             await LoadHistoryAsync();
+            _ = LoadSubscriptionsAsync();
             var policy = await UpdateChecker.CheckVersionPolicyAsync(_settings);
             if (!policy.IsSupported)
             {
@@ -2218,6 +2221,102 @@ public partial class MainWindow : Window
     {
         await _client.ClearHistoryAsync();
         await LoadHistoryAsync();
+    }
+
+    private async Task LoadSubscriptionsAsync()
+    {
+        SubscriptionLoadingBar.IsVisible = true;
+        try
+        {
+            var subs = await _client.GetSubscriptionsAsync();
+            _subscriptions.Clear();
+            foreach (var s in subs) _subscriptions.Add(s);
+        }
+        catch { }
+        finally
+        {
+            SubscriptionLoadingBar.IsVisible = false;
+        }
+    }
+
+    private async void SubscriptionAddButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var url = SubscriptionUrlBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        SubscriptionAddButton.IsEnabled = false;
+        SubscriptionLoadingBar.IsVisible = true;
+        try
+        {
+            var audioOnly = SubscriptionAudioCheck.IsChecked == true;
+            var quality = (SubscriptionQualityCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "best";
+            var maxDownloads = (int)(SubscriptionMaxDownloads.Value ?? 5);
+
+            var added = await _client.AddSubscriptionAsync(url, audioOnly, quality, maxDownloads);
+            if (added != null)
+            {
+                SubscriptionUrlBox.Text = string.Empty;
+                await LoadSubscriptionsAsync();
+                GlobalStatusText.Text = $"Subscribed to {added.DisplayTitle}";
+            }
+        }
+        catch (Exception ex)
+        {
+            GlobalStatusText.Text = $"Subscription failed: {ex.Message}";
+        }
+        finally
+        {
+            SubscriptionAddButton.IsEnabled = true;
+            SubscriptionLoadingBar.IsVisible = false;
+        }
+    }
+
+    private async void SubscriptionRemove_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is SubscriptionModel sub)
+        {
+            SubscriptionLoadingBar.IsVisible = true;
+            try
+            {
+                var removed = await _client.RemoveSubscriptionAsync(sub.Id.ToString());
+                if (removed)
+                {
+                    _subscriptions.Remove(sub);
+                    GlobalStatusText.Text = $"Unsubscribed from {sub.DisplayTitle}";
+                }
+            }
+            finally
+            {
+                SubscriptionLoadingBar.IsVisible = false;
+            }
+        }
+    }
+
+    private async void SubscriptionSyncButton_Click(object? sender, RoutedEventArgs e)
+    {
+        SubscriptionSyncButton.IsEnabled = false;
+        SubscriptionLoadingBar.IsVisible = true;
+        SubscriptionSyncText.Text = "Syncing...";
+        BeginGlobalActivity("Syncing subscribed channels and playlists...");
+        try
+        {
+            var opts = BuildOptionsFromUi();
+            var res = await _client.SyncSubscriptionsAsync(opts);
+            GlobalStatusText.Text = $"Subscriptions synced: {res.Synced}/{res.Total} channels updated ({res.Failed} failed).";
+            await LoadSubscriptionsAsync();
+            await LoadHistoryAsync();
+        }
+        catch (Exception ex)
+        {
+            GlobalStatusText.Text = $"Sync failed: {ex.Message}";
+        }
+        finally
+        {
+            SubscriptionSyncButton.IsEnabled = true;
+            SubscriptionLoadingBar.IsVisible = false;
+            SubscriptionSyncText.Text = "Sync All";
+            EndGlobalActivity();
+        }
     }
 
     private void OpenMediaFile_Click(object? sender, RoutedEventArgs e)

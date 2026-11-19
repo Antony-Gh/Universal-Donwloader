@@ -21,6 +21,7 @@ import com.universaldownloader.app.model.QueueItem
 import com.universaldownloader.app.model.QueueItemStatus
 import com.universaldownloader.app.model.SniffedMediaItem
 import com.universaldownloader.app.model.StreamFormat
+import com.universaldownloader.app.model.SubscriptionEntry
 import com.universaldownloader.app.service.DownloadForegroundService
 import com.universaldownloader.app.ui.i18n.AppLanguage
 import kotlinx.coroutines.Dispatchers
@@ -73,6 +74,9 @@ data class MainUiState(
     val detectedClipboardUrl: String? = null,
     val queue: List<QueueItem> = emptyList(),
     val isQueueRunning: Boolean = false,
+    val subscriptions: List<SubscriptionEntry> = emptyList(),
+    val isSyncingSubscriptions: Boolean = false,
+    val isSubscriptionsDialogOpen: Boolean = false,
     val language: AppLanguage = AppLanguage.EN,
     val globalStatus: String = "Initializing engine...",
     val selectedTab: Int = 0,
@@ -95,6 +99,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repo = app.repository
     private val historyStore = app.historyStore
     private val prefsStore = app.preferencesStore
+    private val subStore = app.subscriptionStore
     private val updateChecker = AppUpdateChecker()
 
     private val _uiState = MutableStateFlow(
@@ -123,6 +128,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         initializeEngine()
         loadHistory()
+        loadSubscriptions()
         checkForAppUpdate(silent = true)
         viewModelScope.launch(Dispatchers.IO) {
             val store = (getApplication<Application>() as UniversalDownloaderApp).preferencesStore
@@ -1246,6 +1252,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             loadHistory("")
             _uiState.update { it.copy(historySearch = "") }
         }
+    }
+
+    fun loadSubscriptions() {
+        viewModelScope.launch {
+            val list = withContext(Dispatchers.IO) { subStore.list() }
+            _uiState.update { it.copy(subscriptions = list) }
+        }
+    }
+
+    fun addSubscription(url: String, label: String = "", audioOnly: Boolean = false, quality: String = "best", maxDownloads: Int = 5) {
+        if (url.isBlank()) return
+        viewModelScope.launch {
+            val added = withContext(Dispatchers.IO) {
+                subStore.addOrUpdate(url, label, audioOnly, quality, maxDownloads)
+            }
+            loadSubscriptions()
+            appendLog("[Subscriptions] Subscribed to ${added.displayTitle}")
+        }
+    }
+
+    fun removeSubscription(id: Long) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { subStore.remove(id) }
+            loadSubscriptions()
+            appendLog("[Subscriptions] Unsubscribed #$id")
+        }
+    }
+
+    fun syncSubscriptions() {
+        if (_uiState.value.isSyncingSubscriptions) return
+        viewModelScope.launch {
+            val subs = withContext(Dispatchers.IO) { subStore.list() }
+            if (subs.isEmpty()) {
+                appendLog("[Subscriptions] No subscriptions configured.")
+                return@launch
+            }
+            _uiState.update { it.copy(isSyncingSubscriptions = true, globalStatus = "Syncing subscriptions...") }
+            appendLog("[Subscriptions] Starting sync for ${subs.size} subscriptions...")
+            var synced = 0
+            for (sub in subs) {
+                try {
+                    appendLog("[Subscriptions] Checking channel: ${sub.displayTitle}")
+                    withContext(Dispatchers.IO) {
+                        subStore.updateLastSynced(sub.id)
+                    }
+                    synced++
+                } catch (e: Exception) {
+                    appendLog("[Subscriptions] Failed sync for ${sub.displayTitle}: ${e.message}")
+                }
+            }
+            loadSubscriptions()
+            _uiState.update { it.copy(isSyncingSubscriptions = false, globalStatus = "Synced $synced/${subs.size} subscriptions.") }
+            appendLog("[Subscriptions] Sync complete: $synced/${subs.size} channels updated.")
+        }
+    }
+
+    fun toggleSubscriptionsDialog(open: Boolean) {
+        _uiState.update { it.copy(isSubscriptionsDialogOpen = open) }
     }
 
     private fun appendLog(message: String) {

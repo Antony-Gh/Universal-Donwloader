@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -197,6 +198,18 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     },
                     actions = {
+                        IconButton(
+                            onClick = { viewModel.toggleSubscriptionsDialog(true) },
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Layers,
+                                contentDescription = "Subscriptions",
+                                tint = AccentSky,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+
                         TextButton(
                             onClick = { viewModel.toggleLanguage() },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
@@ -515,6 +528,172 @@ fun MainScreen(viewModel: MainViewModel) {
                     },
                 ) {
                     Text(strings.releasePage, color = AccentSky)
+                }
+            },
+        )
+    }
+
+    if (state.isSubscriptionsDialogOpen) {
+        var newSubUrl by remember { mutableStateOf("") }
+        var isAudioOnly by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { viewModel.toggleSubscriptionsDialog(false) },
+            containerColor = SurfaceCard,
+            shape = RoundedCornerShape(14.dp),
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Channel Subscriptions",
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                    )
+                    IconButton(
+                        onClick = { viewModel.syncSubscriptions() },
+                        enabled = !state.isSyncingSubscriptions,
+                    ) {
+                        if (state.isSyncingSubscriptions) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = AccentSky,
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Sync All",
+                                tint = AccentSky,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    OutlinedTextField(
+                        value = newSubUrl,
+                        onValueChange = { newSubUrl = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Channel or Playlist URL...", fontSize = 12.sp, color = TextMuted) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AccentSky,
+                            unfocusedBorderColor = BorderSubtle,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                        ),
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Switch(
+                                checked = isAudioOnly,
+                                onCheckedChange = { isAudioOnly = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = AccentSky,
+                                ),
+                            )
+                            Text("Audio (MP3)", color = TextSecondary, fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                if (newSubUrl.isNotBlank()) {
+                                    viewModel.addSubscription(newSubUrl, audioOnly = isAudioOnly)
+                                    newSubUrl = ""
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentSky),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        ) {
+                            Text("Subscribe", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(BorderSubtle))
+
+                    if (state.subscriptions.isEmpty()) {
+                        Text(
+                            text = "No subscriptions yet. Add a channel or playlist above to track new uploads automatically.",
+                            color = TextMuted,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 240.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(state.subscriptions, key = { it.id }) { sub ->
+                                Surface(
+                                    color = SurfaceCardAlt,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(0.5.dp, BorderSubtle),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = sub.displayTitle,
+                                                color = TextPrimary,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 13.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Text(
+                                                text = "${sub.preferenceSummary} • ${sub.lastSyncedSummary}",
+                                                color = TextSecondary,
+                                                fontSize = 11.sp,
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { viewModel.removeSubscription(sub.id) },
+                                            modifier = Modifier.size(24.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Default.DeleteOutline,
+                                                contentDescription = "Unsubscribe",
+                                                tint = Color(0xFFEF4444),
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.toggleSubscriptionsDialog(false) }) {
+                    Text("Close", color = AccentSky, fontWeight = FontWeight.Bold)
                 }
             },
         )

@@ -76,6 +76,30 @@ RunTest("UpdateChecker.EvaluateVersionPolicy evaluates min_supported_version, bl
     AssertTrue(!fallback.IsSupported, "null json uses fallback min 3.6.0");
 });
 
+RunTest("SubscriptionModel and SubscriptionSyncResult serialize and deserialize cleanly", () =>
+{
+    var json = @"{
+        ""id"": 1,
+        ""url"": ""https://www.youtube.com/@TED"",
+        ""label"": ""TED Talks"",
+        ""audio_only"": false,
+        ""quality"": ""1080p"",
+        ""max_downloads"": 10,
+        ""created_at"": ""2026-11-19 12:00:00"",
+        ""last_synced_at"": ""2026-11-19 14:00:00""
+    }";
+    var sub = JsonSerializer.Deserialize(json, DownloaderJsonContext.Default.SubscriptionModel);
+    AssertTrue(sub != null, "sub is not null");
+    AssertEqual(1, sub!.Id);
+    AssertEqual("TED Talks", sub.DisplayTitle);
+    AssertEqual("1080p • Max 10 videos", sub.PreferenceSummary);
+    AssertEqual("Synced: 2026-11-19 14:00:00", sub.LastSyncedSummary);
+
+    var syncJson = @"{ ""success"": true, ""total"": 3, ""synced"": 3, ""failed"": 0 }";
+    var syncRes = JsonSerializer.Deserialize(syncJson, DownloaderJsonContext.Default.SubscriptionSyncResult);
+    AssertTrue(syncRes != null && syncRes.Success && syncRes.Synced == 3, "syncRes parsed");
+});
+
 RunTest("UpdateChecker reads shared app_config.json assembly metadata", () =>
 {
     AssertTrue(!string.IsNullOrWhiteSpace(UpdateChecker.RepoOwner), "RepoOwner populated");

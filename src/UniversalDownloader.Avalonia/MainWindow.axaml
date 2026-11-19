@@ -915,6 +915,69 @@
                 </Border>
             </TabItem>
 
+            <!-- SUBSCRIPTIONS TAB -->
+            <TabItem x:Name="SubscriptionsTab" Header="Subscriptions">
+                <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
+                    <StackPanel Spacing="12">
+                        <!-- Add Subscription Bar -->
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
+                            <TextBox x:Name="SubscriptionUrlBox" Grid.Column="0" Watermark="Channel or playlist URL to auto-track..."/>
+                            <CheckBox x:Name="SubscriptionAudioCheck" Grid.Column="1" Margin="8,0,0,0" Content="Audio (MP3)" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="SubscriptionQualityCombo" Grid.Column="2" Margin="8,0,0,0" SelectedIndex="0" VerticalAlignment="Center">
+                                <ComboBoxItem Content="best"/>
+                                <ComboBoxItem Content="1080p"/>
+                                <ComboBoxItem Content="720p"/>
+                                <ComboBoxItem Content="480p"/>
+                            </ComboBox>
+                            <NumericUpDown x:Name="SubscriptionMaxDownloads" Grid.Column="3" Margin="8,0,0,0" Value="5" Minimum="1" Maximum="100" Width="85" VerticalAlignment="Center" ToolTip.Tip="Max new videos to fetch per sync"/>
+                            <Button x:Name="SubscriptionAddButton" Grid.Column="4" Margin="8,0,0,0" Padding="10,6" Background="#2563EB" Foreground="White" Click="SubscriptionAddButton_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <PathIcon Data="{StaticResource DownloadArrowIcon}" Width="12" Height="12" Foreground="White"/>
+                                    <TextBlock Text="Subscribe" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="SubscriptionSyncButton" Grid.Column="5" Margin="8,0,0,0" Padding="10,6" Background="#059669" Foreground="White" Click="SubscriptionSyncButton_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <PathIcon Data="{StaticResource RefreshIcon}" Width="12" Height="12" Foreground="White"/>
+                                    <TextBlock x:Name="SubscriptionSyncText" Text="Sync All" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <ProgressBar x:Name="SubscriptionLoadingBar" IsIndeterminate="True" Height="3" Foreground="#10B981" IsVisible="False"/>
+
+                        <!-- Subscriptions List -->
+                        <ListBox x:Name="SubscriptionListBox" MaxHeight="450" Background="#18181B" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.Styles>
+                                <Style Selector="ListBoxItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                </Style>
+                            </ListBox.Styles>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:SubscriptionModel">
+                                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="4">
+                                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayTitle}" FontWeight="SemiBold" Foreground="#F4F4F8" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Url}" FontSize="11" Foreground="#6B7280" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding PreferenceSummary}" FontSize="12" Foreground="#38BDF8" HorizontalAlignment="Right"/>
+                                            <TextBlock Text="{Binding LastSyncedSummary}" FontSize="11" Foreground="#9CA3AF" HorizontalAlignment="Right"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Padding="8,4" Background="#374151" Foreground="#EF4444" FontSize="11" Click="SubscriptionRemove_Click" ToolTip.Tip="Unsubscribe">
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <PathIcon Data="{StaticResource ClearIcon}" Width="10" Height="10" Foreground="#EF4444"/>
+                                                <TextBlock Text="Unsubscribe" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </StackPanel>
+                </Border>
+            </TabItem>
+
             <!-- CONSOLE LOGS TAB WITH INDIVIDUAL LINE COLORS -->
             <TabItem x:Name="LogsTab" Header="Console Logs">
                 <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">

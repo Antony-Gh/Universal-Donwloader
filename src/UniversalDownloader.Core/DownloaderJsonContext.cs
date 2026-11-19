@@ -19,6 +19,9 @@ namespace UniversalDownloader.Core;
 [JsonSerializable(typeof(List<FormatInfoModel>))]
 [JsonSerializable(typeof(HistoryRecordModel))]
 [JsonSerializable(typeof(List<HistoryRecordModel>))]
+[JsonSerializable(typeof(SubscriptionModel))]
+[JsonSerializable(typeof(List<SubscriptionModel>))]
+[JsonSerializable(typeof(SubscriptionSyncResult))]
 [JsonSerializable(typeof(UserSettings))]
 public partial class DownloaderJsonContext : JsonSerializerContext
 {

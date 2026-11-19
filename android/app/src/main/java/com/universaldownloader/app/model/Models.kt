@@ -269,6 +269,30 @@ data class HistoryEntry(
         get() = SimpleDateFormat("MMM dd, HH:mm", Locale.US).format(Date(downloadedAt))
 }
 
+data class SubscriptionEntry(
+    val id: Long = 0,
+    val url: String,
+    val label: String = "",
+    val audioOnly: Boolean = false,
+    val quality: String = "best",
+    val maxDownloads: Int = 5,
+    val createdAt: Long = System.currentTimeMillis(),
+    val lastSyncedAt: Long? = null,
+) {
+    val displayTitle: String
+        get() = label.ifBlank { url }
+
+    val preferenceSummary: String
+        get() = "${if (audioOnly) "Audio (MP3)" else quality} • Max $maxDownloads videos"
+
+    val lastSyncedSummary: String
+        get() = if (lastSyncedAt == null || lastSyncedAt == 0L) {
+            "Never synced"
+        } else {
+            "Synced: " + SimpleDateFormat("MMM dd, HH:mm", Locale.US).format(Date(lastSyncedAt))
+        }
+}
+
 enum class EngineStatus {
     INITIALIZING,
     READY,
