@@ -326,3 +326,29 @@ BEGIN
 END;
 $$;
 
+
+-- 6. GDPR Data Erasure Function (Right to be Forgotten)
+CREATE OR REPLACE FUNCTION delete_device_telemetry(p_install_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_deleted_installs INT;
+    v_deleted_crashes INT;
+BEGIN
+    DELETE FROM device_installs WHERE install_id = p_install_id;
+    GET DIAGNOSTICS v_deleted_installs = ROW_COUNT;
+
+    DELETE FROM app_crash_reports WHERE install_id = p_install_id;
+    GET DIAGNOSTICS v_deleted_crashes = ROW_COUNT;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'deleted_installs', v_deleted_installs,
+        'deleted_crashes', v_deleted_crashes
+    );
+END;
+$$;
+
+

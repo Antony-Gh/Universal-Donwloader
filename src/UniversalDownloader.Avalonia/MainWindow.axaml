@@ -1057,6 +1057,53 @@
                     </Grid>
                 </Border>
             </TabItem>
+
+            <!-- PRIVACY & TRANSPARENCY TAB -->
+            <TabItem x:Name="PrivacyTab" Header="Privacy">
+                <Border Background="#1E1E24" CornerRadius="8" Padding="20" Margin="0,15,0,0">
+                    <ScrollViewer>
+                        <StackPanel Spacing="16">
+                            <TextBlock Text="Privacy &amp; Data Transparency" FontSize="18" FontWeight="SemiBold" Foreground="#38BDF8"/>
+                            <TextBlock Text="Universal Media Downloader is built with privacy as a foundational principle. We guarantee 100% open, inspectable telemetry with zero personal data collection." Foreground="#9CA3AF" TextWrapping="Wrap"/>
+
+                            <!-- Guarantees Card -->
+                            <Border Background="#18181B" CornerRadius="6" Padding="14">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="🛡️ Our Privacy Guarantees" FontWeight="Bold" Foreground="#4ADE80" FontSize="14"/>
+                                    <TextBlock Text="• Zero Activity Tracking: Downloaded URLs, video titles, and file contents are strictly processed on your device and are never sent anywhere." Foreground="#D1D5DB" TextWrapping="Wrap"/>
+                                    <TextBlock Text="• Zero Personal Identity: No IP addresses, usernames, accounts, machine hostnames, or credentials are collected or stored." Foreground="#D1D5DB" TextWrapping="Wrap"/>
+                                    <TextBlock Text="• Purely Anonymous Metrics: Heartbeats and crash traces use a locally-generated random UUIDv4." Foreground="#D1D5DB" TextWrapping="Wrap"/>
+                                    <TextBlock Text="• Full GDPR Compliance: You can opt out completely or request full remote deletion of this install ID at any time." Foreground="#D1D5DB" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Settings & Controls -->
+                            <Border Background="#18181B" CornerRadius="6" Padding="14">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="⚙️ Telemetry &amp; Diagnostics Controls" FontWeight="Bold" Foreground="#F3F4F6" FontSize="14"/>
+                                    <CheckBox x:Name="OptOutTelemetryCheckBox" Content="Disable anonymous heartbeats and crash reporting (--no-telemetry)" Foreground="#E5E7EB"/>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
+                                        <Button x:Name="ResetInstallIdButton" Content="🔄 Reset Anonymous Device ID" Background="#374151" Foreground="#F9FAFB" Padding="12,6"/>
+                                        <Button x:Name="GdprWipeButton" Content="🗑️ GDPR Remote Data Wipe" Background="#7F1D1D" Foreground="#FEE2E2" Padding="12,6"/>
+                                    </StackPanel>
+
+                                    <TextBlock x:Name="PrivacyStatusLabel" Text="Status: Telemetry is active with anonymous UUIDv4" Foreground="#9CA3AF" FontSize="12" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Technical Payload Inspector -->
+                            <Border Background="#18181B" CornerRadius="6" Padding="14">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="🔍 Inspect Exact Diagnostic Data Sent to Server" FontWeight="Bold" Foreground="#94A3B8" FontSize="13"/>
+                                    <TextBlock Text="Only high-level device specifications are transmitted (OS name, RAM, CPU architecture, screen resolution, locale, and optional friend referral tag):" Foreground="#9CA3AF" FontSize="12"/>
+                                    <TextBox x:Name="TelemetryPayloadTextBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Cascadia Code, Consolas, monospace" FontSize="11" Background="#0F172A" Foreground="#38BDF8" Height="140"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
         </TabControl>
 
         <!-- Status Footer -->

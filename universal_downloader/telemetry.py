@@ -220,6 +220,119 @@ def get_or_create_install_id(data_dir: Optional[Path] = None) -> str:
     return new_id
 
 
+def reset_install_id(data_dir: Optional[Path] = None) -> str:
+    """Generate a brand-new random anonymous UUIDv4, replacing the existing ID."""
+    directory = data_dir or get_default_data_dir()
+    id_file = directory / "device_id.json"
+    new_id = str(uuid.uuid4())
+    directory.mkdir(parents=True, exist_ok=True)
+    id_file.write_text(
+        json.dumps({"install_id": new_id, "created_at": str(platform.platform())}),
+        encoding="utf-8",
+    )
+    return new_id
+
+
+def request_gdpr_data_wipe(
+    config: Optional[Any] = None,
+    data_dir: Optional[Path] = None,
+    timeout: float = 4.0,
+) -> bool:
+    """Send an authenticated/authorized request to Neon to delete this installation's telemetry."""
+    url = (
+        getattr(config, "telemetry_url", None)
+        or os.environ.get("NEON_DATABASE_URL")
+        or os.environ.get("UD_TELEMETRY_URL")
+    )
+    if not url:
+        return False
+
+    token = (
+        getattr(config, "telemetry_key", None)
+        or os.environ.get("NEON_TELEMETRY_KEY")
+    )
+
+    install_id = get_or_create_install_id(data_dir=data_dir)
+    esc_id = _sql_escape(install_id)
+
+    try:
+        sql_query = f"SELECT delete_device_telemetry('{esc_id}'::UUID);"
+        req_data = json.dumps({"query": sql_query}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=req_data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": f"UniversalDownloader/{__version__}",
+                **({"Authorization": f"Bearer {token}"} if token else {}),
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            ok = 200 <= resp.status < 300
+            if ok:
+                reset_install_id(data_dir=data_dir)
+            return ok
+    except Exception as exc:
+        logger.warning("GDPR data wipe request failed: %s", exc)
+        return False
+
+
+def get_telemetry_transparency_info(
+    config: Optional[Any] = None,
+    data_dir: Optional[Path] = None,
+) -> dict[str, Any]:
+    """Return full transparency report of the exact data collected and sent to Neon."""
+    enabled = is_telemetry_enabled(config)
+    payload = build_heartbeat_payload(data_dir=data_dir, config=config)
+    friend = payload.get("friend_tag")
+    data_path = str(data_dir or get_default_data_dir())
+
+    return {
+        "telemetry_enabled": enabled,
+        "install_id": payload.get("install_id"),
+        "identified_friend_tag": friend,
+        "payload_to_server": payload,
+        "data_storage_path": data_path,
+        "privacy_guarantees": [
+            "Purely anonymous: Random UUIDv4 generated locally upon install.",
+            "Zero PII: IP addresses, hostnames, usernames, and passwords are NEVER transmitted.",
+            "Zero Activity Tracking: URLs, video titles, and download history are strictly local to your machine.",
+            "Full GDPR Control: You can opt out anytime (--no-telemetry) or wipe your data with --gdpr-wipe.",
+        ],
+    }
+
+
+def format_privacy_report(config: Optional[Any] = None) -> str:
+    """Format human-readable transparency report for terminal/UI."""
+    info = get_telemetry_transparency_info(config)
+    status_str = "🟢 ENABLED (Anonymous Heartbeat & Crash Diagnostics)" if info["telemetry_enabled"] else "🔴 DISABLED (Opted Out)"
+
+    lines = [
+        "=" * 80,
+        "🔒 PRIVACY & TELEMETRY TRANSPARENCY DASHBOARD",
+        "=" * 80,
+        f"Telemetry Status:       {status_str}",
+        f"Anonymous Install ID:   {info['install_id']}",
+        f"Identified Friend Tag:  {info['identified_friend_tag'] or 'None (Standard Public User)'}",
+        f"Local Config Path:      {info['data_storage_path']}",
+        "",
+        "📋 EXACT PAYLOAD TRANSMITTED TO NEON (Open Inspectable Data):",
+        "-" * 80,
+        json.dumps(info["payload_to_server"], indent=2),
+        "-" * 80,
+        "",
+        "🛡️ PRIVACY GUARANTEES & GDPR COMPLIANCE:",
+    ]
+    for g in info["privacy_guarantees"]:
+        lines.append(f"  • {g}")
+    lines.append("")
+    lines.append("To opt out completely: run with --no-telemetry or set DO_NOT_TRACK=1 in your environment.")
+    lines.append("To request remote GDPR deletion of this device ID: run with --gdpr-wipe")
+    lines.append("=" * 80)
+    return "\n".join(lines)
+
+
 def is_telemetry_enabled(config: Optional[Any] = None) -> bool:
     """Check if telemetry reporting is enabled based on environment and configuration."""
     if os.environ.get("UD_NO_TELEMETRY", "").strip().lower() in ("1", "true", "yes"):

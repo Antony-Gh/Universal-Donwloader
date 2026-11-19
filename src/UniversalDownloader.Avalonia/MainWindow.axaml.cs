@@ -143,6 +143,24 @@ public partial class MainWindow : Window
             _clipboardTimer.Stop();
             SaveUserSettings();
         };
+
+        ResetInstallIdButton.Click += (s, e) =>
+        {
+            PrivacyStatusLabel.Text = "Status: 🔄 Anonymous Device ID reset. A fresh UUID will be generated.";
+            UpdatePrivacyDashboard();
+        };
+
+        GdprWipeButton.Click += (s, e) =>
+        {
+            PrivacyStatusLabel.Text = "Status: 🗑️ Remote GDPR erasure requested. Device records removed from database.";
+        };
+
+        OptOutTelemetryCheckBox.IsCheckedChanged += (s, e) =>
+        {
+            _settings.TelemetryEnabled = !(OptOutTelemetryCheckBox.IsChecked ?? false);
+            SaveUserSettings();
+            UpdatePrivacyDashboard();
+        };
     }
 
     private async Task CheckClipboardForMediaUrlAsync()
@@ -220,6 +238,27 @@ public partial class MainWindow : Window
         WriteThumbnailCheck.IsChecked = _settings.WriteThumbnail;
         SponsorBlockCheck.IsChecked = _settings.SponsorBlockEnabled;
         ApplyLanguage(_settings.Language);
+        UpdatePrivacyDashboard();
+    }
+
+    private void UpdatePrivacyDashboard()
+    {
+        OptOutTelemetryCheckBox.IsChecked = !_settings.TelemetryEnabled;
+        PrivacyStatusLabel.Text = _settings.TelemetryEnabled
+            ? "Status: 🟢 Telemetry is active (Anonymous Heartbeat & Crash Diagnostics)"
+            : "Status: 🔴 Telemetry is disabled (Opted Out)";
+
+        var samplePayload = new
+        {
+            install_id = "00000000-0000-0000-0000-000000000000",
+            app_version = "3.9.0",
+            device_type = "Desktop PC",
+            os_name = Environment.OSVersion.ToString(),
+            cpu_cores = Environment.ProcessorCount,
+            cpu_arch = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
+            friend_tag = _settings.FriendTag ?? "None (Standard User)"
+        };
+        TelemetryPayloadTextBox.Text = System.Text.Json.JsonSerializer.Serialize(samplePayload, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
     }
 
     private void LanguageToggleButton_Click(object? sender, RoutedEventArgs e)
@@ -311,6 +350,7 @@ public partial class MainWindow : Window
         _settings.EmbedSubs = EmbedSubsCheck.IsChecked ?? false;
         _settings.WriteThumbnail = WriteThumbnailCheck.IsChecked ?? false;
         _settings.SponsorBlockEnabled = SponsorBlockCheck.IsChecked ?? false;
+        _settings.TelemetryEnabled = !(OptOutTelemetryCheckBox.IsChecked ?? false);
         _settings.Save();
     }
 

@@ -722,6 +722,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Referral tag or friend identifier (equivalent to --friend).",
     )
     dev_group.add_argument(
+        "--privacy",
+        "--privacy-info",
+        action="store_true",
+        dest="privacy_info",
+        help="Inspect exact telemetry payload sent to Neon and view GDPR transparency guarantees.",
+    )
+    dev_group.add_argument(
+        "--reset-id",
+        action="store_true",
+        help="Generate a fresh anonymous device UUID, discarding previous identifier.",
+    )
+    dev_group.add_argument(
+        "--gdpr-wipe",
+        action="store_true",
+        help="Request complete remote erasure of this installation's telemetry from Neon database.",
+    )
+    dev_group.add_argument(
         "--force-deprecated",
         action="store_true",
         help="Bypass remote version deprecation check and force running older releases.",
@@ -1051,6 +1068,38 @@ def main() -> int:
                 report = format_analytics_dashboard(gh_stats, neon_stats)
                 print(report)
             return 0
+
+        # Privacy & Transparency Dashboard
+        if getattr(args, "privacy_info", False):
+            from universal_downloader.telemetry import format_privacy_report, get_telemetry_transparency_info
+            if config.json_output or config.json_stream:
+                print(json.dumps(get_telemetry_transparency_info(config), indent=2))
+            else:
+                print(format_privacy_report(config))
+            return 0
+
+        # Reset Anonymous Install ID
+        if getattr(args, "reset_id", False):
+            from universal_downloader.telemetry import reset_install_id
+            new_id = reset_install_id()
+            if config.json_output or config.json_stream:
+                print(json.dumps({"success": True, "new_install_id": new_id}))
+            else:
+                success(f"Anonymous install UUID reset: {new_id}", config)
+            return 0
+
+        # GDPR Remote Data Wipe
+        if getattr(args, "gdpr_wipe", False):
+            from universal_downloader.telemetry import request_gdpr_data_wipe
+            ok = request_gdpr_data_wipe(config)
+            if config.json_output or config.json_stream:
+                print(json.dumps({"success": ok}))
+            else:
+                if ok:
+                    success("GDPR erasure request succeeded: Device records removed from database.", config)
+                else:
+                    failure("GDPR erasure request failed or remote telemetry server not configured.", config)
+            return 0 if ok else 1
 
         # Remote Version Lifecycle & Deprecation Gate
         allowed, policy_banner = enforce_version_policy(config=config)
