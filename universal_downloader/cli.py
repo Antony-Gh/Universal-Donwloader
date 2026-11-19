@@ -41,6 +41,7 @@ from universal_downloader.native_host import (
 from universal_downloader.protocol import clean_protocol_url, register_protocol, unregister_protocol
 from universal_downloader.updater import update_ytdlp
 from universal_downloader.search import fetch_suggestions, is_valid_search_query, search_youtube
+from universal_downloader.sniffer import sniff_page_media
 from universal_downloader.utils.net import detect_target
 from universal_downloader.watcher import watch_clipboard
 
@@ -135,6 +136,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--suggest",
         metavar="QUERY",
         help="Fetch real-time search autosuggestions for a query string.",
+    )
+    search_group.add_argument(
+        "--sniff",
+        "--extract-page-media",
+        dest="sniff",
+        metavar="PAGE_URL",
+        help="Scan an arbitrary webpage HTML for embedded video, audio, HLS (.m3u8), and DASH (.mpd) streams.",
     )
 
     # Audio options
@@ -863,6 +871,39 @@ def main() -> int:
                     print(json.dumps({"success": False, "query": query, "error": str(exc)}))
                 else:
                     failure(f"Suggestion lookup failed: {exc}", config)
+                return 1
+
+        # Generic webpage media sniffer mode
+        if getattr(args, "sniff", None):
+            page_url = clean_protocol_url(str(args.sniff).strip())
+            try:
+                discovered = sniff_page_media(page_url, timeout=config.timeout)
+                payload = {
+                    "success": True,
+                    "url": page_url,
+                    "count": len(discovered),
+                    "media": [m.to_dict() for m in discovered],
+                }
+                if config.json_output or config.json_stream:
+                    print(json.dumps(payload, indent=2))
+                else:
+                    print_banner(config)
+                    if not discovered:
+                        info(f"No embedded media streams found on {page_url}.", config)
+                    else:
+                        info(f"Discovered {len(discovered)} embedded media item(s):", config)
+                        print("-" * 80)
+                        for idx, item in enumerate(discovered, start=1):
+                            mime = f" ({item.mime_type})" if item.mime_type else ""
+                            print(f"[{idx:2d}] [{item.media_type.upper()}] via {item.source}{mime}")
+                            print(f"     URL: {item.url}")
+                        print("-" * 80)
+                return 0
+            except Exception as exc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "url": page_url, "error": str(exc)}))
+                else:
+                    failure(f"Media sniff failed: {exc}", config)
                 return 1
 
         # Metadata inspection mode
