@@ -1467,7 +1467,7 @@ class DownloaderRepository(private val appContext: Context) {
         }
     }
 
-    suspend fun sendDeviceHeartbeat(installId: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun sendDeviceHeartbeat(installId: String, friendTag: String? = null): Boolean = withContext(Dispatchers.IO) {
         try {
             val neonUrl = System.getenv("NEON_DATABASE_URL")
                 ?: System.getenv("UD_TELEMETRY_URL")
@@ -1515,8 +1515,9 @@ class DownloaderRepository(private val appContext: Context) {
             val escScreen = screenRes.replace("'", "''")
             val escConn = connType.replace("'", "''")
             val escRam = if (ramGb != null) String.format(java.util.Locale.US, "%.1f", ramGb) else "NULL"
+            val escFriend = if (!friendTag.isNullOrBlank()) "'${friendTag.replace("'", "''")}'" else "NULL"
 
-            val sql = "SELECT record_device_heartbeat('$escId'::UUID, '$escType', '$escOs', '$escModel', '$escVer', '$escLocale', '$escTz', $cpuCores, '$escArch', $escRam, '$escScreen', '$escConn');"
+            val sql = "SELECT record_device_heartbeat('$escId'::UUID, '$escType', '$escOs', '$escModel', '$escVer', '$escLocale', '$escTz', $cpuCores, '$escArch', $escRam, '$escScreen', '$escConn', $escFriend);"
             val jsonPayload = org.json.JSONObject().put("query", sql).toString()
 
             val conn = (URL(neonUrl).openConnection() as HttpURLConnection).apply {

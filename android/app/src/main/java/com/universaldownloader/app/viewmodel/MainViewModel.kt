@@ -126,7 +126,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val store = (getApplication<Application>() as UniversalDownloaderApp).preferencesStore
             if (store.isTelemetryEnabled()) {
                 val installId = store.getOrCreateInstallId()
-                repo.sendDeviceHeartbeat(installId)
+                val friendTag = store.getFriendTag()
+                repo.sendDeviceHeartbeat(installId, friendTag)
             }
         }
     }

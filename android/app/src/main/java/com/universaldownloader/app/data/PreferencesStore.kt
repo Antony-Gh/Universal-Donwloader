@@ -64,6 +64,12 @@ class PreferencesStore(context: Context) {
         prefs.edit().putBoolean(KEY_TELEMETRY_ENABLED, enabled).apply()
     }
 
+    fun getFriendTag(): String? = prefs.getString(KEY_FRIEND_TAG, null)
+
+    fun setFriendTag(tag: String?) {
+        prefs.edit().putString(KEY_FRIEND_TAG, tag?.trim()?.lowercase()).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "universal_downloader_prefs"
         private const val KEY_QUALITY = "quality"
@@ -78,5 +84,6 @@ class PreferencesStore(context: Context) {
         private const val KEY_LANGUAGE = "language"
         private const val KEY_INSTALL_ID = "install_id"
         private const val KEY_TELEMETRY_ENABLED = "telemetry_enabled"
+        private const val KEY_FRIEND_TAG = "friend_tag"
     }
 }
