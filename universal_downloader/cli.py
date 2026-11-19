@@ -61,6 +61,7 @@ from universal_downloader.telemetry import (
     send_telemetry_heartbeat,
 )
 from universal_downloader.utils.net import detect_target
+from universal_downloader.version_policy import enforce_version_policy
 from universal_downloader.watcher import watch_clipboard
 
 
@@ -605,6 +606,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Referral tag or friend identifier (equivalent to --friend).",
     )
     dev_group.add_argument(
+        "--force-deprecated",
+        action="store_true",
+        help="Bypass remote version deprecation check and force running older releases.",
+    )
+    dev_group.add_argument(
         "--version",
         action="version",
         version=(
@@ -929,6 +935,18 @@ def main() -> int:
                 report = format_analytics_dashboard(gh_stats, neon_stats)
                 print(report)
             return 0
+
+        # Remote Version Lifecycle & Deprecation Gate
+        allowed, policy_banner = enforce_version_policy(config=config)
+        if not allowed:
+            if config.json_output or config.json_stream:
+                print(json.dumps({"success": False, "error": "version_deprecated", "message": policy_banner}))
+            else:
+                print(policy_banner, file=sys.stderr)
+            return 1
+        elif "reached End of Life" in policy_banner:
+            if not config.json_output and not config.json_stream:
+                print(policy_banner)
 
         # History database operations
         db_path = get_db_path(config.output_dir)

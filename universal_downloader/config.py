@@ -463,6 +463,7 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         no_check_certificate=getattr(args, "no_check_certificate", False) or parse_config_bool(json_config.get("no_check_certificate")),
         cookies_file=Path(cookies_file_value).expanduser() if cookies_file_value else None,
         cookies_from_browser=cookies_browser_value.strip() if cookies_browser_value else None,
+        force_deprecated=getattr(args, "force_deprecated", False) or parse_config_bool(env_value(dotenv, "FORCE_DEPRECATED")),
     )
 
     if config.retries > 20:

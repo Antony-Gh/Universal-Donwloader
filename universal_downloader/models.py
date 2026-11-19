@@ -107,6 +107,7 @@ class AppConfig:
     no_check_certificate: bool = False
     cookies_file: Optional[Path] = None
     cookies_from_browser: Optional[str] = None
+    force_deprecated: bool = False
 
 
 @dataclass
