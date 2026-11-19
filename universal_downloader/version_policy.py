@@ -1,7 +1,8 @@
 """Remote version lifecycle and deprecation enforcement for Universal Media Downloader.
 
 Allows maintainers to deprecate or retire older application versions (e.g. disabling versions < v3.6.0)
-remotely via Neon serverless PostgreSQL or GitHub raw version_policy.json fallback.
+remotely by editing the public ``version_policy.json`` in the GitHub repository. The CLI, Desktop,
+and Android clients all read this same file, so one edit reaches every platform.
 """
 
 from __future__ import annotations
@@ -64,57 +65,22 @@ def parse_version_tuple(version_str: str) -> tuple[int, ...]:
 
 
 def fetch_remote_version_policy(
-    neon_url: Optional[str] = None,
-    auth_token: Optional[str] = None,
-    raw_github_url: str = DEFAULT_RAW_POLICY_URL,
+    raw_github_url: Optional[str] = None,
     timeout: float = 3.0,
 ) -> dict[str, Any]:
-    """Retrieve version policy from Neon database or GitHub raw fallback.
+    """Retrieve the version policy from the public GitHub ``version_policy.json``.
 
-    Returns DEFAULT_FALLBACK_POLICY on complete network timeout/failure.
+    This is the single source of truth shared by the CLI, Desktop, and Android
+    clients. It needs no credentials, so every installed copy can reach it.
+    ``UD_VERSION_POLICY_URL`` may override the URL (useful for testing).
+
+    Returns DEFAULT_FALLBACK_POLICY on network timeout/failure.
     """
-    url = (
-        neon_url
-        or os.environ.get("NEON_DATABASE_URL")
-        or os.environ.get("UD_TELEMETRY_URL")
-    )
-    token = (
-        auth_token
-        or os.environ.get("NEON_TELEMETRY_KEY")
-    )
+    url = raw_github_url or os.environ.get("UD_VERSION_POLICY_URL") or DEFAULT_RAW_POLICY_URL
 
-    # 1. Try Neon Serverless Postgres SQL endpoint
-    if url:
-        try:
-            req_data = json.dumps({"query": "SELECT get_version_policy();"}).encode("utf-8")
-            req = urllib.request.Request(
-                url,
-                data=req_data,
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": f"UniversalDownloader/{__version__}",
-                    **({"Authorization": f"Bearer {token}"} if token else {}),
-                },
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                if 200 <= resp.status < 300:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    rows = data.get("rows", [])
-                    if rows:
-                        row = rows[0]
-                        res = row.get("get_version_policy") if isinstance(row, dict) else row[0]
-                        if isinstance(res, dict):
-                            return {**DEFAULT_FALLBACK_POLICY, **res}
-                        elif isinstance(res, str):
-                            return {**DEFAULT_FALLBACK_POLICY, **json.loads(res)}
-        except Exception as exc:
-            logger.debug("Neon version policy query failed, falling back to GitHub: %s", exc)
-
-    # 2. Try Raw GitHub version_policy.json
     try:
         req = urllib.request.Request(
-            raw_github_url,
+            url,
             headers={
                 "User-Agent": f"UniversalDownloader/{__version__}",
                 "Accept": "application/json",
@@ -123,11 +89,12 @@ def fetch_remote_version_policy(
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if 200 <= resp.status < 300:
                 raw_json = json.loads(resp.read().decode("utf-8"))
-                return {**DEFAULT_FALLBACK_POLICY, **raw_json}
+                if isinstance(raw_json, dict):
+                    return {**DEFAULT_FALLBACK_POLICY, **raw_json}
     except Exception as exc:
-        logger.debug("GitHub raw version policy fetch failed, falling back to local defaults: %s", exc)
+        logger.debug("Version policy fetch failed, falling back to embedded defaults: %s", exc)
 
-    # 3. Safe embedded fallback
+    # Embedded fallback when offline
     return dict(DEFAULT_FALLBACK_POLICY)
 
 
@@ -210,21 +177,20 @@ def enforce_version_policy(
     if allow_force or getattr(config, "force_deprecated", False):
         return True, "Deprecation check bypassed via --force-deprecated."
 
-    policy = fetch_remote_version_policy(
-        neon_url=getattr(config, "telemetry_url", None),
-        auth_token=getattr(config, "telemetry_key", None),
-    )
+    policy = fetch_remote_version_policy()
 
     is_allowed, status_code, msg = evaluate_version_support(current_version, policy)
 
-    mode = policy.get("enforcement_mode", "block").strip().lower()
+    mode = str(policy.get("enforcement_mode", "block")).strip().lower()
 
     if not is_allowed:
+        if mode == "allow":
+            # Policy switched off remotely: never warn or block
+            return True, msg
         banner = render_sunset_banner(current_version, policy)
         if mode == "block":
             return False, banner
-        else:
-            # Mode 'warn': print warning but allow user to proceed
-            return True, banner
+        # Mode 'warn': show the banner but let the user proceed
+        return True, banner
 
     return True, msg
