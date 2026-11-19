@@ -435,6 +435,14 @@ class YTDLPExtractor:
                 LOGGER.info("FFmpeg not detected; downloading best pre-merged video+audio stream.")
                 options["format"] = "best[acodec!=none][vcodec!=none]/best"
 
+        # EBU R128 (-14 LUFS) audio loudness normalization
+        if getattr(self.config, "normalize_audio", False) and has_ffmpeg:
+            pp_args = dict(options.get("postprocessor_args") or {})
+            ff_args = list(pp_args.get("ffmpeg") or [])
+            ff_args.extend(["-af", "loudnorm=I=-14:TP=-1.5:LRA=11"])
+            pp_args["ffmpeg"] = ff_args
+            options["postprocessor_args"] = pp_args
+
         # Metadata embedding
         if self.config.embed_metadata:
             if has_ffmpeg:

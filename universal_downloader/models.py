@@ -55,6 +55,7 @@ class AppConfig:
     audio_only: bool = False
     audio_format: str = "mp3"
     audio_quality: str = "192k"
+    normalize_audio: bool = False
     write_metadata: bool = True
     embed_metadata: bool = False
     embed_thumbnail: bool = False

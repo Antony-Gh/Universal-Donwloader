@@ -169,6 +169,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Audio quality (e.g. 192k, 320k, or 0 for best VBR). Default: 192k.",
     )
+    audio_group.add_argument(
+        "--normalize-audio",
+        action="store_true",
+        help="Normalize audio loudness to -14 LUFS (EBU R128 streaming standard) via FFmpeg loudnorm filter.",
+    )
 
     # Metadata & Artwork
     meta_group = parser.add_argument_group("Metadata & Artwork")
@@ -973,6 +978,7 @@ def main() -> int:
                     output_dir=out_dir,
                     audio_quality=config.audio_quality,
                     remux_only=bool(local_remux_fmt),
+                    normalize_audio=config.normalize_audio,
                 )
                 if config.json_output or config.json_stream:
                     print(

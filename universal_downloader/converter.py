@@ -31,6 +31,7 @@ def build_ffmpeg_convert_cmd(
     *,
     audio_quality: str = "192k",
     remux_only: bool = False,
+    normalize_audio: bool = False,
 ) -> list[str]:
     """Build a safe argv list for FFmpeg conversion or lossless container remuxing."""
     fmt = (target_format or "").strip().lower().lstrip(".")
@@ -63,13 +64,19 @@ def build_ffmpeg_convert_cmd(
             cmd.extend(["-c:a", "libopus", "-b:a", audio_quality])
         elif fmt == "wav":
             cmd.extend(["-c:a", "pcm_s16le"])
+        if normalize_audio:
+            cmd.extend(["-af", "loudnorm=I=-14:TP=-1.5:LRA=11"])
     else:
         if remux_only:
             cmd.extend(["-c", "copy"])
         elif fmt == "webm":
             cmd.extend(["-c:v", "libvpx-vp9", "-c:a", "libopus", "-b:a", audio_quality])
+            if normalize_audio:
+                cmd.extend(["-af", "loudnorm=I=-14:TP=-1.5:LRA=11"])
         else:
             cmd.extend(["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac", "-b:a", audio_quality])
+            if normalize_audio:
+                cmd.extend(["-af", "loudnorm=I=-14:TP=-1.5:LRA=11"])
 
         if fmt in {"mp4", "mov"}:
             cmd.extend(["-movflags", "+faststart"])
@@ -85,6 +92,7 @@ def convert_media_file(
     output_dir: Optional[Path] = None,
     audio_quality: str = "192k",
     remux_only: bool = False,
+    normalize_audio: bool = False,
     ffmpeg_path: Optional[Path] = None,
 ) -> Path:
     """Convert or remux a local media file into ``target_format`` using FFmpeg."""
@@ -115,6 +123,7 @@ def convert_media_file(
         fmt,
         audio_quality=audio_quality,
         remux_only=remux_only,
+        normalize_audio=normalize_audio,
     )
     LOGGER.debug("Running FFmpeg convert command: %s", cmd)
 

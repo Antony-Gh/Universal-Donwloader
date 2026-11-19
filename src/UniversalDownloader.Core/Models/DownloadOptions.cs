@@ -9,6 +9,7 @@ public class DownloadOptions
     public bool AudioOnly { get; set; }
     public string AudioFormat { get; set; } = "mp3";
     public string AudioQuality { get; set; } = "192k";
+    public bool NormalizeAudio { get; set; }
 
     public bool EmbedMetadata { get; set; } = true;
     public bool EmbedThumbnail { get; set; } = true;
@@ -80,6 +81,7 @@ public class DownloadOptions
         if (EmbedMetadata) args.Add("--embed-metadata");
         if (EmbedThumbnail) args.Add("--embed-thumbnail");
         if (WriteThumbnail) args.Add("--write-thumbnail");
+        if (NormalizeAudio) args.Add("--normalize-audio");
 
         if (WriteSubs) args.Add("--write-subs");
         if (EmbedSubs) args.Add("--embed-subs");

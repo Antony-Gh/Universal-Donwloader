@@ -177,6 +177,12 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         or "192k"
     )
 
+    normalize_audio = (
+        getattr(args, "normalize_audio", False)
+        or parse_config_bool(env_value(dotenv, "NORMALIZE_AUDIO"))
+        or parse_config_bool(json_config.get("normalize_audio"))
+    )
+
     # Metadata & Artwork
     write_metadata = (
         not getattr(args, "no_metadata", False)
@@ -365,6 +371,7 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         audio_only=audio_only,
         audio_format=audio_format.lower().lstrip("."),
         audio_quality=audio_quality,
+        normalize_audio=normalize_audio,
         write_metadata=write_metadata,
         embed_metadata=embed_metadata,
         embed_thumbnail=embed_thumbnail,
