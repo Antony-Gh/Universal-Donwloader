@@ -69,3 +69,34 @@ def test_detect_target():
     assert target.platform == Platform.YOUTUBE
     assert target.content_type == ContentType.VIDEO
     assert target.is_profile_candidate is False
+
+
+def test_extract_youtube_video_id_all_link_forms():
+    from universal_downloader.utils.net import extract_youtube_video_id
+
+    vid = 'dQw4w9WgXcQ'
+    forms = [
+        f'https://youtu.be/{vid}?si=abc',
+        f'https://www.youtube.com/watch?v={vid}&feature=shared',
+        f'https://www.youtube.com/watch?list=PL1&v={vid}',
+        f'https://m.youtube.com/shorts/{vid}',
+        f'https://www.youtube.com/embed/{vid}',
+        f'https://www.youtube.com/live/{vid}?feature=share',
+        f'https://www.youtube-nocookie.com/embed/{vid}',
+    ]
+    for form in forms:
+        assert extract_youtube_video_id(form) == vid, form
+    assert extract_youtube_video_id('https://example.com/watch?v=short') is None
+    assert extract_youtube_video_id('') is None
+
+
+def test_normalize_youtube_url_canonicalises_but_keeps_playlists():
+    from universal_downloader.utils.net import normalize_youtube_url
+
+    vid = 'dQw4w9WgXcQ'
+    canonical = f'https://www.youtube.com/watch?v={vid}'
+    assert normalize_youtube_url(f'https://youtu.be/{vid}?si=tracking') == canonical
+    assert normalize_youtube_url(f'https://youtube.com/shorts/{vid}') == canonical
+    playlist = f'https://www.youtube.com/watch?v={vid}&list=PL123'
+    assert normalize_youtube_url(playlist) == playlist
+    assert detect_target(f'https://youtu.be/{vid}?si=x').normalized_url == canonical

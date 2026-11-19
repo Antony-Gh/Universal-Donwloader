@@ -77,6 +77,18 @@ class DownloaderRepository(private val appContext: Context) {
         }
     }
 
+    companion object {
+        /** youtu.be/ID, /embed/ID, /live/ID, /shorts/ID, /v/ID and ?v=ID / &v=ID (11-char IDs). */
+        private val YOUTUBE_ID_REGEX = Regex(
+            """(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:embed/|live/|shorts/|v/)|[?&]v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])""",
+            RegexOption.IGNORE_CASE,
+        )
+
+        /** Returns the 11-character YouTube video ID found in [value], or null. */
+        fun extractYoutubeVideoId(value: String): String? =
+            YOUTUBE_ID_REGEX.find(value.trim())?.groupValues?.get(1)
+    }
+
     fun normalizeUrl(rawInput: String): String {
         val trimmed = rawInput.trim().trim('"', '\'')
         if (trimmed.isEmpty()) return ""
@@ -89,6 +101,16 @@ class DownloaderRepository(private val appContext: Context) {
             val uri = Uri.parse(extracted)
             val host = (uri.host ?: "").lowercase(Locale.US)
             val path = uri.path ?: ""
+
+            // Canonicalise single-video YouTube links (drops si=/feature= tracking); keep playlists intact
+            val isYoutubeHost = host.contains("youtube.com") || host.contains("youtu.be") ||
+                host.contains("youtube-nocookie.com")
+            if (isYoutubeHost &&
+                uri.getQueryParameter("list").isNullOrBlank() &&
+                !path.lowercase(Locale.US).contains("/playlist")
+            ) {
+                extractYoutubeVideoId(extracted)?.let { return "https://www.youtube.com/watch?v=$it" }
+            }
 
             // Strip noisy tracking params on Instagram & TikTok media URLs
             val isInstagramMedia = host.contains("instagram.com") &&

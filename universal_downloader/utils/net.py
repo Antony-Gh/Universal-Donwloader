@@ -114,6 +114,35 @@ TIKTOK_SHORT_DOMAINS = frozenset({"vt.tiktok.com", "vm.tiktok.com"})
 TIKTOK_VIDEO_PATH_RE = re.compile(r"/video/\d+", re.IGNORECASE)
 INSTAGRAM_MEDIA_PATH_RE = re.compile(r"/(?:reel|reels|p|tv)/[^/]+", re.IGNORECASE)
 
+# Recognises every common YouTube video link form: youtu.be/ID, /embed/ID, /live/ID,
+# /shorts/ID, /v/ID and ?v=ID / &v=ID (11-character IDs).
+YOUTUBE_VIDEO_ID_RE = re.compile(
+    r"(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:embed/|live/|shorts/|v/)|[?&]v=)"
+    r"([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])",
+    re.IGNORECASE,
+)
+YOUTUBE_BARE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+
+
+def extract_youtube_video_id(value: str) -> Optional[str]:
+    """Return the 11-character YouTube video ID found in a URL, or None."""
+    if not value:
+        return None
+    match = YOUTUBE_VIDEO_ID_RE.search(value.strip())
+    return match.group(1) if match else None
+
+
+def canonical_youtube_url(value: str) -> Optional[str]:
+    """Return https://www.youtube.com/watch?v=ID for any YouTube video link form.
+
+    Tracking parameters (si, feature, pp, ...) are dropped. Links that carry a playlist
+    (list=) are left untouched by callers so playlist downloads keep working.
+    """
+    video_id = extract_youtube_video_id(value)
+    if not video_id:
+        return None
+    return f"https://www.youtube.com/watch?v={video_id}"
+
 
 def normalize_url(value: str) -> str:
     """Validate and normalize arbitrary URL inputs."""
@@ -222,6 +251,22 @@ def normalize_instagram_url(url: str) -> str:
         )
 
     return url
+
+
+def normalize_youtube_url(url: str) -> str:
+    """Canonicalise single-video YouTube links (youtu.be, shorts, embed, live, ?v=).
+
+    Playlist links (list=) and channel/profile links are returned unchanged.
+    """
+    url = normalize_url(url)
+    parsed = urllib.parse.urlparse(url)
+    query = parsed.query.lower()
+
+    if "list=" in query or "/playlist" in parsed.path.lower():
+        return url
+
+    canonical = canonical_youtube_url(url)
+    return canonical or url
 
 
 def domain_matches(domain: str, candidate: str) -> bool:
@@ -356,6 +401,8 @@ def detect_target(url: str, timeout: int = 30) -> DetectedTarget:
         normalized = normalize_tiktok_url(normalized, timeout=timeout)
     elif platform == Platform.INSTAGRAM:
         normalized = normalize_instagram_url(normalized)
+    elif platform == Platform.YOUTUBE:
+        normalized = normalize_youtube_url(normalized)
 
     content_type = detect_content_type(normalized, platform)
 
