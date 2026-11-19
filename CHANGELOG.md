@@ -2,6 +2,24 @@
 
 All notable changes to **Universal Media Downloader** are documented in this file.
 
+## [3.6.0] - 2026-11-19
+
+### Added
+
+- **Remote Version Lifecycle & Deprecation Enforcement**:
+  - Remote kill-switch and deprecation gate disabling client builds prior to **v3.6.0** (like Windows ending support for Win7).
+  - Remotely configurable via Neon PostgreSQL `app_version_policy` table and `get_version_policy()` stored procedure with offline `version_policy.json` raw fallback.
+  - Granular policy control: `min_supported_version`, `latest_version`, `blocked_versions` blacklist, `sunset_message`, `download_url`, and `enforcement_mode` (`block`, `warn`, `allow`).
+  - Terminal CLI (`universal_downloader.version_policy`): Renders ASCII End-of-Life warning and safely halts execution before extractor initialization.
+  - Maintainer / Debug bypass support via `--force-deprecated` CLI flag and configuration option.
+  - Avalonia Desktop (.NET Core): Real-time policy checking with non-blocking async query, top-bar red End-of-Life banner, and download button disablement.
+  - Android Jetpack Compose: `AppUpdateChecker.checkVersionPolicy()`, persistent UI state, and red End-of-Life banner with one-click direct upgrade button.
+
+### Verification
+
+- 142 Python unit and integration tests passing (`pytest tests/test_version_policy.py`).
+- `.NET Core` (`UniversalDownloader.Core`), Avalonia Desktop (`UniversalDownloader.Avalonia`), and Android Release Kotlin (`compileReleaseKotlin`) all build cleanly with 0 errors.
+
 ## [3.4.0] - 2026-11-19
 
 ### Added
