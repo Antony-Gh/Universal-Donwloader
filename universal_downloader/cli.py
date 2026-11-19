@@ -1856,5 +1856,10 @@ def main() -> int:
         return 130
 
     except Exception as exc:
+        try:
+            from universal_downloader.telemetry import send_crash_report
+            send_crash_report(exc, client_platform="CLI", async_send=False)
+        except Exception:
+            pass
         print(f"✗ Unexpected application error\n\n{exc}", file=sys.stderr)
         return 1

@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import platform
+import re
 import sys
 import threading
 import urllib.error
@@ -535,6 +536,112 @@ def send_telemetry_heartbeat(
         return True
     else:
         return push_heartbeat_to_neon(url, token, payload, timeout=timeout)
+
+
+def sanitize_stack_trace(trace_text: str) -> str:
+    """Sanitize stack traces to remove local usernames, home directory paths, or tokens."""
+    if not trace_text:
+        return ""
+    sanitized = re.sub(r"[A-Za-z]:\\[Uu]sers\\[^\\]+\\", lambda _: r"C:\Users\[USER]\\", trace_text)
+    sanitized = re.sub(r"/(?:home|Users)/[^/]+/", "/home/[USER]/", sanitized)
+    return sanitized
+
+
+def push_crash_report_to_neon(
+    endpoint_url: str,
+    auth_token: Optional[str],
+    payload: dict[str, Any],
+    timeout: float = 4.0,
+) -> bool:
+    """Execute record_crash_report stored procedure on Neon via HTTP SQL API."""
+    try:
+        esc_id = _sql_escape(payload.get("install_id"))
+        esc_ver = _sql_escape(payload.get("app_version"))
+        esc_platform = _sql_escape(payload.get("client_platform", "CLI"))
+        esc_os = _sql_escape(payload.get("os_name"))
+        esc_err_type = _sql_escape(payload.get("error_type", "UnknownError"))
+        esc_err_msg = _sql_escape(payload.get("error_message", ""))
+        esc_trace = _sql_escape(payload.get("stack_trace", ""))
+
+        sql_query = (
+            f"SELECT record_crash_report("
+            f"'{esc_id}'::UUID, "
+            f"'{esc_ver}', "
+            f"'{esc_platform}', "
+            f"'{esc_os}', "
+            f"'{esc_err_type}', "
+            f"'{esc_err_msg}', "
+            f"'{esc_trace}'"
+            ");"
+        )
+
+        req_data = json.dumps({"query": sql_query}).encode("utf-8")
+        req = urllib.request.Request(
+            endpoint_url,
+            data=req_data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": f"UniversalDownloader/{__version__}",
+                **({"Authorization": f"Bearer {auth_token}"} if auth_token else {}),
+            },
+            method="POST",
+        )
+
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return 200 <= resp.status < 300
+    except Exception as exc:
+        logger.debug("Neon crash reporting push failed: %s", exc)
+        return False
+
+
+def send_crash_report(
+    exc: BaseException,
+    client_platform: str = "CLI",
+    config: Optional[Any] = None,
+    async_send: bool = True,
+    timeout: float = 4.0,
+) -> bool:
+    """Send an anonymous crash report with sanitized stack trace to Neon."""
+    if not is_telemetry_enabled(config):
+        return False
+
+    url = (
+        getattr(config, "telemetry_url", None)
+        or os.environ.get("NEON_DATABASE_URL")
+        or os.environ.get("UD_TELEMETRY_URL")
+    )
+    if not url:
+        return False
+
+    token = (
+        getattr(config, "telemetry_key", None)
+        or os.environ.get("NEON_TELEMETRY_KEY")
+    )
+
+    import traceback
+    raw_trace = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    clean_trace = sanitize_stack_trace(raw_trace)
+    clean_msg = sanitize_stack_trace(str(exc))
+
+    payload = {
+        "install_id": get_or_create_install_id(),
+        "app_version": __version__,
+        "client_platform": client_platform,
+        "os_name": detect_os_name(),
+        "error_type": type(exc).__name__,
+        "error_message": clean_msg,
+        "stack_trace": clean_trace,
+    }
+
+    def _worker() -> None:
+        push_crash_report_to_neon(url, token, payload, timeout=timeout)
+
+    if async_send:
+        t = threading.Thread(target=_worker, name="UD-CrashReporter", daemon=True)
+        t.start()
+        return True
+    else:
+        return push_crash_report_to_neon(url, token, payload, timeout=timeout)
 
 
 # ==============================================================================

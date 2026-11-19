@@ -29,7 +29,18 @@ class UniversalDownloaderApp : Application() {
         historyStore = HistoryStore(this)
         preferencesStore = PreferencesStore(this)
         subscriptionStore = SubscriptionStore(this)
+        setupCrashHandler()
         createNotificationChannels()
+    }
+
+    private fun setupCrashHandler() {
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                android.util.Log.e("UniversalDownloader", "Uncaught application crash", throwable)
+            } catch (_: Exception) {}
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
     }
 
     private fun createNotificationChannels() {

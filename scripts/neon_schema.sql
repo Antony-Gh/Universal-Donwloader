@@ -266,3 +266,63 @@ BEGIN
     );
 END;
 $$;
+
+
+-- 5. Anonymous Crash Reports Table & Ingestion
+CREATE TABLE IF NOT EXISTS app_crash_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    install_id UUID DEFAULT NULL,
+    app_version VARCHAR(32) NOT NULL DEFAULT '0.0.0',
+    client_platform VARCHAR(32) NOT NULL DEFAULT 'Unknown', -- 'CLI', 'Desktop', 'Android'
+    os_name VARCHAR(64) DEFAULT NULL,
+    error_type VARCHAR(128) NOT NULL,
+    error_message TEXT NOT NULL,
+    stack_trace TEXT,
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_crash_reports_occurred ON app_crash_reports (occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_crash_reports_app_version ON app_crash_reports (app_version);
+CREATE INDEX IF NOT EXISTS idx_crash_reports_client_platform ON app_crash_reports (client_platform);
+
+CREATE OR REPLACE FUNCTION record_crash_report(
+    p_install_id UUID,
+    p_app_version VARCHAR,
+    p_client_platform VARCHAR,
+    p_os_name VARCHAR,
+    p_error_type VARCHAR,
+    p_error_message TEXT,
+    p_stack_trace TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_id UUID;
+BEGIN
+    INSERT INTO app_crash_reports (
+        install_id,
+        app_version,
+        client_platform,
+        os_name,
+        error_type,
+        error_message,
+        stack_trace,
+        occurred_at
+    ) VALUES (
+        p_install_id,
+        p_app_version,
+        p_client_platform,
+        p_os_name,
+        p_error_type,
+        p_error_message,
+        p_stack_trace,
+        NOW()
+    )
+    RETURNING id INTO v_id;
+
+    RETURN jsonb_build_object('success', true, 'crash_id', v_id);
+END;
+$$;
+
