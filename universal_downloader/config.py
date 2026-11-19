@@ -231,6 +231,23 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         or json_config.get("output_template")
     )
 
+    organize = (
+        getattr(args, "organize", None)
+        or env_value(dotenv, "ORGANIZE")
+        or json_config.get("organize")
+        or "platform"
+    ).strip().lower()
+    if organize not in {"none", "platform", "uploader", "date"}:
+        raise ConfigurationError(
+            f"Invalid organize mode '{organize}'. Expected one of: none, platform, uploader, date."
+        )
+
+    clean_filenames = (
+        getattr(args, "clean_filenames", False)
+        or parse_config_bool(env_value(dotenv, "CLEAN_FILENAMES"))
+        or parse_config_bool(json_config.get("clean_filenames"))
+    )
+
     download_archive_val = (
         getattr(args, "download_archive", None)
         or env_value(dotenv, "DOWNLOAD_ARCHIVE")
@@ -356,6 +373,8 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         sub_langs=sub_langs,
         auto_subs=auto_subs,
         output_template=output_template,
+        organize=organize,
+        clean_filenames=clean_filenames,
         download_archive=Path(download_archive_val).expanduser() if download_archive_val else None,
         concurrency=max(1, min(16, concurrency_val)),
         limit_rate=limit_rate,

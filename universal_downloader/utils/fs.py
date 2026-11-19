@@ -41,6 +41,65 @@ def sanitize_filename(name: str, fallback: str = "download") -> str:
     return name[:180].rstrip(" .") or fallback
 
 
+_CLICKBAIT_TAGS_RE = re.compile(
+    r"[\(\[\{]\s*(?:"
+    r"official\s+(?:music\s+|lyric\s+|hd\s+|4k\s+)?(?:video|audio|visualizer|mv)"
+    r"|music\s+video|lyric\s+video|lyrics?|audio\s+only|full\s+(?:video|song|hd)"
+    r"|visualizer|remastered(?:\s+\d{4})?|mv|hd|hq|uhd|4k|8k|1080p|720p|60\s*fps|4k\s*60\s*fps"
+    r"|explicit|clean\s+version|radio\s+edit"
+    r")\s*[\)\]\}]",
+    re.IGNORECASE,
+)
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F300-\U0001FAFF"
+    "\U00002600-\U000027BF"
+    "\U0000FE00-\U0000FE0F"
+    "\U0001F1E6-\U0001F1FF"
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def clean_title(title: str, fallback: str = "download") -> str:
+    """Strip clickbait brackets, resolution badges, and emojis from media titles."""
+    raw = html.unescape(title or "")
+    cleaned = _CLICKBAIT_TAGS_RE.sub("", raw)
+    cleaned = _EMOJI_RE.sub("", cleaned)
+    # Remove empty brackets or stray separator sequences left behind
+    cleaned = re.sub(r"[\(\[\{]\s*[\)\]\}]", "", cleaned)
+    cleaned = re.sub(r"\s*[\|]\s*$", "", cleaned)
+    cleaned = re.sub(r"\s+-\s*$", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -|.")
+
+    if not cleaned:
+        return sanitize_filename(raw, fallback=fallback)
+    return sanitize_filename(cleaned, fallback=fallback)
+
+
+def rename_with_clean_title(path: Path, title: Optional[str] = None) -> Path:
+    """Rename a downloaded file in-place using its sanitized, de-cluttered title."""
+    if not path.exists() or not path.is_file():
+        return path
+
+    target_stem = clean_title(title or path.stem, fallback=path.stem or "download")
+    if target_stem == path.stem:
+        return path
+
+    candidate = path.parent / f"{target_stem}{path.suffix}"
+    if candidate.resolve() == path.resolve():
+        return path
+
+    final_path = unique_path(candidate)
+    ensure_inside_directory(path.parent, final_path)
+    try:
+        path.rename(final_path)
+        return final_path.resolve()
+    except OSError as exc:
+        LOGGER.debug("Could not rename '%s' to '%s': %s", path, final_path, exc)
+        return path
+
+
 def ensure_inside_directory(base: Path, candidate: Path) -> Path:
     """Enforce that candidate path stays securely inside base directory."""
     base_resolved = base.resolve()

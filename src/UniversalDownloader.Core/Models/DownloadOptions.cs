@@ -21,6 +21,8 @@ public class DownloadOptions
 
     public string? OutputDirectory { get; set; }
     public string? OutputTemplate { get; set; }
+    public string? Organize { get; set; }
+    public bool CleanFilenames { get; set; }
 
     public string? DownloadSections { get; set; }
     public string? StartTime { get; set; }
@@ -97,6 +99,14 @@ public class DownloadOptions
             args.Add("--output-template");
             args.Add(OutputTemplate);
         }
+
+        if (!string.IsNullOrWhiteSpace(Organize))
+        {
+            args.Add("--organize");
+            args.Add(Organize);
+        }
+
+        if (CleanFilenames) args.Add("--clean-filenames");
 
         if (!string.IsNullOrWhiteSpace(DownloadSections))
         {

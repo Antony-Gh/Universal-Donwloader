@@ -45,6 +45,7 @@ from universal_downloader.progress import ProgressRenderer, emit_json_event
 from universal_downloader.utils.fs import (
     ensure_inside_directory,
     platform_directory,
+    rename_with_clean_title,
     write_metadata_file,
 )
 from universal_downloader.utils.net import detect_target
@@ -59,8 +60,15 @@ class DownloadEngine:
         self.profile_resolver = ProfilePhotoResolver(config, self.extractor)
 
     def choose_output_template(self, target: DetectedTarget) -> str:
+        organize = (getattr(self.config, "organize", "platform") or "platform").strip().lower()
+
+        def _base_for(root: Path) -> Path:
+            if organize == "none":
+                return root
+            return root / platform_directory(target.platform)
+
         try:
-            base = self.config.output_dir / platform_directory(target.platform)
+            base = _base_for(self.config.output_dir)
             base.mkdir(parents=True, exist_ok=True)
         except (PermissionError, OSError):
             LOGGER.warning(
@@ -69,29 +77,40 @@ class DownloadEngine:
             )
             self.config.output_dir = get_default_download_dir()
             try:
-                base = self.config.output_dir / platform_directory(target.platform)
+                base = _base_for(self.config.output_dir)
                 base.mkdir(parents=True, exist_ok=True)
             except (PermissionError, OSError):
                 temp_dir = Path(tempfile.gettempdir()) / "UniversalDownloader" / "downloads"
                 temp_dir.mkdir(parents=True, exist_ok=True)
                 self.config.output_dir = temp_dir
-                base = temp_dir / platform_directory(target.platform)
+                base = _base_for(temp_dir)
                 base.mkdir(parents=True, exist_ok=True)
 
+        if organize == "uploader":
+            routed_base = base / "%(uploader,channel,uploader_id|Unknown)s"
+        elif organize == "date":
+            routed_base = base / "%(upload_date>%Y-%m|Undated)s"
+        else:
+            routed_base = base
+
         if self.config.output_template:
-            # If the template is already an absolute path, respect it; otherwise nest in base
+            # If the template is already an absolute path, respect it; otherwise nest in routed_base
             tmpl = self.config.output_template
             if not tmpl.startswith(("/", "\\")) and ":" not in tmpl[:2]:
-                return str(base / tmpl)
+                return str(routed_base / tmpl)
             return tmpl
 
         if target.content_type == ContentType.PLAYLIST:
-            return str(base / "%(playlist_title)s" / "%(playlist_index)02d - %(title).150B [%(id)s].%(ext)s")
+            return str(routed_base / "%(playlist_title)s" / "%(playlist_index)02d - %(title).150B [%(id)s].%(ext)s")
 
         if self.config.audio_only:
-            return str(base / "%(uploader)s - %(title).150B.%(ext)s")
+            if organize == "uploader":
+                return str(routed_base / "%(title).150B.%(ext)s")
+            return str(routed_base / "%(uploader)s - %(title).150B.%(ext)s")
 
-        return str(base / "%(uploader)s - %(title).150B [%(id)s].%(ext)s")
+        if organize == "uploader":
+            return str(routed_base / "%(title).150B [%(id)s].%(ext)s")
+        return str(routed_base / "%(uploader)s - %(title).150B [%(id)s].%(ext)s")
 
     def inspect(
         self,
@@ -249,6 +268,11 @@ class DownloadEngine:
 
             # Security boundary verification
             ensure_inside_directory(self.config.output_dir, path)
+
+            if getattr(self.config, "clean_filenames", False):
+                path = rename_with_clean_title(path, info_dict.get("title"))
+                ensure_inside_directory(self.config.output_dir, path)
+
             unique_files.append(path)
 
             if self.config.write_metadata:

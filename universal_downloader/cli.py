@@ -251,6 +251,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Custom yt-dlp naming template (e.g. '%%(uploader)s - %%(title)s.%%(ext)s').",
     )
     out_group.add_argument(
+        "--organize",
+        "--subfolder-mode",
+        dest="organize",
+        choices=["none", "platform", "uploader", "date"],
+        default=None,
+        help="Subfolder routing mode: none (flat), platform (default), uploader (platform/uploader), or date (platform/YYYY-MM).",
+    )
+    out_group.add_argument(
+        "--clean-filenames",
+        action="store_true",
+        help="Strip clickbait tags (e.g. [Official Video], (Lyrics), 4K) and emojis from downloaded filenames.",
+    )
+    out_group.add_argument(
         "--download-archive",
         type=Path,
         help="Track and skip previously downloaded files using an archive text file.",

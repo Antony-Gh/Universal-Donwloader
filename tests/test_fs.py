@@ -96,3 +96,57 @@ def test_write_metadata_file():
 def test_preferred_media_filename():
     info = {"id": "vid01", "uploader": "creator", "uploader_id": "c101", "ext": "mp4"}
     assert preferred_media_filename(info) == "creator_c101_vid01.mp4"
+
+
+def test_clean_title_strips_clickbait_and_emojis():
+    from universal_downloader.utils.fs import clean_title
+
+    assert clean_title("Queen - Bohemian Rhapsody [Official Music Video] (4K)") == "Queen - Bohemian Rhapsody"
+    assert clean_title("Adele - Hello (Lyrics) 🔥🎵") == "Adele - Hello"
+    assert clean_title("Coldplay - Yellow (Official Video) [HD] (1080p)") == "Coldplay - Yellow"
+    # Fallback when entire title is clickbait
+    assert clean_title("[Official Video]") == "[Official Video]"
+
+
+def test_rename_with_clean_title(tmp_path):
+    from universal_downloader.utils.fs import rename_with_clean_title
+
+    original = tmp_path / "Artist - Song [Official Video] (4K).mp4"
+    original.write_bytes(b"data")
+    renamed = rename_with_clean_title(original, "Artist - Song [Official Video] (4K)")
+    assert renamed.name == "Artist - Song.mp4"
+    assert renamed.exists()
+    assert not original.exists()
+
+
+def test_organize_modes_in_choose_output_template(tmp_path):
+    from universal_downloader.engine import DownloadEngine
+    from universal_downloader.models import AppConfig, ContentType, DetectedTarget
+
+    target = DetectedTarget(
+        original_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        normalized_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        platform=Platform.YOUTUBE,
+        content_type=ContentType.VIDEO,
+    )
+
+    # none (flat)
+    eng_none = DownloadEngine(AppConfig(output_dir=tmp_path, organize="none"))
+    t_none = eng_none.choose_output_template(target)
+    assert str(tmp_path) in t_none
+    assert "youtube" not in t_none.lower()
+
+    # platform (default)
+    eng_plat = DownloadEngine(AppConfig(output_dir=tmp_path, organize="platform"))
+    t_plat = eng_plat.choose_output_template(target)
+    assert "youtube" in t_plat.lower()
+
+    # uploader
+    eng_up = DownloadEngine(AppConfig(output_dir=tmp_path, organize="uploader"))
+    t_up = eng_up.choose_output_template(target)
+    assert "%(uploader,channel,uploader_id|Unknown)s" in t_up
+
+    # date
+    eng_date = DownloadEngine(AppConfig(output_dir=tmp_path, organize="date"))
+    t_date = eng_date.choose_output_template(target)
+    assert "%(upload_date>%Y-%m|Undated)s" in t_date
