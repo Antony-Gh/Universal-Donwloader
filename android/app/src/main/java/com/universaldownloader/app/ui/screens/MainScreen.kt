@@ -279,10 +279,19 @@ fun MainScreen(viewModel: MainViewModel) {
                                     .background(Color(0xFFEF4444))
                                     .padding(horizontal = 6.dp, vertical = 2.dp),
                             ) {
-                                Text("END OF LIFE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    if (policy.isBlockedVersion) "WITHDRAWN" else "END OF LIFE",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
                             }
                             Text(
-                                text = "v${com.universaldownloader.app.BuildConfig.VERSION_NAME} deprecated (min v${policy.minSupportedVersion} required)",
+                                text = if (policy.isBlockedVersion) {
+                                    "v${com.universaldownloader.app.BuildConfig.VERSION_NAME} has been withdrawn. Please update."
+                                } else {
+                                    "v${com.universaldownloader.app.BuildConfig.VERSION_NAME} deprecated (min v${policy.minSupportedVersion} required)"
+                                },
                                 color = Color.White,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,

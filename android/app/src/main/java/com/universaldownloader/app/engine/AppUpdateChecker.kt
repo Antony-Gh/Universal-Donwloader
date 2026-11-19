@@ -23,6 +23,7 @@ data class AppUpdateInfo(
 
 data class VersionPolicyResult(
     val isSupported: Boolean = true,
+    val isBlockedVersion: Boolean = false,
     val minSupportedVersion: String = "3.6.0",
     val latestVersion: String = "3.6.0",
     val sunsetMessage: String = "",
@@ -46,9 +47,11 @@ class AppUpdateChecker {
         var sunsetMsg = "This version is deprecated. Please download the latest update."
         var downloadUrl = LATEST_RELEASE_WEB
         var mode = "block"
+        val blockedList = mutableListOf<String>()
 
         try {
-            val rawUrl = "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/master/version_policy.json"
+            val envUrl = System.getenv("UD_VERSION_POLICY_URL")
+            val rawUrl = if (!envUrl.isNullOrBlank()) envUrl else "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/master/version_policy.json"
             val conn = (URL(rawUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 5000
@@ -64,13 +67,26 @@ class AppUpdateChecker {
                 sunsetMsg = root.optString("sunset_message", sunsetMsg)
                 downloadUrl = root.optString("download_url", downloadUrl)
                 mode = root.optString("enforcement_mode", mode)
+
+                val blockedArr = root.optJSONArray("blocked_versions")
+                if (blockedArr != null) {
+                    for (i in 0 until blockedArr.length()) {
+                        val v = blockedArr.optString(i, "").trim()
+                        if (v.isNotEmpty()) {
+                            blockedList.add(normalizeVersion(v))
+                        }
+                    }
+                }
             }
         } catch (_: Exception) {}
 
-        val isSupported = compareVersions(currentVersion, minSupported) >= 0
+        val isBlocked = blockedList.any { compareVersions(it, currentVersion) == 0 }
+        val belowMin = compareVersions(currentVersion, minSupported) < 0
+        val isSupported = mode.equals("allow", ignoreCase = true) || (!isBlocked && !belowMin)
 
         VersionPolicyResult(
             isSupported = isSupported,
+            isBlockedVersion = isBlocked,
             minSupportedVersion = minSupported,
             latestVersion = latestVersion,
             sunsetMessage = sunsetMsg,
