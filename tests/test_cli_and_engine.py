@@ -473,4 +473,22 @@ def test_extract_profile_metadata_fields_across_platforms():
     assert {f.label: f.value for f in fields}["Followers"] == "25M"
 
 
+def test_cli_credits(capsys):
+    import subprocess
+    import sys
+    import json
+
+    result = subprocess.run(
+        [sys.executable, "downloader.py", "--credits", "--json"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    data = json.loads(result.stdout)
+    assert data["author"] == "Anthony Gaius"
+    assert "Antony-Gh" in data["github"]
+    assert "Universal-Donwloader" in data["repository"]
+
+
+
 

@@ -739,6 +739,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Request complete remote erasure of this installation's telemetry from Neon database.",
     )
     dev_group.add_argument(
+        "--credits",
+        "--about",
+        action="store_true",
+        dest="credits",
+        help="Display creator, contributor, and open-source acknowledgments.",
+    )
+    dev_group.add_argument(
         "--force-deprecated",
         action="store_true",
         help="Bypass remote version deprecation check and force running older releases.",
@@ -1100,6 +1107,37 @@ def main() -> int:
                 else:
                     failure("GDPR erasure request failed or remote telemetry server not configured.", config)
             return 0 if ok else 1
+
+        # Credits & Creator Acknowledgments
+        if getattr(args, "credits", False):
+            if config.json_output or config.json_stream:
+                print(
+                    json.dumps(
+                        {
+                            "app": __app_name__,
+                            "version": __version__,
+                            "author": "Anthony Gaius",
+                            "github": "https://github.com/Antony-Gh",
+                            "repository": "https://github.com/Antony-Gh/Universal-Donwloader",
+                            "license": "MIT",
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                print("=" * 70)
+                print(f"🚀 {__app_name__} (v{__version__})")
+                print("=" * 70)
+                print("👤 Creator & Lead Developer: Anthony Gaius (@Antony-Gh)")
+                print("🌐 GitHub Profile:           https://github.com/Antony-Gh")
+                print("⭐ Project Repository:       https://github.com/Antony-Gh/Universal-Donwloader")
+                print("✉️ Contact & Support:        knkmam05@gmail.com")
+                print("📄 License:                  MIT License (Open Source)")
+                print("-" * 70)
+                print("Special thanks to yt-dlp, FFmpeg, Avalonia UI, Jetpack Compose,")
+                print("aria2c, Whisper, and the open-source community.")
+                print("=" * 70)
+            return 0
 
         # Remote Version Lifecycle & Deprecation Gate
         allowed, policy_banner = enforce_version_policy(config=config)

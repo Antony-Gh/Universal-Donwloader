@@ -1104,6 +1104,76 @@
                     </ScrollViewer>
                 </Border>
             </TabItem>
+
+            <!-- CREDITS & ABOUT TAB -->
+            <TabItem x:Name="CreditsTab" Header="Credits">
+                <Border Background="#1E1E24" CornerRadius="8" Padding="20" Margin="0,15,0,0">
+                    <ScrollViewer>
+                        <StackPanel Spacing="16">
+                            <!-- Main Author Hero Card -->
+                            <Border Background="#18181B" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="10" Padding="20">
+                                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
+                                    <!-- Avatar badge -->
+                                    <Border Grid.RowSpan="2" Grid.Column="0" Width="64" Height="64" CornerRadius="32" Background="#0284C7" Margin="0,0,20,0" VerticalAlignment="Top">
+                                        <TextBlock Text="AG" FontSize="26" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+
+                                    <!-- Author Info -->
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
+                                        <TextBlock Text="Anthony Gaius" FontSize="20" FontWeight="Bold" Foreground="#FFFFFF"/>
+                                        <TextBlock Text="Creator, Architect &amp; Lead Developer" FontSize="13" FontWeight="SemiBold" Foreground="#38BDF8"/>
+                                        <TextBlock Text="@Antony-Gh on GitHub" FontSize="12" Foreground="#9CA3AF"/>
+                                    </StackPanel>
+
+                                    <!-- Bio & Statement -->
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Created and actively engineered Universal Media Downloader to provide a fast, private, ad-free, and open-source media downloading suite across Windows, macOS, Linux, and Android." 
+                                               Foreground="#D1D5DB" TextWrapping="Wrap" Margin="0,12,0,0" FontSize="13" LineHeight="20"/>
+
+                                    <!-- Action Buttons -->
+                                    <WrapPanel Grid.Row="2" Grid.Column="1" Margin="0,16,0,0">
+                                        <Button x:Name="AuthorGithubButton" Content="🌐 GitHub Profile" Background="#2563EB" Foreground="#FFFFFF" Padding="14,8" Margin="0,0,10,8" Cursor="Hand"/>
+                                        <Button x:Name="AuthorRepoButton" Content="⭐ Star on GitHub" Background="#374151" Foreground="#F9FAFB" Padding="14,8" Margin="0,0,10,8" Cursor="Hand"/>
+                                        <Button x:Name="AuthorIssuesButton" Content="🐛 Report Issue" Background="#374151" Foreground="#F9FAFB" Padding="14,8" Margin="0,0,10,8" Cursor="Hand"/>
+                                        <Button x:Name="AuthorEmailButton" Content="✉️ Contact Author" Background="#374151" Foreground="#F9FAFB" Padding="14,8" Margin="0,0,10,8" Cursor="Hand"/>
+                                    </WrapPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Project Mission Card -->
+                            <Border Background="#18181B" CornerRadius="8" Padding="16">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="🌟 About Universal Media Downloader" FontSize="15" FontWeight="Bold" Foreground="#4ADE80"/>
+                                    <TextBlock Text="Universal Media Downloader was built from the ground up to solve common frustrations with web media tools: eliminating intrusive ads, trackers, suspicious redirects, and paywalls. Every capability runs 100% locally on your machine." 
+                                               Foreground="#D1D5DB" TextWrapping="Wrap" FontSize="13" LineHeight="19"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Open Source Acknowledgments -->
+                            <Border Background="#18181B" CornerRadius="8" Padding="16">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="❤️ Open-Source Technologies &amp; Acknowledgments" FontSize="15" FontWeight="Bold" Foreground="#F3F4F6"/>
+                                    <TextBlock Text="Universal Media Downloader is proudly built on top of world-class open-source projects:" Foreground="#9CA3AF" FontSize="12"/>
+
+                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4,0,0">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="• yt-dlp: Media extraction core" Foreground="#E5E7EB" Margin="0,3"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="• FFmpeg: Audio/video muxing &amp; codecs" Foreground="#E5E7EB" Margin="0,3"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="• Avalonia UI: Cross-platform XAML GUI" Foreground="#E5E7EB" Margin="0,3"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="• Jetpack Compose: Modern Android UI" Foreground="#E5E7EB" Margin="0,3"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="• aria2c: Parallel download acceleration" Foreground="#E5E7EB" Margin="0,3"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="• OpenAI Whisper: Offline AI transcription" Foreground="#E5E7EB" Margin="0,3"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="• MusicBrainz &amp; CAA: Metadata enrichment" Foreground="#E5E7EB" Margin="0,3"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="• Neon: Serverless Postgres telemetry" Foreground="#E5E7EB" Margin="0,3"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- License & Copyright Footer -->
+                            <TextBlock Text="© 2024-2026 Anthony Gaius. Distributed under the MIT Open Source License." 
+                                       HorizontalAlignment="Center" Foreground="#6B7280" FontSize="12" Margin="0,10,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
         </TabControl>
 
         <!-- Status Footer -->

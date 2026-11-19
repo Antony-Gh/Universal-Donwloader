@@ -161,6 +161,11 @@ public partial class MainWindow : Window
             SaveUserSettings();
             UpdatePrivacyDashboard();
         };
+
+        AuthorGithubButton.Click += (s, e) => PlatformUtils.OpenUrl("https://github.com/Antony-Gh");
+        AuthorRepoButton.Click += (s, e) => PlatformUtils.OpenUrl("https://github.com/Antony-Gh/Universal-Donwloader");
+        AuthorIssuesButton.Click += (s, e) => PlatformUtils.OpenUrl("https://github.com/Antony-Gh/Universal-Donwloader/issues");
+        AuthorEmailButton.Click += (s, e) => PlatformUtils.OpenUrl("mailto:knkmam05@gmail.com");
     }
 
     private async Task CheckClipboardForMediaUrlAsync()

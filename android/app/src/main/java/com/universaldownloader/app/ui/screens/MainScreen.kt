@@ -147,6 +147,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
     var showUpdateMenu by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+    var showCreditsDialog by remember { mutableStateOf(false) }
 
     // Automatically launch native Android APK installer when in-app APK download completes
     LaunchedEffect(state.readyToInstallApkPath) {
@@ -261,6 +262,13 @@ fun MainScreen(viewModel: MainViewModel) {
                                     onClick = {
                                         showUpdateMenu = false
                                         viewModel.updateYtDlpEngine()
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("About & Credits") },
+                                    onClick = {
+                                        showUpdateMenu = false
+                                        showCreditsDialog = true
                                     },
                                 )
                             }
@@ -528,6 +536,55 @@ fun MainScreen(viewModel: MainViewModel) {
                     },
                 ) {
                     Text(strings.releasePage, color = AccentSky)
+                }
+            },
+        )
+    }
+
+    if (showCreditsDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreditsDialog = false },
+            containerColor = SurfaceCard,
+            shape = RoundedCornerShape(14.dp),
+            title = {
+                Text("About & Credits", color = TextPrimary, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Anthony Gaius (@Antony-Gh)",
+                        fontWeight = FontWeight.Bold,
+                        color = AccentSky,
+                        fontSize = 16.sp,
+                    )
+                    Text(
+                        text = "Creator, Architect & Lead Developer",
+                        fontWeight = FontWeight.SemiBold,
+                        color = SuccessGreen,
+                        fontSize = 12.sp,
+                    )
+                    Text(
+                        text = "Universal Media Downloader is built to provide a fast, private, ad-free, and open-source media downloading suite across platforms.\n\nPowered by yt-dlp, FFmpeg, Jetpack Compose, and Kotlin.",
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCreditsDialog = false
+                        openExternalUrl(context, "https://github.com/Antony-Gh/Universal-Donwloader")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
+                ) {
+                    Text("GitHub Repo", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreditsDialog = false }) {
+                    Text("Close", color = TextSecondary)
                 }
             },
         )
