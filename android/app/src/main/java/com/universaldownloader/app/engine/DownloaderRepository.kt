@@ -1480,13 +1480,43 @@ class DownloaderRepository(private val appContext: Context) {
             val deviceModel = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
             val appVersion = com.universaldownloader.app.BuildConfig.VERSION_NAME
 
+            val locale = java.util.Locale.getDefault().toLanguageTag()
+            val timezone = java.util.TimeZone.getDefault().id ?: "Unknown"
+            val cpuCores = Runtime.getRuntime().availableProcessors()
+            val cpuArch = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
+
+            val actManager = appContext.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val memInfo = android.app.ActivityManager.MemoryInfo()
+            actManager?.getMemoryInfo(memInfo)
+            val ramGb = if (memInfo.totalMem > 0) Math.round((memInfo.totalMem.toDouble() / (1024 * 1024 * 1024)) * 10.0) / 10.0 else null
+
+            val metrics = appContext.resources.displayMetrics
+            val screenRes = "${metrics.widthPixels}x${metrics.heightPixels}"
+
+            val connMgr = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            val activeNet = connMgr?.activeNetwork
+            val caps = connMgr?.getNetworkCapabilities(activeNet)
+            val connType = when {
+                caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true -> "Wi-Fi"
+                caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "Cellular"
+                caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) == true -> "Ethernet"
+                activeNet != null -> "Connected"
+                else -> "Offline"
+            }
+
             val escId = installId.replace("'", "''")
             val escType = deviceType.replace("'", "''")
             val escOs = osName.replace("'", "''")
             val escModel = deviceModel.replace("'", "''")
             val escVer = appVersion.replace("'", "''")
+            val escLocale = locale.replace("'", "''")
+            val escTz = timezone.replace("'", "''")
+            val escArch = cpuArch.replace("'", "''")
+            val escScreen = screenRes.replace("'", "''")
+            val escConn = connType.replace("'", "''")
+            val escRam = if (ramGb != null) String.format(java.util.Locale.US, "%.1f", ramGb) else "NULL"
 
-            val sql = "SELECT record_device_heartbeat('$escId'::UUID, '$escType', '$escOs', '$escModel', '$escVer');"
+            val sql = "SELECT record_device_heartbeat('$escId'::UUID, '$escType', '$escOs', '$escModel', '$escVer', '$escLocale', '$escTz', $cpuCores, '$escArch', $escRam, '$escScreen', '$escConn');"
             val jsonPayload = org.json.JSONObject().put("query", sql).toString()
 
             val conn = (URL(neonUrl).openConnection() as HttpURLConnection).apply {
