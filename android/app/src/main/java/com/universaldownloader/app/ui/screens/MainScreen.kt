@@ -110,6 +110,7 @@ import com.universaldownloader.app.model.EngineStatus
 import com.universaldownloader.app.model.HistoryEntry
 import com.universaldownloader.app.model.LogEntry
 import com.universaldownloader.app.model.LogSeverity
+import com.universaldownloader.app.model.OrganizeMode
 import com.universaldownloader.app.model.QualityOption
 import com.universaldownloader.app.model.QueueItemStatus
 import com.universaldownloader.app.model.StreamFormat
@@ -682,6 +683,89 @@ private fun DownloadTab(
                     }
                 }
 
+                // Sniff Page Media Button & Discovered Streams Card
+                if (isValidUrl) {
+                    OutlinedButton(
+                        onClick = { viewModel.sniffPage() },
+                        enabled = !state.isSniffingPage && !state.isDownloading,
+                        modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, Color(0xFF0F766E)),
+                    ) {
+                        if (state.isSniffingPage) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = AccentSky)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Sniffing Page Media...", color = TextPrimary, fontSize = 12.sp)
+                        } else {
+                            Text("Sniff Embedded Page Media (.m3u8 / .mpd / <video>)", color = AccentSky, fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                if (state.sniffedMedia.isNotEmpty()) {
+                    Surface(
+                        color = Color(0xFF111C1D),
+                        border = BorderStroke(1.dp, Color(0xFF14B8A6)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "Discovered Page Media (${state.sniffedMedia.size})",
+                                    color = Color(0xFFCCFBF1),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                )
+                                IconButton(
+                                    onClick = { viewModel.dismissSniffedMedia() },
+                                    modifier = Modifier.size(24.dp),
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                            state.sniffedMedia.take(6).forEach { item ->
+                                Surface(
+                                    color = Color(0xFF1A2829),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.selectSniffedMedia(item) },
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = "[${item.mediaType}]",
+                                            color = Color(0xFF2DD4BF),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = item.url,
+                                            color = TextPrimary,
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Load", color = AccentSky, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Smart Clipboard Suggestion Banner
                 val clipUrl = state.detectedClipboardUrl
                 if (!clipUrl.isNullOrBlank()) {
@@ -1189,10 +1273,104 @@ private fun DownloadTab(
                             checked = state.options.sponsorBlockEnabled,
                             onCheckedChange = viewModel::updateSponsorBlock,
                         )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            InfoLabel(
+                                title = "Subfolder Organization",
+                                explanation = "Automatically sorts downloaded media into subfolders by Platform, Platform/Uploader, Platform/Date (YYYY-MM), or Flat.",
+                            )
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                items(OrganizeMode.entries) { mode ->
+                                    val selected = state.options.organizeMode == mode
+                                    Surface(
+                                        color = if (selected) AccentIndigo else Color(0xFF1E293B),
+                                        border = BorderStroke(1.dp, if (selected) AccentIndigo else BorderSubtle),
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier.clickable { viewModel.updateOrganizeMode(mode) },
+                                    ) {
+                                        Text(
+                                            text = mode.label,
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        OptionSwitchRow(
+                            title = "Clean Clickbait Filenames",
+                            explanation = "Strips clickbait brackets ([Official Video], (Lyrics), 4K, 1080p) and emojis from saved filenames.",
+                            checked = state.options.cleanFilenames,
+                            onCheckedChange = viewModel::updateCleanFilenames,
+                        )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            InfoLabel(
+                                title = "Live Stream Recording Cap",
+                                explanation = "Optional maximum duration when recording a live stream (e.g. 00:10:00, 300, or 5m). Cleanly finalizes the container with FFmpeg.",
+                            )
+                            OutlinedTextField(
+                                value = state.options.recordDuration,
+                                onValueChange = viewModel::updateRecordDuration,
+                                placeholder = { Text("e.g. 00:10:00 or 5m", color = TextMuted, fontSize = 12.sp) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+
+                        OptionSwitchRow(
+                            title = "Live From Start",
+                            explanation = "When recording a live stream, start from the beginning of the broadcast if supported by the platform.",
+                            checked = state.options.liveFromStart,
+                            onCheckedChange = viewModel::updateLiveFromStart,
+                        )
                     }
                 }
             }
         }
+        }
+
+        // 3b. Local File Converter (FFmpeg)
+        val localMp3Picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) viewModel.convertLocalUri(uri, targetFormat = "mp3", remuxOnly = false)
+        }
+        val localMp4Picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) viewModel.convertLocalUri(uri, targetFormat = "mp4", remuxOnly = true)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = { localMp3Picker.launch("video/*") },
+                enabled = state.engineStatus == EngineStatus.READY && !state.isConvertingLocal && !state.isDownloading,
+                modifier = Modifier.weight(1f),
+                border = BorderStroke(1.dp, BorderSubtle),
+            ) {
+                Text(
+                    if (state.isConvertingLocal) "Converting..." else "Local Video → MP3",
+                    color = TextPrimary,
+                    fontSize = 12.sp,
+                )
+            }
+            OutlinedButton(
+                onClick = { localMp4Picker.launch("video/*") },
+                enabled = state.engineStatus == EngineStatus.READY && !state.isConvertingLocal && !state.isDownloading,
+                modifier = Modifier.weight(1f),
+                border = BorderStroke(1.dp, BorderSubtle),
+            ) {
+                Text(
+                    if (state.isConvertingLocal) "Converting..." else "Remux Local → MP4",
+                    color = TextPrimary,
+                    fontSize = 12.sp,
+                )
+            }
         }
 
         // 4. Action Buttons (Download / Queue / Cancel)

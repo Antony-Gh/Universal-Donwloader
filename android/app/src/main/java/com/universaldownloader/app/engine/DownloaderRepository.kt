@@ -9,7 +9,9 @@ import android.os.Environment
 import com.universaldownloader.app.model.CodecOption
 import com.universaldownloader.app.model.DownloadOptions
 import com.universaldownloader.app.model.MediaMetadata
+import com.universaldownloader.app.model.OrganizeMode
 import com.universaldownloader.app.model.QualityOption
+import com.universaldownloader.app.model.SniffedMediaItem
 import com.universaldownloader.app.model.StreamFormat
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
@@ -486,6 +488,192 @@ class DownloaderRepository(private val appContext: Context) {
         }
     }
 
+    suspend fun sniffPageMedia(rawUrl: String): Result<List<SniffedMediaItem>> = withContext(Dispatchers.IO) {
+        runCatching {
+            var targetUrl = rawUrl.trim()
+            if (targetUrl.isEmpty()) return@runCatching emptyList()
+            if (!targetUrl.contains("://")) targetUrl = "https://$targetUrl"
+
+            val conn = (URL(targetUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10000
+                readTimeout = 10000
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+            }
+            val html = conn.inputStream.bufferedReader().use { it.readText() }
+            val finalBase = conn.url?.toString() ?: targetUrl
+            conn.disconnect()
+
+            val discovered = mutableListOf<SniffedMediaItem>()
+            val seen = mutableSetOf<String>()
+
+            fun addCandidate(raw: String, defaultType: String, source: String) {
+                val cleaned = raw.trim().replace("\\/", "/")
+                if (cleaned.isEmpty()) return
+                val lower = cleaned.lowercase(Locale.US)
+                if (lower.startsWith("blob:") || lower.startsWith("data:") || lower.startsWith("javascript:") || lower.startsWith("#")) return
+                val resolved = runCatching { URL(URL(finalBase), cleaned).toString() }.getOrNull() ?: return
+                if (!resolved.startsWith("http://") && !resolved.startsWith("https://")) return
+                if (!seen.add(resolved)) return
+
+                val pathOnly = resolved.lowercase(Locale.US).substringBefore('?').substringBefore('#')
+                val mediaType = when {
+                    pathOnly.endsWith(".m3u8") -> "HLS"
+                    pathOnly.endsWith(".mpd") -> "DASH"
+                    pathOnly.endsWith(".mp3") || pathOnly.endsWith(".m4a") || pathOnly.endsWith(".aac") || pathOnly.endsWith(".ogg") || pathOnly.endsWith(".opus") || pathOnly.endsWith(".flac") -> "AUDIO"
+                    else -> defaultType.uppercase(Locale.US)
+                }
+                discovered.add(SniffedMediaItem(url = resolved, mediaType = mediaType, source = source))
+            }
+
+            Regex("""<meta[^>]+(?:property|name)\s*=\s*["'](og:video(?::url|:secure_url)?|og:audio(?::url|:secure_url)?|twitter:player:stream)["'][^>]+content\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+                .findAll(html)
+                .forEach { m ->
+                    val prop = m.groupValues[1].lowercase(Locale.US)
+                    addCandidate(m.groupValues[2], if (prop.contains("audio")) "AUDIO" else "VIDEO", "OpenGraph")
+                }
+
+            Regex("""<(video|audio|source)[^>]+(?:data-)?src\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+                .findAll(html)
+                .forEach { m ->
+                    val tag = m.groupValues[1].lowercase(Locale.US)
+                    addCandidate(m.groupValues[2], if (tag == "audio") "AUDIO" else "VIDEO", "HTML5 <$tag>")
+                }
+
+            val unescaped = html.replace("\\/", "/")
+            Regex("""https?://[^\s"'<>\\)]+?\.(?:m3u8|mpd|mp4|webm|m4v|mov|mp3|m4a|aac|ogg|opus|flac)(?:\?[^\s"'<>\\)]*)?""", RegexOption.IGNORE_CASE)
+                .findAll(unescaped)
+                .forEach { m -> addCandidate(m.value, "VIDEO", "Stream Link") }
+
+            discovered
+        }
+    }
+
+    suspend fun convertLocalMedia(
+        uri: Uri,
+        displayName: String,
+        targetFormat: String,
+        remuxOnly: Boolean = false,
+    ): Result<File> = withContext(Dispatchers.IO) {
+        runCatching {
+            val fmt = targetFormat.trim().lowercase(Locale.US).trimStart('.')
+            val isAudio = fmt in setOf("mp3", "m4a", "flac", "opus", "wav", "aac")
+            val tempIn = File(appContext.cacheDir, "conv_in_${System.currentTimeMillis()}_${displayName.replace(Regex("[^A-Za-z0-9._-]"), "_")}")
+            appContext.contentResolver.openInputStream(uri)?.use { input ->
+                tempIn.outputStream().use { output -> input.copyTo(output) }
+            } ?: throw IllegalArgumentException("Unable to read selected local file.")
+
+            val baseStem = displayName.substringBeforeLast('.').ifBlank { "converted" }
+                .replace(Regex("""[<>:"/\\|?*]"""), "_")
+            val outDir = getOutputDirectory(isAudio)
+            var outFile = File(outDir, "$baseStem.$fmt")
+            var counter = 1
+            while (outFile.exists()) {
+                outFile = File(outDir, "$baseStem ($counter).$fmt")
+                counter++
+            }
+
+            try {
+                val cmd = mutableListOf("-y", "-hide_banner", "-loglevel", "error", "-i", tempIn.absolutePath, "-map_metadata", "0")
+                if (isAudio) {
+                    cmd.add("-vn")
+                    when (fmt) {
+                        "mp3" -> cmd.addAll(listOf("-c:a", "libmp3lame", "-b:a", "192k"))
+                        "m4a", "aac" -> cmd.addAll(listOf("-c:a", "aac", "-b:a", "192k"))
+                        "flac" -> cmd.addAll(listOf("-c:a", "flac"))
+                        "opus" -> cmd.addAll(listOf("-c:a", "libopus", "-b:a", "192k"))
+                        "wav" -> cmd.addAll(listOf("-c:a", "pcm_s16le"))
+                    }
+                } else {
+                    if (remuxOnly) {
+                        cmd.addAll(listOf("-c", "copy"))
+                    } else {
+                        cmd.addAll(listOf("-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac", "-b:a", "192k"))
+                    }
+                    if (fmt == "mp4" || fmt == "mov") {
+                        cmd.addAll(listOf("-movflags", "+faststart"))
+                    }
+                }
+                cmd.add(outFile.absolutePath)
+
+                val request = YoutubeDLRequest(emptyList()).apply {
+                    addOption("--ffmpeg-location", FFmpeg.getInstance().toString())
+                }
+                val proc = ProcessBuilder(listOf("ffmpeg") + cmd).redirectErrorStream(true)
+                val response = runCatching {
+                    val ffmpegClass = FFmpeg.getInstance()
+                    val execMethod = ffmpegClass.javaClass.methods.firstOrNull { it.name == "execute" && it.parameterTypes.size == 1 }
+                    if (execMethod != null) {
+                        execMethod.invoke(ffmpegClass, cmd.toTypedArray())
+                    } else {
+                        val p = proc.start()
+                        p.waitFor()
+                    }
+                }
+                if (response.isFailure || !outFile.exists() || outFile.length() == 0L) {
+                    // Fallback: invoke yt-dlp postprocessor / ffmpeg via YoutubeDL
+                    val ydlReq = YoutubeDLRequest(tempIn.toURI().toString()).apply {
+                        addOption("--enable-file-urls")
+                        addOption("-o", outFile.absolutePath)
+                        if (isAudio) {
+                            addOption("-x")
+                            addOption("--audio-format", fmt)
+                        } else {
+                            addOption("--remux-video", fmt)
+                        }
+                    }
+                    YoutubeDL.getInstance().execute(ydlReq)
+                }
+                if (!outFile.exists()) {
+                    throw RuntimeException("FFmpeg conversion did not produce output file.")
+                }
+                MediaScannerConnection.scanFile(appContext, arrayOf(outFile.absolutePath), null, null)
+                outFile
+            } finally {
+                tempIn.delete()
+            }
+        }
+    }
+
+    private fun parseDurationSeconds(raw: String): Long? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+        if (trimmed.contains(':')) {
+            val parts = trimmed.split(':').mapNotNull { it.trim().toLongOrNull() }
+            return when (parts.size) {
+                3 -> parts[0] * 3600 + parts[1] * 60 + parts[2]
+                2 -> parts[0] * 60 + parts[1]
+                else -> null
+            }?.takeIf { it > 0 }
+        }
+        val human = Regex("""^\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?\s*$""", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+        if (human != null && (human.groupValues[1].isNotEmpty() || human.groupValues[2].isNotEmpty() || human.groupValues[3].isNotEmpty())) {
+            val h = human.groupValues[1].toLongOrNull() ?: 0L
+            val m = human.groupValues[2].toLongOrNull() ?: 0L
+            val s = human.groupValues[3].toLongOrNull() ?: 0L
+            return (h * 3600 + m * 60 + s).takeIf { it > 0 }
+        }
+        return trimmed.toLongOrNull()?.takeIf { it > 0 }
+    }
+
+    private fun cleanClickbaitFilename(file: File): File {
+        val stem = file.nameWithoutExtension
+        val clickbaitRe = Regex(
+            """[\(\[\{]\s*(?:official\s+(?:music\s+|lyric\s+|hd\s+|4k\s+)?(?:video|audio|visualizer|mv)|music\s+video|lyric\s+video|lyrics?|audio\s+only|full\s+(?:video|song|hd)|visualizer|remastered(?:\s+\d{4})?|mv|hd|hq|uhd|4k|8k|1080p|720p|60\s*fps)\s*[\)\]\}]""",
+            RegexOption.IGNORE_CASE,
+        )
+        val emojiRe = Regex("""[\uD83C-\uDBFF\uDC00-\uDFFF\u2600-\u27BF]+""")
+        val cleaned = stem
+            .replace(clickbaitRe, "")
+            .replace(emojiRe, "")
+            .replace(Regex("""\s+"""), " ")
+            .trim(' ', '-', '|', '.')
+        if (cleaned.isEmpty() || cleaned == stem) return file
+        val target = File(file.parentFile, "$cleaned.${file.extension}")
+        return if (!target.exists() && file.renameTo(target)) target else file
+    }
+
     fun getOutputDirectory(audioOnly: Boolean): File {
         val publicDir = Environment.getExternalStoragePublicDirectory(
             if (audioOnly) Environment.DIRECTORY_MUSIC else Environment.DIRECTORY_DOWNLOADS
@@ -516,15 +704,23 @@ class DownloaderRepository(private val appContext: Context) {
             val url = normalizeUrl(rawUrl)
             val isAudioOnly = options.quality == QualityOption.AUDIO_MP3 && options.explicitFormatId == null
             val outDir = getOutputDirectory(isAudioOnly)
-            val beforeFiles = outDir.listFiles()?.map { it.absolutePath }?.toSet() ?: emptySet()
+            val beforeFiles = outDir.walkTopDown().filter { it.isFile }.map { it.absolutePath }.toSet()
 
             val platform = detectPlatformLabel(url)
             val isTikTok = platform == "TIKTOK"
             val cookiesPath = options.cookiesFilePath
             val hasCookies = !cookiesPath.isNullOrBlank() && File(cookiesPath).exists()
 
+            val platformFolder = platform.lowercase(Locale.US).replace(Regex("[^a-z0-9_-]"), "_")
+            val outputTemplate = when (options.organizeMode) {
+                OrganizeMode.NONE -> "${outDir.absolutePath}/%(title).120B [%(id)s].%(ext)s"
+                OrganizeMode.PLATFORM -> "${outDir.absolutePath}/$platformFolder/%(title).120B [%(id)s].%(ext)s"
+                OrganizeMode.UPLOADER -> "${outDir.absolutePath}/$platformFolder/%(uploader,channel|Unknown)s/%(title).120B [%(id)s].%(ext)s"
+                OrganizeMode.DATE -> "${outDir.absolutePath}/$platformFolder/%(upload_date>%Y-%m|Undated)s/%(title).120B [%(id)s].%(ext)s"
+            }
+
             fun buildRequest(youtubeExtractorArgs: String?): YoutubeDLRequest = YoutubeDLRequest(url).apply {
-                addOption("-o", "${outDir.absolutePath}/%(title).120B [%(id)s].%(ext)s")
+                addOption("-o", outputTemplate)
                 addOption("--concurrent-fragments", options.concurrentFragments.coerceIn(1, 16).toString())
                 if (!youtubeExtractorArgs.isNullOrBlank()) {
                     addOption("--extractor-args", youtubeExtractorArgs)
@@ -588,6 +784,15 @@ class DownloaderRepository(private val appContext: Context) {
                 if (options.sponsorBlockEnabled) {
                     addOption("--sponsorblock-remove", "sponsor,intro,outro,selfpromo")
                 }
+                if (options.liveFromStart) {
+                    addOption("--live-from-start")
+                }
+                val recSec = parseDurationSeconds(options.recordDuration)
+                if (recSec != null) {
+                    addOption("--hls-use-mpegts")
+                    addOption("--external-downloader", "ffmpeg")
+                    addOption("--external-downloader-args", "ffmpeg:-t $recSec")
+                }
             }
 
             onLog("Starting download to: ${outDir.absolutePath}")
@@ -635,14 +840,17 @@ class DownloaderRepository(private val appContext: Context) {
                 throw RuntimeException(formatDownloadError(errDetail.trim(), platform))
             }
 
-            val createdFile = outDir.listFiles()
-                ?.filter { it.isFile && it.absolutePath !in beforeFiles && !it.name.endsWith(".part") }
-                ?.maxByOrNull { it.lastModified() }
-                ?: outDir.listFiles()
-                    ?.filter { it.isFile && !it.name.endsWith(".part") }
-                    ?.maxByOrNull { it.lastModified() }
+            var createdFile = outDir.walkTopDown()
+                .filter { it.isFile && it.absolutePath !in beforeFiles && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl") }
+                .maxByOrNull { it.lastModified() }
+                ?: outDir.walkTopDown()
+                    .filter { it.isFile && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl") }
+                    .maxByOrNull { it.lastModified() }
 
             if (createdFile != null) {
+                if (options.cleanFilenames) {
+                    createdFile = cleanClickbaitFilename(createdFile)
+                }
                 MediaScannerConnection.scanFile(
                     appContext,
                     arrayOf(createdFile.absolutePath),

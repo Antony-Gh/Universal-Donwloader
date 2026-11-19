@@ -22,6 +22,19 @@ enum class CodecOption(val label: String, val value: String?) {
     AV1("AV1 (Ultra Compressed)", "av01"),
 }
 
+enum class OrganizeMode(val label: String, val value: String) {
+    PLATFORM("Platform", "platform"),
+    UPLOADER("Platform / Uploader", "uploader"),
+    DATE("Platform / Date", "date"),
+    NONE("Flat (None)", "none"),
+}
+
+data class SniffedMediaItem(
+    val url: String,
+    val mediaType: String,
+    val source: String,
+)
+
 data class DownloadOptions(
     val quality: QualityOption = QualityOption.BEST,
     val codec: CodecOption = CodecOption.AUTO,
@@ -36,6 +49,10 @@ data class DownloadOptions(
     val playlistItems: String = "",
     val sponsorBlockEnabled: Boolean = false,
     val explicitFormatId: String? = null,
+    val organizeMode: OrganizeMode = OrganizeMode.PLATFORM,
+    val cleanFilenames: Boolean = false,
+    val recordDuration: String = "",
+    val liveFromStart: Boolean = false,
 )
 
 data class MediaMetadata(

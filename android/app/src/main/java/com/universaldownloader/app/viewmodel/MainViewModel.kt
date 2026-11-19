@@ -14,9 +14,11 @@ import com.universaldownloader.app.model.EngineStatus
 import com.universaldownloader.app.model.HistoryEntry
 import com.universaldownloader.app.model.LogEntry
 import com.universaldownloader.app.model.MediaMetadata
+import com.universaldownloader.app.model.OrganizeMode
 import com.universaldownloader.app.model.QualityOption
 import com.universaldownloader.app.model.QueueItem
 import com.universaldownloader.app.model.QueueItemStatus
+import com.universaldownloader.app.model.SniffedMediaItem
 import com.universaldownloader.app.model.StreamFormat
 import com.universaldownloader.app.service.DownloadForegroundService
 import com.universaldownloader.app.ui.i18n.AppLanguage
@@ -43,6 +45,9 @@ data class MainUiState(
     val suggestions: List<String> = emptyList(),
     val searchResults: List<SearchResultItem> = emptyList(),
     val isSearchingYoutube: Boolean = false,
+    val sniffedMedia: List<SniffedMediaItem> = emptyList(),
+    val isSniffingPage: Boolean = false,
+    val isConvertingLocal: Boolean = false,
     val isInspectingStreams: Boolean = false,
     val isDownloadingProfilePic: Boolean = false,
     val streams: List<StreamFormat> = emptyList(),
@@ -702,6 +707,92 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSponsorBlock(enabled: Boolean) {
         updateAndPersistOptions { it.copy(sponsorBlockEnabled = enabled) }
+    }
+
+    fun updateOrganizeMode(mode: OrganizeMode) {
+        updateAndPersistOptions { it.copy(organizeMode = mode) }
+    }
+
+    fun updateCleanFilenames(enabled: Boolean) {
+        updateAndPersistOptions { it.copy(cleanFilenames = enabled) }
+    }
+
+    fun updateRecordDuration(value: String) {
+        _uiState.update { it.copy(options = it.options.copy(recordDuration = value)) }
+    }
+
+    fun updateLiveFromStart(enabled: Boolean) {
+        updateAndPersistOptions { it.copy(liveFromStart = enabled) }
+    }
+
+    fun sniffPage() {
+        val rawUrl = _uiState.value.urlInput.trim()
+        if (rawUrl.isEmpty() || _uiState.value.isSniffingPage) return
+        _uiState.update {
+            it.copy(
+                isSniffingPage = true,
+                globalStatus = "Sniffing embedded media streams on page...",
+            )
+        }
+        viewModelScope.launch {
+            repo.sniffPageMedia(rawUrl).onSuccess { items ->
+                appendLog("[Sniffer] Discovered ${items.size} embedded media stream(s) on $rawUrl")
+                _uiState.update {
+                    it.copy(
+                        isSniffingPage = false,
+                        sniffedMedia = items,
+                        globalStatus = if (items.isNotEmpty()) "Discovered ${items.size} embedded media stream(s)" else "No embedded streams found on page",
+                    )
+                }
+            }.onFailure { err ->
+                appendLog("[Error] Media sniff failed: ${err.message}")
+                _uiState.update {
+                    it.copy(
+                        isSniffingPage = false,
+                        globalStatus = "Media sniff failed: ${err.message ?: "unknown error"}",
+                    )
+                }
+            }
+        }
+    }
+
+    fun selectSniffedMedia(item: SniffedMediaItem) {
+        _uiState.update { it.copy(sniffedMedia = emptyList()) }
+        onUrlChanged(item.url, immediate = true)
+    }
+
+    fun dismissSniffedMedia() {
+        _uiState.update { it.copy(sniffedMedia = emptyList()) }
+    }
+
+    fun convertLocalUri(uri: android.net.Uri, targetFormat: String, remuxOnly: Boolean = false) {
+        if (_uiState.value.isConvertingLocal) return
+        val displayName = uri.lastPathSegment?.substringAfterLast('/') ?: "local_media"
+        _uiState.update {
+            it.copy(
+                isConvertingLocal = true,
+                globalStatus = "Converting $displayName → ${targetFormat.uppercase(Locale.US)}...",
+            )
+        }
+        viewModelScope.launch {
+            repo.convertLocalMedia(uri, displayName, targetFormat, remuxOnly).onSuccess { outFile ->
+                appendLog("[Success] Converted media saved: ${outFile.absolutePath}")
+                _uiState.update {
+                    it.copy(
+                        isConvertingLocal = false,
+                        globalStatus = "Saved converted file: ${outFile.name}",
+                    )
+                }
+            }.onFailure { err ->
+                appendLog("[Error] Local conversion failed: ${err.message}")
+                _uiState.update {
+                    it.copy(
+                        isConvertingLocal = false,
+                        globalStatus = "Conversion failed: ${err.message ?: "unknown error"}",
+                    )
+                }
+            }
+        }
     }
 
     fun startDownload(explicitFormatId: String? = null, isAutoRetry: Boolean = false) {
