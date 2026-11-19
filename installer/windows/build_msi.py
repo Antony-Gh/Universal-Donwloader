@@ -71,7 +71,7 @@ def build_msi(exe_path: Path, output_path: Path, version_override: str | None = 
     desktop_cfg = cfg.get("desktop", {}) if isinstance(cfg.get("desktop"), dict) else {}
 
     app_name = str(cfg.get("app_name") or "Universal Media Downloader")
-    version = normalize_msi_version(version_override or str(cfg.get("version_name") or "3.9.0"))
+    version = normalize_msi_version(version_override or str(cfg.get("version_name") or "4.0.0"))
     owner = str(cfg.get("github_owner") or "Antony-Gh")
     repo = str(cfg.get("github_repo") or "Universal-Donwloader")
     repo_url = f"https://github.com/{owner}/{repo}"
