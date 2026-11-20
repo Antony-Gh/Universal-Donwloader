@@ -4,7 +4,7 @@ Update the version number (and version code) across all project files.
 
 Single-purpose script: ONLY updates version strings and version codes across
 Desktop (.NET / Avalonia / WiX MSI), Android (Gradle / README), Python,
-app_config.json, and GitHub Actions release workflow.
+Browser Extension (manifest.json), app_config.json, and GitHub Actions release workflow.
 
 Examples:
     python scripts/bump_version.py 2.3.0
@@ -156,6 +156,13 @@ def update_all_versions(
             lambda t: _apply_regex_replacements(
                 t,
                 [(r'^(# Universal Media Downloader — Android Edition \(v)[^)]+(\))', rf'\g<1>{v}\g<2>')],
+            ),
+        ),
+        (
+            "browser/extension/manifest.json",
+            lambda t: _apply_regex_replacements(
+                t,
+                [(r'(^\s*"version"\s*:\s*")[^"]+(")', rf'\g<1>{v}\g<2>')],
             ),
         ),
         (

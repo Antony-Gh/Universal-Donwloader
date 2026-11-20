@@ -42,6 +42,7 @@ def test_update_all_versions_in_isolated_copy():
         "src/UniversalDownloader.Avalonia/MainWindow.axaml",
         "android/app/build.gradle.kts",
         "android/README.md",
+        "browser/extension/manifest.json",
         ".github/workflows/release.yml",
     ]
 
