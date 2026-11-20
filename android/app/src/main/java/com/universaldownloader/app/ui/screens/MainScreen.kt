@@ -1828,11 +1828,25 @@ private fun DownloadTab(
                                     fontWeight = FontWeight.Bold,
                                 )
                                 if (qItem.status != QueueItemStatus.DOWNLOADING) {
-                                    IconButton(
-                                        onClick = { viewModel.removeQueueItem(qItem.id) },
-                                        modifier = Modifier.size(20.dp),
-                                    ) {
-                                        Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextMuted, modifier = Modifier.size(13.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { viewModel.moveQueueItemUp(qItem.id) },
+                                            modifier = Modifier.size(22.dp),
+                                        ) {
+                                            Text("▲", fontSize = 11.sp, color = TextMuted)
+                                        }
+                                        IconButton(
+                                            onClick = { viewModel.moveQueueItemDown(qItem.id) },
+                                            modifier = Modifier.size(22.dp),
+                                        ) {
+                                            Text("▼", fontSize = 11.sp, color = TextMuted)
+                                        }
+                                        IconButton(
+                                            onClick = { viewModel.removeQueueItem(qItem.id) },
+                                            modifier = Modifier.size(22.dp),
+                                        ) {
+                                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextMuted, modifier = Modifier.size(13.dp))
+                                        }
                                     }
                                 }
                             }

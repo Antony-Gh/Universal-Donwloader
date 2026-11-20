@@ -268,6 +268,23 @@ RunTest("FormatInfoModel.ExtractSupportedQualities sorts descending and appends 
     AssertEqual("1080p,720p,Audio", string.Join(",", qualities));
 });
 
+RunTest("QueueItemModel and ObservableCollection support reordering and priority", () =>
+{
+    var q1 = new QueueItemModel { Title = "Item 1", Url = "https://example.com/1" };
+    var q2 = new QueueItemModel { Title = "Item 2", Url = "https://example.com/2" };
+    var collection = new System.Collections.ObjectModel.ObservableCollection<QueueItemModel> { q1, q2 };
+
+    // Move Item 2 up to index 0
+    collection.Move(1, 0);
+    AssertEqual("Item 2", collection[0].Title);
+    AssertEqual("Item 1", collection[1].Title);
+
+    // Move back
+    collection.Move(0, 1);
+    AssertEqual("Item 1", collection[0].Title);
+    AssertEqual("Item 2", collection[1].Title);
+});
+
 RunTest("UpdateChecker.IsInstalledInProgramFiles detects MSI install location on Windows", () =>
 {
     if (PlatformUtils.IsWindows)

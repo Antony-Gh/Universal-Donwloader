@@ -790,7 +790,11 @@
                                                 <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}" Height="6" Foreground="#6366F1"/>
                                                 <TextBlock Text="{Binding ProgressText}" Foreground="#9CA3AF" FontSize="10" HorizontalAlignment="Right"/>
                                             </StackPanel>
-                                            <Button Grid.Column="2" VerticalAlignment="Center" Padding="8,4" Background="#27272A" Foreground="#EF4444" FontSize="11" Content="✕" Click="RemoveQueueItem_Click"/>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                <Button Padding="6,3" Background="#27272A" Foreground="#94A3B8" FontSize="11" Content="▲" ToolTip.Tip="Move Up in Queue" Click="MoveQueueItemUp_Click"/>
+                                                <Button Padding="6,3" Background="#27272A" Foreground="#94A3B8" FontSize="11" Content="▼" ToolTip.Tip="Move Down in Queue" Click="MoveQueueItemDown_Click"/>
+                                                <Button Padding="8,3" Background="#27272A" Foreground="#EF4444" FontSize="11" Content="✕" ToolTip.Tip="Remove from Queue" Click="RemoveQueueItem_Click"/>
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

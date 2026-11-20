@@ -1135,6 +1135,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun moveQueueItemUp(id: String) {
+        _uiState.update { state ->
+            val idx = state.queue.indexOfFirst { it.id == id }
+            if (idx > 0) {
+                val newQueue = state.queue.toMutableList()
+                val item = newQueue.removeAt(idx)
+                newQueue.add(idx - 1, item)
+                state.copy(queue = newQueue)
+            } else state
+        }
+    }
+
+    fun moveQueueItemDown(id: String) {
+        _uiState.update { state ->
+            val idx = state.queue.indexOfFirst { it.id == id }
+            if (idx >= 0 && idx < state.queue.size - 1) {
+                val newQueue = state.queue.toMutableList()
+                val item = newQueue.removeAt(idx)
+                newQueue.add(idx + 1, item)
+                state.copy(queue = newQueue)
+            } else state
+        }
+    }
+
     fun clearCompletedQueue() {
         _uiState.update { state ->
             state.copy(queue = state.queue.filter { it.status == QueueItemStatus.QUEUED || it.status == QueueItemStatus.DOWNLOADING })

@@ -1284,6 +1284,30 @@ public partial class MainWindow : Window
         }
     }
 
+    private void MoveQueueItemUp_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is QueueItemModel item)
+        {
+            var idx = _queueItems.IndexOf(item);
+            if (idx > 0)
+            {
+                _queueItems.Move(idx, idx - 1);
+            }
+        }
+    }
+
+    private void MoveQueueItemDown_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is QueueItemModel item)
+        {
+            var idx = _queueItems.IndexOf(item);
+            if (idx >= 0 && idx < _queueItems.Count - 1)
+            {
+                _queueItems.Move(idx, idx + 1);
+            }
+        }
+    }
+
     private void UpdateQueueSummary()
     {
         var total = _queueItems.Count;
