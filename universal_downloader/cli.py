@@ -1451,7 +1451,6 @@ def main() -> int:
         if getattr(args, "export_rss", None) is not None:
             from universal_downloader.feed import export_subscription_feed
             from universal_downloader.history import get_history
-            from universal_downloader.subscriptions import list_subscriptions
 
             subs = list_subscriptions(db_path)
             export_target = str(args.export_rss).strip()
