@@ -45,7 +45,7 @@ public sealed class ProfileInfoChipViewModel : INotifyPropertyChanged
         }
     }
 
-    public string DisplayText => RecentlyCopied ? $"✓ Copied {Label}" : $"{Label}: {Value}";
+    public string DisplayText => RecentlyCopied ? $"Copied: {Label}" : $"{Label}: {Value}";
     public string TooltipText => $"Click to copy {Label}: {CopyValue}";
     public string BorderHex => RecentlyCopied ? "#10B981" : "#334155";
     public string ForegroundHex => RecentlyCopied ? "#6EE7B7" : "#BAE6FD";

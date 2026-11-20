@@ -17,6 +17,29 @@ public partial class QuickDownloadWindow : Window
         KeyDown += QuickDownloadWindow_KeyDown;
     }
 
+    public void ApplyLanguage(string lang)
+    {
+        var code = lang == "ar" ? "ar" : "en";
+        FlowDirection = code == "ar"
+            ? global::Avalonia.Media.FlowDirection.RightToLeft
+            : global::Avalonia.Media.FlowDirection.LeftToRight;
+
+        string T(string key) => Localization.Get(code, key);
+
+        Title = T("QuickHudTitle");
+        HudTitleText.Text = T("QuickHudHeader");
+        HudSubtitleText.Text = T("QuickHudSubtitle");
+        HudUrlTextBox.Watermark = T("QuickHudUrlWatermark");
+        HudPasteText.Text = T("Paste");
+        HudFormatQualityLabel.Text = T("QuickHudFormatQuality");
+        HudPresetLabel.Text = T("QuickHudPreset");
+        HudDownloadVideoText.Text = T("QuickHudDownloadVideo");
+        HudDownloadAudioText.Text = T("QuickHudDownloadAudio");
+        HudQueueText.Text = T("QuickHudAddToQueue");
+        HudTipText.Text = T("QuickHudTip");
+        HudDismissButton.Content = T("QuickHudDismiss");
+    }
+
     private async void QuickDownloadWindow_Loaded(object? sender, RoutedEventArgs e)
     {
         HudUrlTextBox.Focus();

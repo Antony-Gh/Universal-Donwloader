@@ -176,13 +176,13 @@ public partial class MainWindow : Window
 
         ResetInstallIdButton.Click += (s, e) =>
         {
-            PrivacyStatusLabel.Text = "Status: 🔄 Anonymous Device ID reset. A fresh UUID will be generated.";
+            PrivacyStatusLabel.Text = "Status: Anonymous Device ID reset. A fresh UUID will be generated.";
             UpdatePrivacyDashboard();
         };
 
         GdprWipeButton.Click += (s, e) =>
         {
-            PrivacyStatusLabel.Text = "Status: 🗑️ Remote GDPR erasure requested. Device records removed from database.";
+            PrivacyStatusLabel.Text = "Status: Remote GDPR erasure requested. Device records removed from database.";
         };
 
         OptOutTelemetryCheckBox.IsCheckedChanged += (s, e) =>
@@ -290,8 +290,8 @@ public partial class MainWindow : Window
     {
         OptOutTelemetryCheckBox.IsChecked = !_settings.TelemetryEnabled;
         PrivacyStatusLabel.Text = _settings.TelemetryEnabled
-            ? "Status: 🟢 Telemetry is active (Anonymous Heartbeat & Crash Diagnostics)"
-            : "Status: 🔴 Telemetry is disabled (Opted Out)";
+            ? Localization.Get(_settings.Language, "TelemetryStatusActive")
+            : Localization.Get(_settings.Language, "TelemetryStatusDisabled");
 
         bool showInfo = _settings.ShowTelemetryInfo || UpdateChecker.ShowTelemetryInfo;
         TelemetryInfoLayout.IsVisible = showInfo;
@@ -333,13 +333,25 @@ public partial class MainWindow : Window
         AppTitleText.Text = T("AppTitle");
         LanguageToggleButton.Content = T("LangToggle");
         CheckUpdatesText.Text = T("CheckUpdates");
+        QuickHudText.Text = T("QuickHud");
+
+        ThemeDefaultItem.Content = T("ThemeDefault");
+        ThemeAmoledItem.Content = T("ThemeAmoled");
+        ThemeNordItem.Content = T("ThemeNord");
+        ThemeCyberpunkItem.Content = T("ThemeCyberpunk");
+        ThemeCatppuccinItem.Content = T("ThemeCatppuccin");
+        ThemeEmeraldItem.Content = T("ThemeEmerald");
 
         DownloadTab.Header = T("TabDownload");
         QueueTab.Header = T("TabQueue");
         StreamsTab.Header = T("TabStreams");
         HistoryTab.Header = T("TabHistory");
+        SubscriptionsTab.Header = T("TabSubscriptions");
         LogsTab.Header = T("TabLogs");
+        PrivacyTab.Header = T("TabPrivacy");
+        CreditsTab.Header = T("TabCredits");
 
+        // Download Tab
         MediaUrlHeader.Text = T("MediaUrl");
         UrlTextBox.Watermark = T("UrlWatermark");
         PasteButtonText.Text = T("Paste");
@@ -373,10 +385,15 @@ public partial class MainWindow : Window
         CancelButton.Content = T("Cancel");
         LiveTerminalHeader.Text = T("LiveTerminal");
         QuickCopyText.Text = T("CopyOutput");
+        VerifiedBadgeText.Text = T("VerifiedBadge");
 
+        // Queue Tab
         QueueHeaderLabel.Text = T("QueueHeader");
         QueueParallelLabel.Text = T("QueueParallel");
+        QueueBatchUrlsBox.Watermark = T("QueueBatchWatermark");
         QueueAddBatchButton.Content = T("QueueAddUrls");
+        QueueScheduleCheck.Content = T("QueueSchedule");
+        QueueBatterySaverCheck.Content = T("QueueBatterySaver");
         StartQueueButton.Content = T("StartQueue");
         StopQueueButton.Content = T("Stop");
         ClearQueueButton.Content = T("ClearCompleted");
@@ -384,8 +401,65 @@ public partial class MainWindow : Window
         LoadAllQualitiesButton.Content = T("LoadAllQualities");
         SupportedQualitiesLabel.Text = T("SupportedQualities");
 
+        // Streams Tab
+        StreamsStatusHeader.Text = T("StreamsStatusDefault");
+        StreamsLoadingLabel.Text = T("StreamsInspecting");
         RefreshStreamsButtonText.Text = T("RefreshStreams");
+
+        // History Tab
+        HistorySearchBox.Watermark = T("HistorySearchWatermark");
+        HistorySearchText.Text = T("HistorySearch");
+        HistoryRefreshText.Text = T("HistoryRefresh");
+        HistoryClearText.Text = T("HistoryClearAll");
+        MiniPlayerExternalText.Text = T("MiniPlayerExternal");
+
+        // Subscriptions Tab
+        SubscriptionUrlBox.Watermark = T("SubscriptionUrlWatermark");
+        SubscriptionAudioCheck.Content = T("SubscriptionAudio");
+        SubscriptionQualityLabel.Text = T("SubscriptionQualityLabel");
+        SubscriptionMaxSyncLabel.Text = T("SubscriptionMaxSyncLabel");
+        SubscriptionAddText.Text = T("SubscriptionSubscribe");
+        SubscriptionSyncText.Text = T("SubscriptionSyncAll");
+
+        // Logs Tab
         BackendLogsHeader.Text = T("BackendLogs");
+        AutoScrollCheck.Content = T("AutoScroll");
+        LogsFilterBox.Watermark = T("FilterLogsWatermark");
+        SaveAllLogsText.Text = T("SaveLogs");
+        CopyAllLogsText.Text = T("CopyAll");
+
+        // Privacy Tab
+        PrivacyTitleText.Text = T("PrivacyTitle");
+        PrivacySubtitleText.Text = T("PrivacySubtitle");
+        PrivacyGuaranteesHeader.Text = T("PrivacyGuaranteesHeader");
+        PrivacyGuarantee1Text.Text = T("PrivacyGuarantee1");
+        PrivacyGuarantee2Text.Text = T("PrivacyGuarantee2");
+        PrivacyGuarantee3Text.Text = T("PrivacyGuarantee3");
+        PrivacyGuarantee4Text.Text = T("PrivacyGuarantee4");
+        TelemetryControlsHeader.Text = T("TelemetryControlsHeader");
+        OptOutTelemetryCheckBox.Content = T("OptOutTelemetry");
+        ResetInstallIdText.Text = T("ResetInstallId");
+        GdprWipeText.Text = T("GdprWipe");
+        InspectDiagnosticHeader.Text = T("InspectDiagnosticHeader");
+        InspectDiagnosticSubtitle.Text = T("InspectDiagnosticSubtitle");
+        PrivacyStatusLabel.Text = _settings.TelemetryEnabled
+            ? T("TelemetryStatusActive")
+            : T("TelemetryStatusDisabled");
+
+        // Credits Tab
+        AuthorRoleText.Text = T("AuthorRole");
+        AuthorBioText.Text = T("AuthorBio");
+        AuthorGithubText.Text = T("AuthorGithub");
+        AuthorRepoText.Text = T("AuthorRepo");
+        AuthorIssuesText.Text = T("AuthorIssues");
+        AuthorEmailText.Text = T("AuthorEmail");
+        AboutUmdHeader.Text = T("AboutUmdHeader");
+        AboutUmdText.Text = T("AboutUmdText");
+        OpenSourceTechHeader.Text = T("OpenSourceTechHeader");
+        LicenseFooterText.Text = T("LicenseFooter");
+
+        // Footer
+        GlobalStatusText.Text = T("Ready");
     }
 
     private void ThemeComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -486,6 +560,7 @@ public partial class MainWindow : Window
     private void OpenQuickHud()
     {
         var hud = new QuickDownloadWindow();
+        hud.ApplyLanguage(_settings.Language);
         hud.DownloadTriggered += (url, quality, preset, queueOnly) =>
         {
             UrlTextBox.Text = url;
@@ -2044,7 +2119,7 @@ public partial class MainWindow : Window
         if (clipboard != null)
         {
             await clipboard.SetTextAsync(id);
-            ProfileIdLabel.Text = $"✓ Copied: {id}";
+            ProfileIdLabel.Text = $"Copied: {id}";
             GlobalStatusText.Text = $"Copied Profile ID: {id}";
             DispatcherTimer.RunOnce(() =>
             {
@@ -2105,7 +2180,7 @@ public partial class MainWindow : Window
         if (lines.Count == 0) return;
 
         await clipboard.SetTextAsync(string.Join(Environment.NewLine, lines));
-        CopyAllProfileInfoText.Text = "✓ Copied All";
+        CopyAllProfileInfoText.Text = "Copied All";
         GlobalStatusText.Text = "Copied all profile info to clipboard.";
         DispatcherTimer.RunOnce(() => CopyAllProfileInfoText.Text = "Copy All Info", TimeSpan.FromSeconds(2));
     }
@@ -2587,7 +2662,8 @@ public partial class MainWindow : Window
                     string ext = Path.GetExtension(record.PrimaryFilepath).TrimStart('.').ToUpperInvariant();
                     MiniPlayerBadge.Text = string.IsNullOrEmpty(ext) ? "MEDIA" : ext;
                     _miniPlayer.Play();
-                    MiniPlayerPlayToggle.Content = "⏸";
+                    MiniPlayerPauseIcon.IsVisible = true;
+                    MiniPlayerPlayIcon.IsVisible = false;
                     _miniPlayerTimer.Start();
                     return;
                 }
@@ -2626,19 +2702,22 @@ public partial class MainWindow : Window
         if (_miniPlayer.IsPlaying)
         {
             _miniPlayer.Pause();
-            MiniPlayerPlayToggle.Content = "▶";
+            MiniPlayerPauseIcon.IsVisible = false;
+            MiniPlayerPlayIcon.IsVisible = true;
         }
         else
         {
             _miniPlayer.Resume();
-            MiniPlayerPlayToggle.Content = "⏸";
+            MiniPlayerPauseIcon.IsVisible = true;
+            MiniPlayerPlayIcon.IsVisible = false;
         }
     }
 
     private void MiniPlayerStopButton_Click(object? sender, RoutedEventArgs e)
     {
         _miniPlayer.Stop();
-        MiniPlayerPlayToggle.Content = "▶";
+        MiniPlayerPauseIcon.IsVisible = false;
+        MiniPlayerPlayIcon.IsVisible = true;
         MiniPlayerSeekBar.Value = 0;
     }
 

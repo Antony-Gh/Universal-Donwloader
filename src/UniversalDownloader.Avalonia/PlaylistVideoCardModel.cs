@@ -134,7 +134,7 @@ public class PlaylistVideoCardModel : INotifyPropertyChanged
         }
     }
 
-    public string QueueButtonText => IsQueued ? "Queued ✓" : "+ Queue";
+    public string QueueButtonText => IsQueued ? "Queued" : "+ Queue";
 
     public static PlaylistVideoCardModel FromEntry(PlaylistEntryModel entry)
     {

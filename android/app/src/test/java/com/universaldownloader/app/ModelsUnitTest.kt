@@ -75,4 +75,19 @@ class ModelsUnitTest {
         assertTrue(lines[0].endsWith("\tsessionid\tabc123"))
         assertTrue(lines[1].endsWith("\tcsrftoken\txyz789"))
     }
+
+    @Test
+    fun appStrings_englishAndArabicArePopulated() {
+        val en = com.universaldownloader.app.ui.i18n.EnglishStrings
+        val ar = com.universaldownloader.app.ui.i18n.ArabicStrings
+
+        assertTrue(en.appTitle.isNotBlank())
+        assertTrue(ar.appTitle.isNotBlank())
+        assertEquals("Universal Downloader", en.appTitle)
+        assertEquals("المحمل الشامل", ar.appTitle)
+        assertTrue(en.aboutCredits.isNotBlank())
+        assertTrue(ar.aboutCredits.isNotBlank())
+        assertTrue(en.subscriptionsTitle.isNotBlank())
+        assertTrue(ar.subscriptionsTitle.isNotBlank())
+    }
 }

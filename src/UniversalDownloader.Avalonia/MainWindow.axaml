@@ -29,6 +29,26 @@
         <StreamGeometry x:Key="InfoCircleIcon">M11,7H13V9H11V7M11,11H13V17H11V11M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z</StreamGeometry>
         <StreamGeometry x:Key="SpinnerIcon">M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z</StreamGeometry>
         <StreamGeometry x:Key="UpdateIcon">M21,10.12H14.22L16.96,7.3C14.23,4.6 9.81,4.5 7.08,7.2C4.35,9.91 4.35,14.28 7.08,17C9.81,19.7 14.23,19.7 16.96,17C18.32,15.65 19,14.08 19,12.1H21C21,14.08 20.12,16.65 18.36,18.39C14.85,21.87 9.15,21.87 5.64,18.39C2.14,14.92 2.11,9.28 5.62,5.81C9.13,2.34 14.76,2.34 18.27,5.81L21,3V10.12M12.5,8V12.25L16,14.33L15.28,15.54L11,13V8H12.5Z</StreamGeometry>
+        <StreamGeometry x:Key="CloseIcon">M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z</StreamGeometry>
+        <StreamGeometry x:Key="ArrowUpIcon">M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z</StreamGeometry>
+        <StreamGeometry x:Key="ArrowDownIcon">M7.41,8.59L12,13.17L16.59,8.59L18,10L12,16L6,10L7.41,8.59Z</StreamGeometry>
+        <StreamGeometry x:Key="PauseIcon">M14,19H18V5H14M6,19H10V5H6V19Z</StreamGeometry>
+        <StreamGeometry x:Key="StopIcon">M18,18H6V6H18V18Z</StreamGeometry>
+        <StreamGeometry x:Key="VolumeHighIcon">M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18.01,19.86 21,16.28 21,12C21,7.72 18.01,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z</StreamGeometry>
+        <StreamGeometry x:Key="ExternalLaunchIcon">M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z</StreamGeometry>
+        <StreamGeometry x:Key="ShieldCheckIcon">M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9L10,17Z</StreamGeometry>
+        <StreamGeometry x:Key="SettingsIcon">M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z</StreamGeometry>
+        <StreamGeometry x:Key="TrashIcon">M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z</StreamGeometry>
+        <StreamGeometry x:Key="WebIcon">M16.36,14C16.44,13.34 16.5,12.68 16.5,12C16.5,11.32 16.44,10.66 16.36,10H19.74C19.9,10.64 20,11.31 20,12C20,12.69 19.9,13.36 19.74,14M14.59,19.56C15.19,18.45 15.65,17.25 15.97,16H18.92C17.96,17.65 16.43,18.93 14.59,19.56M14.34,14H9.66C9.56,13.34 9.5,12.68 9.5,12C9.5,11.32 9.56,10.65 9.66,10H14.34C14.43,10.65 14.5,11.32 14.5,12C14.5,12.68 14.43,13.34 14.34,14M12,19.96C11.17,18.76 10.5,17.43 10.09,16H13.91C13.5,17.43 12.83,18.76 12,19.96M8,8H5.08C6.03,6.34 7.57,5.06 9.4,4.44C8.8,5.55 8.35,6.75 8,8M5.08,16H8C8.35,17.25 8.8,18.45 9.4,19.56C7.57,18.93 6.03,17.65 5.08,16M4.26,14C4.1,13.36 4,12.69 4,12C4,11.31 4.1,10.64 4.26,10H7.64C7.56,10.66 7.5,11.32 7.5,12C7.5,12.68 7.56,13.34 7.64,14M12,4.03C12.83,5.23 13.5,6.57 13.91,8H10.09C10.5,6.57 11.17,5.23 12,4.03M18.92,8H15.97C15.65,6.75 15.19,5.55 14.59,4.44C16.43,5.07 17.96,6.34 18.92,8M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z</StreamGeometry>
+        <StreamGeometry x:Key="BugIcon">M14,12V10H10V12H14M14,16V14H10V16H14M20,8H17.19C16.74,7.22 16.12,6.55 15.37,6.04L17,4.41L15.59,3L13.42,5.17C12.96,5.06 12.5,5 12,5C11.5,5 11.04,5.06 10.59,5.17L8.41,3L7,4.41L8.62,6.04C7.88,6.55 7.26,7.22 6.81,8H4V10H6.09C6.04,10.33 6,10.66 6,11V12H4V14H6V15C6,15.34 6.04,15.67 6.09,16H4V18H6.81C7.85,19.79 9.78,21 12,21C14.22,21 16.15,19.79 17.19,18H20V16H17.91C17.96,15.67 18,15.34 18,15V14H20V12H18V11C18,10.66 17.96,10.33 17.91,10H20V8Z</StreamGeometry>
+        <StreamGeometry x:Key="EmailIcon">M20,8L12,13L4,8V6L12,11L20,6M20,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4Z</StreamGeometry>
+        <StreamGeometry x:Key="StarIcon">M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z</StreamGeometry>
+        <StreamGeometry x:Key="HeartIcon">M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z</StreamGeometry>
+        <StreamGeometry x:Key="CheckmarkIcon">M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z</StreamGeometry>
+        <StreamGeometry x:Key="PaletteIcon">M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3M6.5,12A1.5,1.5 0 1,1 8,10.5A1.5,1.5 0 0,1 6.5,12M9.5,8A1.5,1.5 0 1,1 11,6.5A1.5,1.5 0 0,1 9.5,8M14.5,8A1.5,1.5 0 1,1 16,6.5A1.5,1.5 0 0,1 14.5,8M17.5,12A1.5,1.5 0 1,1 19,10.5A1.5,1.5 0 0,1 17.5,12Z</StreamGeometry>
+        <StreamGeometry x:Key="VideoIcon">M17,10.5V7A1,1 0 0,0 16,6H4A1,1 0 0,0 3,7V17A1,1 0 0,0 4,18H16A1,1 0 0,0 17,17V13.5L21,17.5V6.5L17,10.5Z</StreamGeometry>
+        <StreamGeometry x:Key="MusicNoteIcon">M12,3V13.55C11.41,13.21 10.73,13 10,13A4,4 0 0,0 6,17A4,4 0 0,0 10,21A4,4 0 0,0 14,17V7H18V3H12Z</StreamGeometry>
+        <StreamGeometry x:Key="QueueIcon">M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z</StreamGeometry>
     </Window.Resources>
 
     <Window.Styles>
@@ -80,14 +100,19 @@
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <ComboBox x:Name="ThemeComboBox" Height="32" Padding="8,4" Background="#27272A" Foreground="#E2E8F0" FontSize="11" SelectionChanged="ThemeComboBox_SelectionChanged" ToolTip.Tip="Switch UI theme &amp; accent palette">
-                    <ComboBoxItem Content="🎨 Default Dark"/>
-                    <ComboBoxItem Content="🖤 AMOLED Black"/>
-                    <ComboBoxItem Content="❄️ Nord Frost"/>
-                    <ComboBoxItem Content="🟣 Cyberpunk"/>
-                    <ComboBoxItem Content="🌸 Catppuccin"/>
-                    <ComboBoxItem Content="🌲 Emerald"/>
+                    <ComboBoxItem x:Name="ThemeDefaultItem" Content="Default Dark"/>
+                    <ComboBoxItem x:Name="ThemeAmoledItem" Content="AMOLED Black"/>
+                    <ComboBoxItem x:Name="ThemeNordItem" Content="Nord Frost"/>
+                    <ComboBoxItem x:Name="ThemeCyberpunkItem" Content="Cyberpunk"/>
+                    <ComboBoxItem x:Name="ThemeCatppuccinItem" Content="Catppuccin"/>
+                    <ComboBoxItem x:Name="ThemeEmeraldItem" Content="Emerald"/>
                 </ComboBox>
-                <Button x:Name="QuickHudButton" Padding="10,6" Background="#1E3A8A" Foreground="#93C5FD" FontWeight="Bold" FontSize="12" Content="⚡ Quick HUD" Click="QuickHudButton_Click" ToolTip.Tip="Open floating Quick Download HUD (Ctrl+Shift+D)"/>
+                <Button x:Name="QuickHudButton" Padding="10,6" Background="#1E3A8A" Foreground="#93C5FD" FontWeight="Bold" FontSize="12" Click="QuickHudButton_Click" ToolTip.Tip="Open floating Quick Download HUD (Ctrl+Shift+D)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource DownloadLightningIcon}" Width="12" Height="12" Foreground="#93C5FD"/>
+                        <TextBlock x:Name="QuickHudText" Text="Quick HUD" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
                 <Button x:Name="LanguageToggleButton" Padding="10,6" Background="#27272A" Foreground="#38BDF8" FontWeight="Bold" FontSize="12" Content="عربي" Click="LanguageToggleButton_Click" ToolTip.Tip="Switch interface language between English (LTR) and Arabic (RTL)"/>
                 <Button x:Name="CheckUpdatesButton" Padding="10,6" Background="#27272A" Foreground="#E2E8F0" Click="CheckUpdatesButton_Click" ToolTip.Tip="Check GitHub Releases for a newer version of Universal Media Downloader">
                     <StackPanel Orientation="Horizontal" Spacing="6">
@@ -115,7 +140,9 @@
                     </StackPanel>
                 </Button>
                 <Button x:Name="ViewReleaseNotesButton" Grid.Column="2" Margin="6,0,0,0" Padding="10,5" Background="#312E81" Foreground="#E2E8F0" FontSize="11" Content="Release Notes" Click="ViewReleaseNotesButton_Click"/>
-                <Button x:Name="DismissUpdateButton" Grid.Column="3" Margin="6,0,0,0" Padding="8,4" Background="Transparent" Foreground="#94A3B8" FontSize="12" Content="✕" Click="DismissUpdateButton_Click"/>
+                <Button x:Name="DismissUpdateButton" Grid.Column="3" Margin="6,0,0,0" Padding="8,4" Background="Transparent" Foreground="#94A3B8" FontSize="12" Click="DismissUpdateButton_Click" ToolTip.Tip="Dismiss">
+                    <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" Foreground="#94A3B8"/>
+                </Button>
             </Grid>
         </Border>
 
@@ -167,7 +194,9 @@
                                     <StackPanel Spacing="8">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <TextBlock x:Name="SearchResultsHeader" Grid.Column="0" Text="Search Results" Foreground="#E2E8F0" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="1" Content="✕" Padding="6,2" Background="Transparent" Foreground="#94A3B8" Click="CloseSearchResults_Click"/>
+                                            <Button Grid.Column="1" Padding="6,2" Background="Transparent" Foreground="#94A3B8" Click="CloseSearchResults_Click" ToolTip.Tip="Close Search Results">
+                                                <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" Foreground="#94A3B8"/>
+                                            </Button>
                                         </Grid>
                                         <ListBox x:Name="SearchResultsListBox" MaxHeight="220" Background="Transparent" BorderThickness="0">
                                             <ListBox.ItemTemplate>
@@ -190,7 +219,9 @@
                                     <StackPanel Spacing="8">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <TextBlock x:Name="SniffedMediaHeader" Grid.Column="0" Text="Discovered Page Media" Foreground="#CCFBF1" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="1" Content="✕" Padding="6,2" Background="Transparent" Foreground="#94A3B8" Click="CloseSniffedMedia_Click"/>
+                                            <Button Grid.Column="1" Padding="6,2" Background="Transparent" Foreground="#94A3B8" Click="CloseSniffedMedia_Click" ToolTip.Tip="Close Sniffed Media">
+                                                <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" Foreground="#94A3B8"/>
+                                            </Button>
                                         </Grid>
                                         <ListBox x:Name="SniffedMediaListBox" MaxHeight="200" Background="Transparent" BorderThickness="0">
                                             <ListBox.ItemTemplate>
@@ -215,7 +246,9 @@
                                     <Grid ColumnDefinitions="*,Auto,Auto">
                                         <TextBlock x:Name="ClipboardBannerText" Grid.Column="0" Text="Copied media URL detected" Foreground="#BAE6FD" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                         <Button x:Name="AcceptClipboardButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,4" Background="#0284C7" Foreground="White" FontSize="11" FontWeight="SemiBold" Content="Paste &amp; Load" Click="AcceptClipboardButton_Click"/>
-                                        <Button x:Name="DismissClipboardButton" Grid.Column="2" Margin="4,0,0,0" Padding="6,4" Background="Transparent" Foreground="#94A3B8" FontSize="11" Content="✕" Click="DismissClipboardButton_Click"/>
+                                        <Button x:Name="DismissClipboardButton" Grid.Column="2" Margin="4,0,0,0" Padding="6,4" Background="Transparent" Foreground="#94A3B8" FontSize="11" Click="DismissClipboardButton_Click" ToolTip.Tip="Dismiss">
+                                            <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" Foreground="#94A3B8"/>
+                                        </Button>
                                     </Grid>
                                 </Border>
                             </StackPanel>
@@ -248,7 +281,10 @@
                                                 <TextBlock x:Name="ProfileIdLabel" Text="ID: " Foreground="#7DD3FC" FontSize="10" FontWeight="SemiBold"/>
                                             </Button>
                                             <Border x:Name="ProfileVerifiedBadge" IsVisible="False" Background="#172554" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="0,0,6,3" VerticalAlignment="Center">
-                                                <TextBlock Text="✓ VERIFIED" Foreground="#93C5FD" FontSize="10" FontWeight="Bold"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                    <PathIcon Data="{StaticResource CheckmarkIcon}" Width="9" Height="9" Foreground="#93C5FD"/>
+                                                    <TextBlock x:Name="VerifiedBadgeText" Text="VERIFIED" Foreground="#93C5FD" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                </StackPanel>
                                             </Border>
                                             <Border x:Name="ProfileLockedBadge" IsVisible="False" Background="#451A03" BorderBrush="#F59E0B" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="0,0,6,3" VerticalAlignment="Center">
                                                 <TextBlock x:Name="ProfileLockedBadgeText" Text="LOCKED PROFILE" Foreground="#FCD34D" FontSize="10" FontWeight="Bold"/>
@@ -531,7 +567,9 @@
                                             <Button x:Name="PasteCookiesButton" Grid.Column="2" Margin="6,0,0,0" Padding="10,6" Background="#1E293B" Foreground="#38BDF8" FontWeight="SemiBold" Content="Paste Cookies" Click="PasteCookiesButton_Click"
                                                     ToolTip.Tip="Paste a raw Cookie header from Chrome/Edge DevTools or Netscape cookies.txt text — works even while Chrome is open!"/>
                                             <Button x:Name="BrowseCookiesButton" Grid.Column="3" Margin="6,0,0,0" Padding="10,6" Content="Browse..." Click="BrowseCookiesButton_Click"/>
-                                            <Button x:Name="ClearCookiesButton" Grid.Column="4" Margin="6,0,0,0" Padding="8,6" Background="#374151" Content="✕" Click="ClearCookiesButton_Click"/>
+                                            <Button x:Name="ClearCookiesButton" Grid.Column="4" Margin="6,0,0,0" Padding="8,6" Background="#374151" Click="ClearCookiesButton_Click" ToolTip.Tip="Clear Cookies File">
+                                                <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" Foreground="#EF4444"/>
+                                            </Button>
                                         </Grid>
                                     </StackPanel>
                                 </Grid>
@@ -801,9 +839,15 @@
                                                 <TextBlock Text="{Binding ProgressText}" Foreground="#9CA3AF" FontSize="10" HorizontalAlignment="Right"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                                <Button Padding="6,3" Background="#27272A" Foreground="#94A3B8" FontSize="11" Content="▲" ToolTip.Tip="Move Up in Queue" Click="MoveQueueItemUp_Click"/>
-                                                <Button Padding="6,3" Background="#27272A" Foreground="#94A3B8" FontSize="11" Content="▼" ToolTip.Tip="Move Down in Queue" Click="MoveQueueItemDown_Click"/>
-                                                <Button Padding="8,3" Background="#27272A" Foreground="#EF4444" FontSize="11" Content="✕" ToolTip.Tip="Remove from Queue" Click="RemoveQueueItem_Click"/>
+                                                <Button Padding="6,3" Background="#27272A" Foreground="#94A3B8" ToolTip.Tip="Move Up in Queue" Click="MoveQueueItemUp_Click">
+                                                    <PathIcon Data="{StaticResource ArrowUpIcon}" Width="10" Height="10" Foreground="#94A3B8"/>
+                                                </Button>
+                                                <Button Padding="6,3" Background="#27272A" Foreground="#94A3B8" ToolTip.Tip="Move Down in Queue" Click="MoveQueueItemDown_Click">
+                                                    <PathIcon Data="{StaticResource ArrowDownIcon}" Width="10" Height="10" Foreground="#94A3B8"/>
+                                                </Button>
+                                                <Button Padding="8,3" Background="#27272A" Foreground="#EF4444" ToolTip.Tip="Remove from Queue" Click="RemoveQueueItem_Click">
+                                                    <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" Foreground="#EF4444"/>
+                                                </Button>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -903,19 +947,19 @@
                             <Button x:Name="HistorySearchButton" Grid.Column="1" Margin="8,0,0,0" Padding="10,6" Click="HistorySearchButton_Click">
                                 <StackPanel Orientation="Horizontal" Spacing="5">
                                     <PathIcon Data="{StaticResource InspectIcon}" Width="12" Height="12" Foreground="#94A3B8"/>
-                                    <TextBlock Text="Search" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="HistorySearchText" Text="Search" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="HistoryRefreshButton" Grid.Column="2" Margin="8,0,0,0" Padding="10,6" Click="HistoryRefreshButton_Click">
                                 <StackPanel Orientation="Horizontal" Spacing="5">
                                     <PathIcon Data="{StaticResource RefreshIcon}" Width="12" Height="12" Foreground="#94A3B8"/>
-                                    <TextBlock Text="Refresh" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="HistoryRefreshText" Text="Refresh" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="HistoryClearButton" Grid.Column="3" Margin="8,0,0,0" Padding="10,6" Background="#374151" Click="HistoryClearButton_Click">
                                 <StackPanel Orientation="Horizontal" Spacing="5">
                                     <PathIcon Data="{StaticResource ClearIcon}" Width="12" Height="12" Foreground="#EF4444"/>
-                                    <TextBlock Text="Clear All" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="HistoryClearText" Text="Clear All" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                         </Grid>
@@ -960,26 +1004,40 @@
                                     </Border>
                                     <TextBlock x:Name="MiniPlayerTitle" Grid.Column="1" Text="Media Title" FontWeight="SemiBold" Foreground="#F8FAFC" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock x:Name="MiniPlayerTimeText" Grid.Column="2" Text="00:00 / 00:00" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="10,0"/>
-                                    <Button x:Name="MiniPlayerCloseButton" Grid.Column="3" Padding="6,2" Background="Transparent" Foreground="#64748B" FontSize="12" Content="✕" Click="MiniPlayerCloseButton_Click" ToolTip.Tip="Close Player"/>
+                                    <Button x:Name="MiniPlayerCloseButton" Grid.Column="3" Padding="6,2" Background="Transparent" Foreground="#64748B" FontSize="12" Click="MiniPlayerCloseButton_Click" ToolTip.Tip="Close Player">
+                                        <PathIcon Data="{StaticResource CloseIcon}" Width="10" Height="10" Foreground="#64748B"/>
+                                    </Button>
                                 </Grid>
 
                                 <!-- Bottom row: Controls and seek bar -->
                                 <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                                     <!-- Play/Pause Toggle -->
-                                    <Button x:Name="MiniPlayerPlayToggle" Grid.Column="0" Padding="10,5" Background="#2563EB" Foreground="White" FontWeight="Bold" FontSize="12" CornerRadius="4" Content="⏸" Click="MiniPlayerPlayToggle_Click" ToolTip.Tip="Play/Pause"/>
-                                    <Button x:Name="MiniPlayerStopButton" Grid.Column="1" Margin="6,0,8,0" Padding="8,5" Background="#27272A" Foreground="#E2E8F0" FontSize="12" CornerRadius="4" Content="⏹" Click="MiniPlayerStopButton_Click" ToolTip.Tip="Stop"/>
+                                    <Button x:Name="MiniPlayerPlayToggle" Grid.Column="0" Padding="10,5" Background="#2563EB" Foreground="White" FontWeight="Bold" FontSize="12" CornerRadius="4" Click="MiniPlayerPlayToggle_Click" ToolTip.Tip="Play/Pause">
+                                        <Panel>
+                                            <PathIcon x:Name="MiniPlayerPauseIcon" Data="{StaticResource PauseIcon}" Width="12" Height="12" Foreground="White"/>
+                                            <PathIcon x:Name="MiniPlayerPlayIcon" Data="{StaticResource PlayArrowIcon}" Width="12" Height="12" Foreground="White" IsVisible="False"/>
+                                        </Panel>
+                                    </Button>
+                                    <Button x:Name="MiniPlayerStopButton" Grid.Column="1" Margin="6,0,8,0" Padding="8,5" Background="#27272A" Foreground="#E2E8F0" FontSize="12" CornerRadius="4" Click="MiniPlayerStopButton_Click" ToolTip.Tip="Stop">
+                                        <PathIcon Data="{StaticResource StopIcon}" Width="12" Height="12" Foreground="#E2E8F0"/>
+                                    </Button>
 
                                     <!-- Position Seek Bar -->
                                     <Slider x:Name="MiniPlayerSeekBar" Grid.Column="2" Minimum="0" Maximum="100" Value="0" VerticalAlignment="Center" Margin="6,0,12,0"/>
 
                                     <!-- Volume Slider -->
                                     <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,10,0">
-                                        <TextBlock Text="🔊" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
+                                        <PathIcon Data="{StaticResource VolumeHighIcon}" Width="12" Height="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
                                         <Slider x:Name="MiniPlayerVolumeSlider" Width="75" Minimum="0" Maximum="100" Value="85" VerticalAlignment="Center"/>
                                     </StackPanel>
 
                                     <!-- Open in external app -->
-                                    <Button x:Name="MiniPlayerExternalButton" Grid.Column="4" Padding="8,4" Background="#27272A" Foreground="#38BDF8" FontSize="11" Content="↗ External" Click="MiniPlayerExternalButton_Click" ToolTip.Tip="Open in default system media player"/>
+                                    <Button x:Name="MiniPlayerExternalButton" Grid.Column="4" Padding="8,4" Background="#27272A" Foreground="#38BDF8" FontSize="11" Click="MiniPlayerExternalButton_Click" ToolTip.Tip="Open in default system media player">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <PathIcon Data="{StaticResource ExternalLaunchIcon}" Width="11" Height="11" Foreground="#38BDF8"/>
+                                            <TextBlock x:Name="MiniPlayerExternalText" Text="External" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
                                 </Grid>
                             </Grid>
                         </Border>
@@ -1005,7 +1063,7 @@
                                         <CheckBox x:Name="SubscriptionAudioCheck" Content="Audio (MP3)" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" Margin="0,0,16,4"/>
                                         
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,4">
-                                            <TextBlock Text="Quality:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="SubscriptionQualityLabel" Text="Quality:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
                                             <ComboBox x:Name="SubscriptionQualityCombo" SelectedIndex="0" VerticalAlignment="Center" Height="32">
                                                 <ComboBoxItem Content="best"/>
                                                 <ComboBoxItem Content="1080p"/>
@@ -1015,7 +1073,7 @@
                                         </StackPanel>
 
                                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,4">
-                                            <TextBlock Text="Max Sync:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="SubscriptionMaxSyncLabel" Text="Max Sync:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Maximum new videos to fetch per synchronization (1 to 100)."/>
                                             <NumericUpDown x:Name="SubscriptionMaxDownloads" Value="5" Minimum="1" Maximum="100"
@@ -1030,7 +1088,7 @@
                                         <Button x:Name="SubscriptionAddButton" Padding="14,7" Background="#2563EB" Foreground="White" Click="SubscriptionAddButton_Click">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <PathIcon Data="{StaticResource DownloadArrowIcon}" Width="12" Height="12" Foreground="White"/>
-                                                <TextBlock Text="Subscribe" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                                <TextBlock x:Name="SubscriptionAddText" Text="Subscribe" VerticalAlignment="Center" FontWeight="SemiBold"/>
                                             </StackPanel>
                                         </Button>
                                         <Button x:Name="SubscriptionSyncButton" Padding="12,7" Background="#059669" Foreground="White" Click="SubscriptionSyncButton_Click">
@@ -1157,29 +1215,45 @@
                 <Border Background="#1E1E24" CornerRadius="8" Padding="20" Margin="0,15,0,0">
                     <ScrollViewer>
                         <StackPanel Spacing="16">
-                            <TextBlock Text="Privacy &amp; Data Transparency" FontSize="18" FontWeight="SemiBold" Foreground="#38BDF8"/>
-                            <TextBlock Text="Universal Media Downloader is built with privacy as a foundational principle. We guarantee 100% open, inspectable telemetry with zero personal data collection." Foreground="#9CA3AF" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="PrivacyTitleText" Text="Privacy &amp; Data Transparency" FontSize="18" FontWeight="SemiBold" Foreground="#38BDF8"/>
+                            <TextBlock x:Name="PrivacySubtitleText" Text="Universal Media Downloader is built with privacy as a foundational principle. We guarantee 100% open, inspectable telemetry with zero personal data collection." Foreground="#9CA3AF" TextWrapping="Wrap"/>
 
                             <!-- Guarantees Card -->
                             <Border Background="#18181B" CornerRadius="6" Padding="14">
                                 <StackPanel Spacing="8">
-                                    <TextBlock Text="🛡️ Our Privacy Guarantees" FontWeight="Bold" Foreground="#4ADE80" FontSize="14"/>
-                                    <TextBlock Text="• Zero Activity Tracking: Downloaded URLs, video titles, and file contents are strictly processed on your device and are never sent anywhere." Foreground="#D1D5DB" TextWrapping="Wrap"/>
-                                    <TextBlock Text="• Zero Personal Identity: No IP addresses, usernames, accounts, machine hostnames, or credentials are collected or stored." Foreground="#D1D5DB" TextWrapping="Wrap"/>
-                                    <TextBlock Text="• Purely Anonymous Metrics: Heartbeats and crash traces use a locally-generated random UUIDv4." Foreground="#D1D5DB" TextWrapping="Wrap"/>
-                                    <TextBlock Text="• Full GDPR Compliance: You can opt out completely or request full remote deletion of this install ID at any time." Foreground="#D1D5DB" TextWrapping="Wrap"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <PathIcon Data="{StaticResource ShieldCheckIcon}" Width="15" Height="15" Foreground="#4ADE80" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="PrivacyGuaranteesHeader" Text="Our Privacy Guarantees" FontWeight="Bold" Foreground="#4ADE80" FontSize="14" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="PrivacyGuarantee1Text" Text="• Zero Activity Tracking: Downloaded URLs, video titles, and file contents are strictly processed on your device and are never sent anywhere." Foreground="#D1D5DB" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="PrivacyGuarantee2Text" Text="• Zero Personal Identity: No IP addresses, usernames, accounts, machine hostnames, or credentials are collected or stored." Foreground="#D1D5DB" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="PrivacyGuarantee3Text" Text="• Purely Anonymous Metrics: Heartbeats and crash traces use a locally-generated random UUIDv4." Foreground="#D1D5DB" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="PrivacyGuarantee4Text" Text="• Full GDPR Compliance: You can opt out completely or request full remote deletion of this install ID at any time." Foreground="#D1D5DB" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
 
                             <!-- Settings & Controls -->
                             <Border Background="#18181B" CornerRadius="6" Padding="14">
                                 <StackPanel Spacing="12">
-                                    <TextBlock Text="⚙️ Telemetry &amp; Diagnostics Controls" FontWeight="Bold" Foreground="#F3F4F6" FontSize="14"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <PathIcon Data="{StaticResource SettingsIcon}" Width="15" Height="15" Foreground="#F3F4F6" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TelemetryControlsHeader" Text="Telemetry &amp; Diagnostics Controls" FontWeight="Bold" Foreground="#F3F4F6" FontSize="14" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                     <CheckBox x:Name="OptOutTelemetryCheckBox" Content="Disable anonymous heartbeats and crash reporting (--no-telemetry)" Foreground="#E5E7EB"/>
 
                                     <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,8,0,0">
-                                        <Button x:Name="ResetInstallIdButton" Content="🔄 Reset Anonymous Device ID" Background="#374151" Foreground="#F9FAFB" Padding="12,6"/>
-                                        <Button x:Name="GdprWipeButton" Content="🗑️ GDPR Remote Data Wipe" Background="#7F1D1D" Foreground="#FEE2E2" Padding="12,6"/>
+                                        <Button x:Name="ResetInstallIdButton" Background="#374151" Foreground="#F9FAFB" Padding="12,6">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <PathIcon Data="{StaticResource RefreshIcon}" Width="12" Height="12" Foreground="#F9FAFB"/>
+                                                <TextBlock x:Name="ResetInstallIdText" Text="Reset Anonymous Device ID" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="GdprWipeButton" Background="#7F1D1D" Foreground="#FEE2E2" Padding="12,6">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <PathIcon Data="{StaticResource TrashIcon}" Width="12" Height="12" Foreground="#FEE2E2"/>
+                                                <TextBlock x:Name="GdprWipeText" Text="GDPR Remote Data Wipe" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
                                     </StackPanel>
 
                                     <TextBlock x:Name="PrivacyStatusLabel" Text="Status: Telemetry is active with anonymous UUIDv4" Foreground="#9CA3AF" FontSize="12" Margin="0,4,0,0"/>
@@ -1189,8 +1263,11 @@
                             <!-- Technical Payload Inspector (Hidden by default; configurable via app_config.json / UserSettings) -->
                             <Border x:Name="TelemetryInfoLayout" Background="#18181B" CornerRadius="6" Padding="14" IsVisible="False">
                                 <StackPanel Spacing="8">
-                                    <TextBlock Text="🔍 Inspect Exact Diagnostic Data Sent to Server" FontWeight="Bold" Foreground="#94A3B8" FontSize="13"/>
-                                    <TextBlock Text="Only high-level device specifications are transmitted (OS name, RAM, CPU architecture, screen resolution, locale, and optional friend referral tag):" Foreground="#9CA3AF" FontSize="12"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <PathIcon Data="{StaticResource InspectIcon}" Width="13" Height="13" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="InspectDiagnosticHeader" Text="Inspect Exact Diagnostic Data Sent to Server" FontWeight="Bold" Foreground="#94A3B8" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="InspectDiagnosticSubtitle" Text="Only high-level device specifications are transmitted (OS name, RAM, CPU architecture, screen resolution, locale, and optional friend referral tag):" Foreground="#9CA3AF" FontSize="12"/>
                                     <TextBox x:Name="TelemetryPayloadTextBox" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Cascadia Code, Consolas, monospace" FontSize="11" Background="#0F172A" Foreground="#38BDF8" Height="140"/>
                                 </StackPanel>
                             </Border>
@@ -1215,20 +1292,40 @@
                                     <!-- Author Info -->
                                     <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4">
                                         <TextBlock Text="Anthony Gaius" FontSize="20" FontWeight="Bold" Foreground="#FFFFFF"/>
-                                        <TextBlock Text="Creator, Architect &amp; Lead Developer" FontSize="13" FontWeight="SemiBold" Foreground="#38BDF8"/>
+                                        <TextBlock x:Name="AuthorRoleText" Text="Creator, Architect &amp; Lead Developer" FontSize="13" FontWeight="SemiBold" Foreground="#38BDF8"/>
                                         <TextBlock Text="@Antony-Gh on GitHub" FontSize="12" Foreground="#9CA3AF"/>
                                     </StackPanel>
 
                                     <!-- Bio & Statement -->
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Created and actively engineered Universal Media Downloader to provide a fast, private, ad-free, and open-source media downloading suite across Windows, macOS, Linux, and Android." 
+                                    <TextBlock x:Name="AuthorBioText" Grid.Row="1" Grid.Column="1" Text="Created and actively engineered Universal Media Downloader to provide a fast, private, ad-free, and open-source media downloading suite across Windows, macOS, Linux, and Android." 
                                                Foreground="#D1D5DB" TextWrapping="Wrap" Margin="0,12,0,0" FontSize="13" LineHeight="20"/>
 
                                     <!-- Action Buttons -->
                                     <WrapPanel Grid.Row="2" Grid.Column="1" Margin="0,16,0,0">
-                                        <Button x:Name="AuthorGithubButton" Content="🌐 GitHub Profile" Background="#2563EB" Foreground="#FFFFFF" Padding="14,8" Margin="0,0,10,8" Cursor="Hand"/>
-                                        <Button x:Name="AuthorRepoButton" Content="⭐ Star on GitHub" Background="#374151" Foreground="#F9FAFB" Padding="14,8" Margin="0,0,10,8" Cursor="Hand"/>
-                                        <Button x:Name="AuthorIssuesButton" Content="🐛 Report Issue" Background="#374151" Foreground="#F9FAFB" Padding="14,8" Margin="0,0,10,8" Cursor="Hand"/>
-                                        <Button x:Name="AuthorEmailButton" Content="✉️ Contact Author" Background="#374151" Foreground="#F9FAFB" Padding="14,8" Margin="0,0,10,8" Cursor="Hand"/>
+                                        <Button x:Name="AuthorGithubButton" Background="#2563EB" Foreground="#FFFFFF" Padding="14,8" Margin="0,0,10,8" Cursor="Hand">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <PathIcon Data="{StaticResource WebIcon}" Width="13" Height="13" Foreground="#FFFFFF"/>
+                                                <TextBlock x:Name="AuthorGithubText" Text="GitHub Profile" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="AuthorRepoButton" Background="#374151" Foreground="#F9FAFB" Padding="14,8" Margin="0,0,10,8" Cursor="Hand">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <PathIcon Data="{StaticResource StarIcon}" Width="13" Height="13" Foreground="#F59E0B"/>
+                                                <TextBlock x:Name="AuthorRepoText" Text="Star on GitHub" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="AuthorIssuesButton" Background="#374151" Foreground="#F9FAFB" Padding="14,8" Margin="0,0,10,8" Cursor="Hand">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <PathIcon Data="{StaticResource BugIcon}" Width="13" Height="13" Foreground="#F87171"/>
+                                                <TextBlock x:Name="AuthorIssuesText" Text="Report Issue" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="AuthorEmailButton" Background="#374151" Foreground="#F9FAFB" Padding="14,8" Margin="0,0,10,8" Cursor="Hand">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <PathIcon Data="{StaticResource EmailIcon}" Width="13" Height="13" Foreground="#38BDF8"/>
+                                                <TextBlock x:Name="AuthorEmailText" Text="Contact Author" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
                                     </WrapPanel>
                                 </Grid>
                             </Border>
@@ -1236,8 +1333,11 @@
                             <!-- Project Mission Card -->
                             <Border Background="#18181B" CornerRadius="8" Padding="16">
                                 <StackPanel Spacing="8">
-                                    <TextBlock Text="🌟 About Universal Media Downloader" FontSize="15" FontWeight="Bold" Foreground="#4ADE80"/>
-                                    <TextBlock Text="Universal Media Downloader was built from the ground up to solve common frustrations with web media tools: eliminating intrusive ads, trackers, suspicious redirects, and paywalls. Every capability runs 100% locally on your machine." 
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <PathIcon Data="{StaticResource StarIcon}" Width="15" Height="15" Foreground="#4ADE80" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="AboutUmdHeader" Text="About Universal Media Downloader" FontSize="15" FontWeight="Bold" Foreground="#4ADE80" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="AboutUmdText" Text="Universal Media Downloader was built from the ground up to solve common frustrations with web media tools: eliminating intrusive ads, trackers, suspicious redirects, and paywalls. Every capability runs 100% locally on your machine." 
                                                Foreground="#D1D5DB" TextWrapping="Wrap" FontSize="13" LineHeight="19"/>
                                 </StackPanel>
                             </Border>
@@ -1245,7 +1345,10 @@
                             <!-- Open Source Acknowledgments -->
                             <Border Background="#18181B" CornerRadius="8" Padding="16">
                                 <StackPanel Spacing="10">
-                                    <TextBlock Text="❤️ Open-Source Technologies &amp; Acknowledgments" FontSize="15" FontWeight="Bold" Foreground="#F3F4F6"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <PathIcon Data="{StaticResource HeartIcon}" Width="15" Height="15" Foreground="#F43F5E" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="OpenSourceTechHeader" Text="Open-Source Technologies &amp; Acknowledgments" FontSize="15" FontWeight="Bold" Foreground="#F3F4F6" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                     <TextBlock Text="Universal Media Downloader is proudly built on top of world-class open-source projects:" Foreground="#9CA3AF" FontSize="12"/>
 
                                     <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4,0,0">
@@ -1262,7 +1365,7 @@
                             </Border>
 
                             <!-- License & Copyright Footer -->
-                            <TextBlock Text="© 2024-2026 Anthony Gaius. Distributed under the MIT Open Source License." 
+                            <TextBlock x:Name="LicenseFooterText" Text="© 2024-2026 Anthony Gaius. Distributed under the MIT Open Source License." 
                                        HorizontalAlignment="Center" Foreground="#6B7280" FontSize="12" Margin="0,10,0,0"/>
                         </StackPanel>
                     </ScrollViewer>

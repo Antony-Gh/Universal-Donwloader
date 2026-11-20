@@ -43,6 +43,8 @@ import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -265,7 +267,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("About & Credits") },
+                                    text = { Text(strings.aboutCredits) },
                                     onClick = {
                                         showUpdateMenu = false
                                         showCreditsDialog = true
@@ -329,7 +331,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             ) {
-                                Text("Upgrade", color = Color(0xFFFCA5A5), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(strings.upgrade, color = Color(0xFFFCA5A5), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }
@@ -374,7 +376,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                 onClick = { showUpdateDialog = true },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             ) {
-                                Text("Update", color = AccentSky, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(strings.update, color = AccentSky, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                             IconButton(
                                 onClick = { viewModel.dismissUpdateBanner() },
@@ -547,7 +549,7 @@ fun MainScreen(viewModel: MainViewModel) {
             containerColor = SurfaceCard,
             shape = RoundedCornerShape(14.dp),
             title = {
-                Text("About & Credits", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text(strings.aboutCredits, color = TextPrimary, fontWeight = FontWeight.Bold)
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -558,13 +560,13 @@ fun MainScreen(viewModel: MainViewModel) {
                         fontSize = 16.sp,
                     )
                     Text(
-                        text = "Creator, Architect & Lead Developer",
+                        text = strings.aboutCreatorRole,
                         fontWeight = FontWeight.SemiBold,
                         color = SuccessGreen,
                         fontSize = 12.sp,
                     )
                     Text(
-                        text = "Universal Media Downloader is built to provide a fast, private, ad-free, and open-source media downloading suite across platforms.\n\nPowered by yt-dlp, FFmpeg, Jetpack Compose, and Kotlin.",
+                        text = strings.aboutStatement,
                         color = TextSecondary,
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
@@ -579,12 +581,12 @@ fun MainScreen(viewModel: MainViewModel) {
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentIndigo),
                 ) {
-                    Text("GitHub Repo", color = Color.White)
+                    Text(strings.githubRepo, color = Color.White)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCreditsDialog = false }) {
-                    Text("Close", color = TextSecondary)
+                    Text(strings.close, color = TextSecondary)
                 }
             },
         )
@@ -605,7 +607,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Channel Subscriptions",
+                        text = strings.subscriptionsTitle,
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp,
@@ -623,7 +625,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         } else {
                             Icon(
                                 Icons.Default.Refresh,
-                                contentDescription = "Sync All",
+                                contentDescription = strings.syncAll,
                                 tint = AccentSky,
                                 modifier = Modifier.size(20.dp),
                             )
@@ -640,7 +642,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         value = newSubUrl,
                         onValueChange = { newSubUrl = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Channel or Playlist URL...", fontSize = 12.sp, color = TextMuted) },
+                        placeholder = { Text(strings.channelOrPlaylistPlaceholder, fontSize = 12.sp, color = TextMuted) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = AccentSky,
@@ -667,7 +669,7 @@ fun MainScreen(viewModel: MainViewModel) {
                                     checkedTrackColor = AccentSky,
                                 ),
                             )
-                            Text("Audio (MP3)", color = TextSecondary, fontSize = 12.sp)
+                            Text(strings.audioMp3, color = TextSecondary, fontSize = 12.sp)
                         }
 
                         Button(
@@ -681,7 +683,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                         ) {
-                            Text("Subscribe", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(strings.subscribe, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -689,8 +691,11 @@ fun MainScreen(viewModel: MainViewModel) {
 
                     if (state.subscriptions.isEmpty()) {
                         Text(
-                            text = "No subscriptions yet. Add a channel or playlist above to track new uploads automatically.",
+                            text = strings.noSubscriptionsYet,
                             color = TextMuted,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
                             fontSize = 12.sp,
                             modifier = Modifier.padding(vertical = 12.dp),
                         )
@@ -750,7 +755,7 @@ fun MainScreen(viewModel: MainViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.toggleSubscriptionsDialog(false) }) {
-                    Text("Close", color = AccentSky, fontWeight = FontWeight.Bold)
+                    Text(strings.close, color = AccentSky, fontWeight = FontWeight.Bold)
                 }
             },
         )
@@ -970,7 +975,7 @@ private fun DownloadTab(
                                             }
                                         }
                                         Spacer(Modifier.width(8.dp))
-                                        Text("Select", color = AccentSky, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(strings.select, color = AccentSky, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -989,9 +994,9 @@ private fun DownloadTab(
                         if (state.isSniffingPage) {
                             CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = AccentSky)
                             Spacer(Modifier.width(6.dp))
-                            Text("Sniffing Page Media...", color = TextPrimary, fontSize = 12.sp)
+                            Text(strings.sniffingPageMedia, color = TextPrimary, fontSize = 12.sp)
                         } else {
-                            Text("Sniff Embedded Page Media (.m3u8 / .mpd / <video>)", color = AccentSky, fontSize = 12.sp)
+                            Text(strings.sniffEmbeddedMedia, color = AccentSky, fontSize = 12.sp)
                         }
                     }
                 }
@@ -1053,7 +1058,7 @@ private fun DownloadTab(
                                             modifier = Modifier.weight(1f),
                                         )
                                         Spacer(Modifier.width(6.dp))
-                                        Text("Load", color = AccentSky, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(strings.load, color = AccentSky, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -1089,7 +1094,7 @@ private fun DownloadTab(
                                 onClick = { viewModel.acceptClipboardUrl() },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             ) {
-                                Text("Load", color = AccentSky, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(strings.load, color = AccentSky, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                             IconButton(
                                 onClick = { viewModel.dismissClipboardUrl() },
@@ -1188,7 +1193,7 @@ private fun DownloadTab(
                                     )
                                 }
                                 if (state.isFetchingMetadata) {
-                                    Text("Loading details...", color = TextSecondary, fontSize = 11.sp)
+                                    Text(strings.loadingDetails, color = TextSecondary, fontSize = 11.sp)
                                 }
                             }
 
@@ -1695,11 +1700,11 @@ private fun DownloadTab(
                         color = Color.White,
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("Downloading Pic...", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                    Text(strings.downloadingPic, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
                 } else if (isProfileMode) {
                     Icon(Icons.Default.Person, contentDescription = null, tint = Color.White)
                     Spacer(Modifier.width(6.dp))
-                    Text("Download Profile Pic", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                    Text(strings.downloadProfilePic, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
                 } else {
                     Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
                     Spacer(Modifier.width(6.dp))
@@ -1833,19 +1838,19 @@ private fun DownloadTab(
                                             onClick = { viewModel.moveQueueItemUp(qItem.id) },
                                             modifier = Modifier.size(22.dp),
                                         ) {
-                                            Text("▲", fontSize = 11.sp, color = TextMuted)
+                                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = strings.moveUp, tint = TextMuted, modifier = Modifier.size(14.dp))
                                         }
                                         IconButton(
                                             onClick = { viewModel.moveQueueItemDown(qItem.id) },
                                             modifier = Modifier.size(22.dp),
                                         ) {
-                                            Text("▼", fontSize = 11.sp, color = TextMuted)
+                                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = strings.moveDown, tint = TextMuted, modifier = Modifier.size(14.dp))
                                         }
                                         IconButton(
                                             onClick = { viewModel.removeQueueItem(qItem.id) },
                                             modifier = Modifier.size(22.dp),
                                         ) {
-                                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextMuted, modifier = Modifier.size(13.dp))
+                                            Icon(Icons.Default.Close, contentDescription = strings.remove, tint = TextMuted, modifier = Modifier.size(13.dp))
                                         }
                                     }
                                 }
@@ -2209,7 +2214,7 @@ private fun StreamRowCard(
             ) {
                 Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
                 Spacer(Modifier.width(4.dp))
-                Text("Get", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(LocalAppStrings.current.get, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
     }
@@ -2307,10 +2312,10 @@ private fun HistoryRowCard(item: HistoryEntry, context: Context) {
             }
 
             IconButton(onClick = { openMediaFile(context, item.filePath) }) {
-                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = AccentBlue)
+                Icon(Icons.Default.PlayArrow, contentDescription = LocalAppStrings.current.open, tint = AccentBlue)
             }
             IconButton(onClick = { shareMediaFile(context, item.filePath) }) {
-                Icon(Icons.Default.Share, contentDescription = "Share", tint = TextSecondary)
+                Icon(Icons.Default.Share, contentDescription = LocalAppStrings.current.share, tint = TextSecondary)
             }
         }
     }
