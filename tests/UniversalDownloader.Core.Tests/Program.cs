@@ -105,6 +105,7 @@ RunTest("UpdateChecker reads shared app_config.json assembly metadata", () =>
     AssertTrue(!string.IsNullOrWhiteSpace(UpdateChecker.RepoOwner), "RepoOwner populated");
     AssertTrue(!string.IsNullOrWhiteSpace(UpdateChecker.RepoName), "RepoName populated");
     AssertTrue(UpdateChecker.AppVersionCode >= 100, "AppVersionCode >= 100");
+    AssertTrue(UpdateChecker.ShowTelemetryInfo == false, "ShowTelemetryInfo defaults to false in app_config.json");
 });
 
 RunTest("DownloadOptions.BuildCliArguments builds cookies, clip, playlist, and sponsorblock flags", () =>

@@ -942,29 +942,57 @@
                 <Border Background="#1E1E24" CornerRadius="8" Padding="16" Margin="0,15,0,0">
                     <StackPanel Spacing="12">
                         <!-- Add Subscription Bar -->
-                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
-                            <TextBox x:Name="SubscriptionUrlBox" Grid.Column="0" Watermark="Channel or playlist URL to auto-track..."/>
-                            <CheckBox x:Name="SubscriptionAudioCheck" Grid.Column="1" Margin="8,0,0,0" Content="Audio (MP3)" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="SubscriptionQualityCombo" Grid.Column="2" Margin="8,0,0,0" SelectedIndex="0" VerticalAlignment="Center">
-                                <ComboBoxItem Content="best"/>
-                                <ComboBoxItem Content="1080p"/>
-                                <ComboBoxItem Content="720p"/>
-                                <ComboBoxItem Content="480p"/>
-                            </ComboBox>
-                            <NumericUpDown x:Name="SubscriptionMaxDownloads" Grid.Column="3" Margin="8,0,0,0" Value="5" Minimum="1" Maximum="100" Width="85" VerticalAlignment="Center" ToolTip.Tip="Max new videos to fetch per sync"/>
-                            <Button x:Name="SubscriptionAddButton" Grid.Column="4" Margin="8,0,0,0" Padding="10,6" Background="#2563EB" Foreground="White" Click="SubscriptionAddButton_Click">
-                                <StackPanel Orientation="Horizontal" Spacing="5">
-                                    <PathIcon Data="{StaticResource DownloadArrowIcon}" Width="12" Height="12" Foreground="White"/>
-                                    <TextBlock Text="Subscribe" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="SubscriptionSyncButton" Grid.Column="5" Margin="8,0,0,0" Padding="10,6" Background="#059669" Foreground="White" Click="SubscriptionSyncButton_Click">
-                                <StackPanel Orientation="Horizontal" Spacing="5">
-                                    <PathIcon Data="{StaticResource RefreshIcon}" Width="12" Height="12" Foreground="White"/>
-                                    <TextBlock x:Name="SubscriptionSyncText" Text="Sync All" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                        </Grid>
+                        <Border Background="#18181E" BorderBrush="#27272A" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,6">
+                            <Grid RowDefinitions="Auto,Auto">
+                                <!-- Row 0: Target Channel / Playlist URL -->
+                                <TextBox x:Name="SubscriptionUrlBox" Grid.Row="0" Margin="0,0,0,10"
+                                         Watermark="Channel or playlist URL to auto-track (e.g. https://www.youtube.com/@channel)..."/>
+
+                                <!-- Row 1: Options & Action Buttons -->
+                                <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                                    <!-- Subscription Options -->
+                                    <WrapPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <CheckBox x:Name="SubscriptionAudioCheck" Content="Audio (MP3)" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center" Margin="0,0,16,4"/>
+                                        
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,4">
+                                            <TextBlock Text="Quality:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                                            <ComboBox x:Name="SubscriptionQualityCombo" SelectedIndex="0" VerticalAlignment="Center" Height="32">
+                                                <ComboBoxItem Content="best"/>
+                                                <ComboBoxItem Content="1080p"/>
+                                                <ComboBoxItem Content="720p"/>
+                                                <ComboBoxItem Content="480p"/>
+                                            </ComboBox>
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,4">
+                                            <TextBlock Text="Max Sync:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                                            <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                      ToolTip.Tip="Maximum new videos to fetch per synchronization (1 to 100)."/>
+                                            <NumericUpDown x:Name="SubscriptionMaxDownloads" Value="5" Minimum="1" Maximum="100"
+                                                           Width="105" Height="32" Margin="4,0,0,0" FormatString="0"
+                                                           HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                           VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </WrapPanel>
+
+                                    <!-- Action Buttons -->
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <Button x:Name="SubscriptionAddButton" Padding="14,7" Background="#2563EB" Foreground="White" Click="SubscriptionAddButton_Click">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <PathIcon Data="{StaticResource DownloadArrowIcon}" Width="12" Height="12" Foreground="White"/>
+                                                <TextBlock Text="Subscribe" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="SubscriptionSyncButton" Padding="12,7" Background="#059669" Foreground="White" Click="SubscriptionSyncButton_Click">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <PathIcon Data="{StaticResource RefreshIcon}" Width="12" Height="12" Foreground="White"/>
+                                                <TextBlock x:Name="SubscriptionSyncText" Text="Sync All" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Grid>
+                        </Border>
 
                         <ProgressBar x:Name="SubscriptionLoadingBar" IsIndeterminate="True" Height="3" Foreground="#10B981" IsVisible="False"/>
 
@@ -1108,8 +1136,8 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Technical Payload Inspector -->
-                            <Border Background="#18181B" CornerRadius="6" Padding="14">
+                            <!-- Technical Payload Inspector (Hidden by default; configurable via app_config.json / UserSettings) -->
+                            <Border x:Name="TelemetryInfoLayout" Background="#18181B" CornerRadius="6" Padding="14" IsVisible="False">
                                 <StackPanel Spacing="8">
                                     <TextBlock Text="🔍 Inspect Exact Diagnostic Data Sent to Server" FontWeight="Bold" Foreground="#94A3B8" FontSize="13"/>
                                     <TextBlock Text="Only high-level device specifications are transmitted (OS name, RAM, CPU architecture, screen resolution, locale, and optional friend referral tag):" Foreground="#9CA3AF" FontSize="12"/>

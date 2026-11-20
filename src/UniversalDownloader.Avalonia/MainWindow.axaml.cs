@@ -253,17 +253,23 @@ public partial class MainWindow : Window
             ? "Status: 🟢 Telemetry is active (Anonymous Heartbeat & Crash Diagnostics)"
             : "Status: 🔴 Telemetry is disabled (Opted Out)";
 
-        var samplePayload = new
+        bool showInfo = _settings.ShowTelemetryInfo || UpdateChecker.ShowTelemetryInfo;
+        TelemetryInfoLayout.IsVisible = showInfo;
+
+        if (showInfo)
         {
-            install_id = "00000000-0000-0000-0000-000000000000",
-            app_version = "3.9.0",
-            device_type = "Desktop PC",
-            os_name = Environment.OSVersion.ToString(),
-            cpu_cores = Environment.ProcessorCount,
-            cpu_arch = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
-            friend_tag = _settings.FriendTag ?? "None (Standard User)"
-        };
-        TelemetryPayloadTextBox.Text = System.Text.Json.JsonSerializer.Serialize(samplePayload, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var samplePayload = new
+            {
+                install_id = "00000000-0000-0000-0000-000000000000",
+                app_version = "4.0.0",
+                device_type = "Desktop PC",
+                os_name = Environment.OSVersion.ToString(),
+                cpu_cores = Environment.ProcessorCount,
+                cpu_arch = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
+                friend_tag = _settings.FriendTag ?? "None (Standard User)"
+            };
+            TelemetryPayloadTextBox.Text = System.Text.Json.JsonSerializer.Serialize(samplePayload, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
     }
 
     private void LanguageToggleButton_Click(object? sender, RoutedEventArgs e)

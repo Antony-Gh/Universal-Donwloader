@@ -42,6 +42,7 @@ public static class UpdateChecker
     public static string RepoName => GetAssemblyMetadata("GitHubRepo") ?? "Universal-Donwloader";
     public static string AppDisplayName => GetAssemblyMetadata("AppDisplayName") ?? "Universal Media Downloader";
     public static int AppVersionCode => int.TryParse(GetAssemblyMetadata("AppVersionCode"), out var code) ? code : 400;
+    public static bool ShowTelemetryInfo => bool.TryParse(GetAssemblyMetadata("ShowTelemetryInfo"), out var show) && show;
     public static string LatestReleaseApiUrl => $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest";
     public static string LatestReleaseWebUrl => $"https://github.com/{RepoOwner}/{RepoName}/releases/latest";
 

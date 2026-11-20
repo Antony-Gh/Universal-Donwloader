@@ -19,6 +19,7 @@ public class UserSettings
     public string CookiesFilePath { get; set; } = string.Empty;
     public bool SponsorBlockEnabled { get; set; } = false;
     public bool TelemetryEnabled { get; set; } = true;
+    public bool ShowTelemetryInfo { get; set; } = false;
     public string? TelemetryUrl { get; set; } = null;
     public string? TelemetryKey { get; set; } = null;
     public string? FriendTag { get; set; } = null;

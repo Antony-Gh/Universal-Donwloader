@@ -5,6 +5,7 @@
   "version_code": 400,
   "github_owner": "Antony-Gh",
   "github_repo": "Universal-Donwloader",
+  "show_telemetry_info": false,
   "android": {
     "application_id": "com.universaldownloader.app",
     "min_sdk": 24,
@@ -17,6 +18,7 @@
     "msi_upgrade_code": "8F4B9A2C-6E1D-4A3F-9C8B-2E5A7D1F4B90",
     "default_fragments": 4,
     "max_fragments": 16,
-    "update_check_timeout_seconds": 25
+    "update_check_timeout_seconds": 25,
+    "show_telemetry_info": false
   }
 }
