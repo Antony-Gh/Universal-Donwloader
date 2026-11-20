@@ -2,6 +2,74 @@
 
 All notable changes to **Universal Media Downloader** are documented in this file.
 
+## [4.1.0] - 2026-11-20
+
+### ⚡ Feature Release: Automation, Custom Themes, Built-In Media Player & AI Stems
+
+Universal Media Downloader v4.1.0 brings a huge expansion in workflow automation, user interface personalization, and audio processing capabilities. This release introduces a floating Quick Download HUD, an integrated in-app media player, real-time download bandwidth visualization, 6 custom UI themes, an if-this-then-that smart routing rules engine, device and social media presets, bilingual dual subtitles, AI vocal/karaoke extraction, podcast RSS feed export, and automatic NAS/cloud backups.
+
+### Added
+
+- **Floating Quick-Download HUD (`Ctrl + Shift + D` / Quick Modal)**:
+  - Floating, always-on-top quick action modal (`QuickDownloadWindow.axaml`) with clipboard media URL auto-detection.
+  - 1-click download actions for Best Video, High-Quality Audio MP3, device/social presets, and direct queueing.
+  - Global desktop shortcut `Ctrl + Shift + D` and header trigger button.
+  - Interactive CLI `--quick` / `--hud` prompt mode with automatic clipboard inspection.
+
+- **Integrated In-App Mini Media Player / Previewer**:
+  - Zero-dependency native media engine (`MiniMediaPlayer.cs` via Win32 MCI / `winmm.dll` with POSIX fallback).
+  - Sleek in-app playback card embedded in the Desktop History tab with play/pause toggle, stop, position seek slider, volume control, and external player launcher.
+  - Real-time timecode display (`MM:SS / MM:SS`).
+
+- **Live Download Speed & Bandwidth History Graph / Visualizer**:
+  - Custom high-performance vector polyline visualizer control (`BandwidthGraphControl.cs`) rendered in real time.
+  - Displays dynamic gradient area fill, peak transfer speed tracking, current speed badge, and background guidelines directly inside the progress card.
+
+- **Custom UI Themes & Accent Palettes**:
+  - 6 custom theme presets: **Default Dark**, **AMOLED True Black**, **Nord Frost**, **Cyberpunk Neon**, **Catppuccin Mocha**, and **Emerald Matrix**.
+  - Persistent theme selection via header dropdown (`ThemeComboBox`), saving preferences to `UserSettings`.
+  - Dynamic visual tree surface updating for cards, dialogs, and borders.
+
+- **Smart Routing & Automation Rules Engine**:
+  - Conditional if-this-then-that rules engine (`universal_downloader/rules.py`).
+  - Evaluates media platform, title keywords, uploader, or duration to automatically route downloads to specific subdirectories, formats, presets, or trigger Whisper transcription and chapter splitting.
+  - CLI management flags: `--rules [PATH]` (custom JSON file), `--rules-list` (display configured rules), and `--no-rules` (bypass rules).
+
+- **One-Click Device & Social Media Optimization Presets**:
+  - Target optimization profiles: `discord` (<25MB), `discord_10mb` (<10MB), `whatsapp` (<16MB), `car_audio` (MP3 320k normalized), and `tv_theater` (4K/Surround).
+  - Dynamic dual-pass target-size bitrate scaling engine (`universal_downloader/presets.py`) ensuring videos fit exact platform upload limits.
+  - CLI options: `--preset <name>` and `--preset-list`.
+
+- **Bilingual & Dual Subtitle Generator & Merger**:
+  - Subtitle parser and cue alignment engine (`universal_downloader/subtitles.py`).
+  - Synchronizes two subtitle streams into a single bilingual SRT file with stacked or side-by-side formatting.
+  - CLI options: `--dual-subs` and `--merge-subs FILE1,FILE2`.
+
+- **Podcast RSS Feed Generator for Subscriptions**:
+  - Exports standard RSS 2.0 podcast XML feeds with iTunes tags, RFC 822 publication dates, channel artwork, and enclosure media streams (`universal_downloader/feed.py`).
+  - Directly importable into AntennaPod, Pocket Casts, Apple Podcasts, and VLC.
+  - CLI flags: `--export-rss [URL_OR_ID]` and `--rss-base-url URL`.
+
+- **AI Vocal & Instrumental Stems Separation / Karaoke Extractor**:
+  - Dual-mode audio stem separator (`universal_downloader/stems.py`): Demucs deep learning AI model integration and zero-dependency FFmpeg center-channel phase inversion fallback.
+  - Extracts clean instrumental accompaniment for karaoke or isolated vocal tracks.
+  - CLI flags: `--karaoke` / `--instrumental` and `--isolate-vocals`.
+
+- **Automatic NAS & Cloud Backup Integration**:
+  - Post-download synchronization engine (`universal_downloader/backup.py`).
+  - Supports authenticated WebDAV HTTP PUT uploads (Nextcloud, ownCloud, Synology, TrueNAS) and local / SMB network shares (`\\server\share`).
+  - CLI options: `--backup-target <URI_OR_PATH>`, `--backup-user <USER>`, and `--backup-pass <PASS>`.
+
+- **Interactive Queue Item Priority Reordering**:
+  - Added `▲` Move Up and `▼` Move Down buttons on queue items in Desktop Avalonia and Android Compose.
+  - Allows reordering pending downloads with animated collection updates.
+
+### Verification
+
+- **204 Python unit and integration tests passing** (`pytest tests/`).
+- **22 C# Core unit tests passing** (`dotnet test tests/UniversalDownloader.Core.Tests`).
+- Full cross-platform compilation clean with 0 errors across .NET 9 Avalonia Desktop.
+
 ## [4.0.0] - 2026-11-20
 
 ### 🚀 Major Release: The All-in-One Media Archiving & Automation Suite
