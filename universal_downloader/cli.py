@@ -474,6 +474,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Download new uploads from all subscribed channels/playlists using the subscription archive.",
     )
+    pl_group.add_argument(
+        "--export-rss",
+        metavar="URL_OR_ID",
+        nargs="?",
+        const="all",
+        help="Generate local Podcast RSS XML feed for subscriptions (compatible with AntennaPod, Pocket Casts).",
+    )
+    pl_group.add_argument(
+        "--rss-base-url",
+        metavar="URL",
+        default="",
+        help="Base HTTP/LAN URL for enclosure items in the generated podcast RSS feed.",
+    )
 
     # Performance & Networking
     net_group = parser.add_argument_group("Networking & Performance")
@@ -1404,6 +1417,59 @@ def main() -> int:
                         config,
                     )
             return 0 if summary["failed"] == 0 else 1
+
+        # Export Podcast RSS Feed for Subscriptions
+        if getattr(args, "export_rss", None) is not None:
+            from universal_downloader.feed import export_subscription_feed
+            from universal_downloader.history import get_history
+            from universal_downloader.subscriptions import list_subscriptions
+
+            subs = list_subscriptions(db_path)
+            export_target = str(args.export_rss).strip()
+            matched_subs = subs
+            if export_target != "all":
+                matched_subs = [s for s in subs if str(s["id"]) == export_target or s["url"] == export_target]
+
+            if not matched_subs:
+                channel_info = {
+                    "title": "Universal Downloader Media Feed",
+                    "url": "https://github.com/Antony-Gh/Universal-Donwloader",
+                    "description": "Local media feed exported from Universal Downloader",
+                }
+            else:
+                channel_info = {
+                    "title": matched_subs[0].get("label") or f"Subscription #{matched_subs[0]['id']}",
+                    "url": matched_subs[0]["url"],
+                    "description": f"Offline podcast episodes from {matched_subs[0]['url']}",
+                }
+
+            history_records = get_history(db_path, limit=100)
+            items = []
+            for h in history_records:
+                files = h.get("files") or []
+                primary = files[0] if files else None
+                items.append({
+                    "title": h.get("title") or "Episode",
+                    "url": h.get("url") or "",
+                    "uploader": h.get("uploader") or "",
+                    "duration": h.get("duration"),
+                    "file_path": primary,
+                })
+
+            out_feed = config.output_dir / "podcast_feed.xml"
+            feed_file = export_subscription_feed(
+                channel_info,
+                items,
+                out_feed,
+                base_url=getattr(args, "rss_base_url", "") or "",
+            )
+
+            if config.json_output or config.json_stream:
+                print(json.dumps({"success": True, "feed_path": str(feed_file), "episodes": len(items)}, indent=2))
+            else:
+                success(f"Generated Podcast RSS feed with {len(items)} episodes:\n  • {feed_file}", config)
+                info("You can import this feed into AntennaPod, Pocket Casts, or VLC.", config)
+            return 0
 
         # Clipboard Watcher Daemon
         if getattr(args, "watch_clipboard", False):
