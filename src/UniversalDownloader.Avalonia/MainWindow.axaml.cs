@@ -272,6 +272,16 @@ public partial class MainWindow : Window
         EmbedSubsCheck.IsChecked = _settings.EmbedSubs;
         WriteThumbnailCheck.IsChecked = _settings.WriteThumbnail;
         SponsorBlockCheck.IsChecked = _settings.SponsorBlockEnabled;
+        ThemeComboBox.SelectedIndex = _settings.ThemePreset switch
+        {
+            "amoled" => 1,
+            "nord" => 2,
+            "cyberpunk" => 3,
+            "catppuccin" => 4,
+            "emerald" => 5,
+            _ => 0
+        };
+        ThemeManager.ApplyTheme(this, _settings.ThemePreset);
         ApplyLanguage(_settings.Language);
         UpdatePrivacyDashboard();
     }
@@ -376,6 +386,23 @@ public partial class MainWindow : Window
 
         RefreshStreamsButtonText.Text = T("RefreshStreams");
         BackendLogsHeader.Text = T("BackendLogs");
+    }
+
+    private void ThemeComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (ThemeComboBox == null) return;
+        string themeId = ThemeComboBox.SelectedIndex switch
+        {
+            1 => "amoled",
+            2 => "nord",
+            3 => "cyberpunk",
+            4 => "catppuccin",
+            5 => "emerald",
+            _ => "default"
+        };
+        _settings.ThemePreset = themeId;
+        ThemeManager.ApplyTheme(this, themeId);
+        _settings.Save();
     }
 
     private void SaveUserSettings()

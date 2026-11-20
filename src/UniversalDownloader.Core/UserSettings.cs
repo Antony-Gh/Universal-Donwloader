@@ -26,6 +26,7 @@ public class UserSettings
     public string Language { get; set; } = "en";
     public bool MinimizeToTray { get; set; } = true;
     public bool WatchClipboard { get; set; } = true;
+    public string ThemePreset { get; set; } = "default";
 
     public static string SettingsFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
