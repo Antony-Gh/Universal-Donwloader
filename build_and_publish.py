@@ -559,6 +559,39 @@ def build_and_package_android_release(version: str) -> List[Path]:
     return results
 
 
+def package_browser_extension(version: str) -> Optional[Path]:
+    """Package the Manifest V3 browser companion extension into a zip archive for GitHub Releases."""
+    print_step(f"Packaging Browser Companion Extension (Manifest V3) for v{version}")
+    ext_dir = ROOT_DIR / "browser" / "extension"
+    if not ext_dir.exists():
+        print_warning(f"Browser extension directory not found: {ext_dir}")
+        return None
+
+    # Sync manifest.json version
+    manifest_file = ext_dir / "manifest.json"
+    if manifest_file.exists():
+        try:
+            m_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+            if m_data.get("version") != version:
+                m_data["version"] = version
+                manifest_file.write_text(json.dumps(m_data, indent=2) + "\n", encoding="utf-8")
+                print_success(f"Synced manifest.json version to {version}")
+        except Exception as exc:
+            print_warning(f"Failed to sync manifest.json version: {exc}")
+
+    RELEASES_DIR.mkdir(parents=True, exist_ok=True)
+    zip_path = RELEASES_DIR / f"UniversalDownloader-v{version}-browser-extension.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(ext_dir):
+            for file in files:
+                file_path = Path(root) / file
+                arcname = file_path.relative_to(ext_dir)
+                zf.write(file_path, arcname)
+
+    print_success(f"Generated Browser Extension Package: {zip_path.name} ({zip_path.stat().st_size / 1024:.1f} KB)")
+    return zip_path
+
+
 def generate_checksums(archives: List[Path]) -> Path:
     """Generate SHA256SUMS.txt file."""
     print_step("Generating SHA-256 Checksums")
@@ -784,6 +817,7 @@ def main() -> None:
     parser.add_argument("--draft", action="store_true", help="Publish release as a draft")
     parser.add_argument("--prerelease", action="store_true", help="Mark release as a pre-release")
     parser.add_argument("--skip-android", action="store_true", help="Skip Android APK build and packaging")
+    parser.add_argument("--skip-browser-extension", action="store_true", help="Skip packaging browser companion extension")
     args = parser.parse_args()
 
     version = (args.version or get_default_version()).lstrip("v")
@@ -813,6 +847,7 @@ def main() -> None:
             f"UniversalDownloader-v{version}-macos-x64.tar.gz",
             "UniversalDownloader-android-arm64.apk",
             "UniversalDownloader-android-universal.apk",
+            f"UniversalDownloader-v{version}-browser-extension.zip",
         ]
         for name in expected_names:
             candidate = RELEASES_DIR / name
@@ -848,6 +883,10 @@ def main() -> None:
         archives.extend(package_tar_release("macos-x64", "osx-x64", version))
         if not args.skip_android:
             archives.extend(build_and_package_android_release(version))
+        if not args.skip_browser_extension:
+            ext_pkg = package_browser_extension(version)
+            if ext_pkg:
+                archives.append(ext_pkg)
 
     # 4. Generate SHA256 Checksums
     checksum_file = generate_checksums(archives)

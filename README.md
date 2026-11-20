@@ -1,364 +1,256 @@
 # Universal Media Downloader
 
-A production-grade, highly resilient command-line and backend media downloader for publicly accessible media that you are authorized to download. Powered by `yt-dlp` with built-in path boundary safety, secret redaction, format selection, concurrent batch processing, audio transcoding, subtitle embedding, public profile picture resolution, SQLite history tracking, and a real-time JSON stream engine designed for external C#/.NET or native GUI frontends.
+<p align="center">
+  <img src="assets/app-icon.png" alt="Universal Media Downloader Logo" width="128" height="128" />
+</p>
+
+<p align="center">
+  <strong>The all-in-one, privacy-focused, cross-platform media downloader, converter, and automation suite.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Antony-Gh/Universal-Donwloader/releases/latest"><img src="https://img.shields.io/badge/release-v4.0.0-blue.svg?style=flat-square" alt="Latest Release" /></a>
+  <a href="https://github.com/Antony-Gh/Universal-Donwloader/actions"><img src="https://img.shields.io/badge/tests-183%20passed-brightgreen.svg?style=flat-square" alt="Tests" /></a>
+  <a href="https://dotnet.microsoft.com/download/dotnet/9.0"><img src="https://img.shields.io/badge/.NET-9.0%20(Avalonia%2011)-purple.svg?style=flat-square" alt=".NET 9" /></a>
+  <a href="https://developer.android.com/"><img src="https://img.shields.io/badge/Android-8.0%2B%20(Compose)-green.svg?style=flat-square" alt="Android" /></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-yellow.svg?style=flat-square" alt="Python 3.10+" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-red.svg?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/Antony-Gh"><img src="https://img.shields.io/badge/author-Anthony%20Gaius-blueviolet.svg?style=flat-square" alt="Author" /></a>
+</p>
 
 ---
 
-## Key Features
+## 🌟 What is Universal Media Downloader?
 
-- **Broad Platform Support**: YouTube, Instagram, TikTok, Twitter/X, Threads, Reddit, Pinterest, Facebook, Vimeo, Twitch, SoundCloud, Bilibili, Bluesky, Bandcamp, Loom, and generic video feeds.
-- **Fast Multi-Fragment Downloads**: Multi-threaded fragment downloading (`--concurrent-fragments 4` or higher) speeds up DASH and HLS video streams by 4x to 10x.
-- **Video Time-Range Slicing**: Download specific segments (e.g. `--download-sections "*00:01:30-00:03:00"` or `--start-time "00:01:30" --end-time "00:03:00"`) without fetching the entire video first.
-- **Codec Preferences**: Prefer specific video codecs like `--prefer-codec h264` (for hardware acceleration compatibility on Windows), `vp9`, `av01`, or `hevc`.
-- **Audio Extraction**: Extract audio in `best` (lossless native stream without re-encoding), `mp3`, `m4a`, `flac`, `opus`, `wav`, or `aac` with customizable bitrates (`320k`, `192k`, VBR).
-- **Embedded Metadata & Artwork**: Embed title, artist, date, chapters, and cover art (`--embed-metadata`, `--embed-thumbnail`) directly into MP4/MP3/M4A containers, or save raw artwork files with `--write-thumbnail`.
-- **Subtitles & Captions**: Download separate subtitle files (`--write-subs`) or embed them into the video (`--embed-subs`), supporting language codes (`--sub-langs "en,es"`) and auto-generated captions (`--auto-subs`).
-- **SQLite Download History**: Automatically records all completed and failed downloads with titles, uploaders, file paths, and dates in an indexed SQLite database (`downloads.db`). Queryable via `--history` and `--history-search`.
-- **Real-Time JSON Streaming for External GUIs**: The `--json-stream` flag emits line-delimited JSON events to stdout for real-time progress, speed, ETA, and status, making integration with C# (WPF/WinUI 3/Avalonia) or Rust/Go frontends straightforward.
-- **Clipboard Watcher Daemon**: Run `--watch-clipboard` to monitor the system clipboard (Win32 API on Windows, `wl-paste`/`xclip`/`xsel` on Linux, `pbpaste` on macOS) and automatically enqueue or download media links as soon as they are copied.
-- **Desktop Notifications & Audio Alerts**: Send native desktop alerts and audio cues (`--notify`) when downloads complete across Windows (Windows Runtime Toast), Linux (`notify-send`), and macOS (`osascript`).
-- **Cross-Platform URL Scheme**: Register `downloader://` with `--register-protocol` across Windows Registry and Linux FreeDesktop XDG handlers so browser bookmarklets or desktop hyperlinks launch downloads directly.
-- **Self-Updater**: Run `--update` to check and upgrade `yt-dlp` to the latest PyPI release in one command.
-- **Resilient Batch Processing**:
-  - Multi-threaded concurrent batch downloads (`--concurrency 4`).
-  - Polite scraping delays with jitter (`--sleep-interval 3 --max-sleep-interval 7`).
-  - Idempotent runs with download archives (`--download-archive archive.txt`).
-- **Security by Design**: Enforces directory confinement (`ensure_inside_directory`), prevents path traversal, sanitizes Windows-reserved filenames (`CON`, `PRN`, etc.), and redacts sensitive credentials from logs.
+**Universal Media Downloader** is a high-resilience, production-grade media downloading suite engineered from the ground up to eliminate common frustrations with online tools: **no ads, no tracking, no suspicious redirects, and no paywalls**. Every feature runs **100% locally** on your device.
+
+Available across **Windows, Linux, macOS, Android (Jetpack Compose), and CLI**, with a companion **Manifest V3 Browser Extension**.
 
 ---
 
-## Installation & Prerequisites
+## ⚡ v4.0.0 Feature Matrix & Capabilities
 
-### 1. Python
-Requires **Python 3.10+**.
+| Capability | CLI | Desktop (Avalonia) | Android (Compose) | Details |
+| :--- | :---: | :---: | :---: | :--- |
+| **Broad Platform Support** | ✅ | ✅ | ✅ | YouTube, TikTok, Instagram, X/Twitter, Reddit, Facebook, Twitch, Vimeo, Bilibili, Bluesky, SoundCloud, Bandcamp, and 1,000+ sites. |
+| **🚀 aria2c Acceleration** | ✅ | ✅ | ❌ | Multi-connection engine downloading segmented streams up to **10x faster** (`--aria2`). |
+| **🎙️ Local AI Whisper Transcription** | ✅ | ✅ | ❌ | 100% offline speech-to-text. Generates synchronized `.srt`, `.vtt`, and `.txt` summaries (`--whisper`). |
+| **📺 Channel & Playlist Subscriptions** | ✅ | ✅ | ✅ | Auto-track creators and channels. Downloads new uploads automatically with custom quality presets. |
+| **⏰ Smart Scheduling & Battery Saver** | ✅ | ✅ | ✅ | Queue downloads at set times (e.g. `02:00` off-peak), pause on battery power, and enforce Wi-Fi only. |
+| **✂️ Video-to-GIF & Frame Grabber** | ✅ | ✅ | ❌ | High-quality dual-pass palettegen GIFs, millisecond sub-clips, and uncompressed PNG frame capture. |
+| **🎵 MusicBrainz & CAA Tagging** | ✅ | ✅ | ❌ | Acoustic fingerprinting and metadata lookup. Embeds accurate artist, album, year, and high-res cover art. |
+| **📲 Send to Phone over LAN (LocalShare)** | ✅ | ✅ | ❌ | LocalSend-style direct transfer from PC to phone via animated QR code over home Wi-Fi (`--local-share`). |
+| **🔍 Intelligent Duplicate Detection** | ✅ | ✅ | ✅ | Scans target folders before downloading, matching filenames, normalized titles, and IDs to save bandwidth. |
+| **🧩 Manifest V3 Browser Extension** | ✅ | ✅ | ❌ | 1-click download popup and real-time page media stream sniffer (.m3u8, .mpd, HTML5 video). |
+| **🛡️ In-App Privacy Dashboard & GDPR** | ✅ | ✅ | ✅ | Zero activity tracking, purely anonymous UUIDv4 metrics, and 1-click remote GDPR data wipe. |
+| **🖥️ Tray Icon & Clipboard Monitor** | ✅ | ✅ | ✅ | Minimizes to system tray on desktop and detects copied media URLs in background. |
+| **👤 Creator & Credits Tab** | ✅ | ✅ | ✅ | Full attribution, author bio, issue reporting, and open-source acknowledgments for Anthony Gaius. |
 
+---
+
+## 📱 Android Installation & Distribution
+
+Because Google Play restricts YouTube downloading apps under section 4.4 of its Developer Agreement, Universal Media Downloader is distributed through trusted open-source channels:
+
+### 1. Obtainium (Recommended for Automated Updates)
+[Obtainium](https://github.com/ImranR98/Obtainium) allows you to install and receive seamless background update notifications directly from this GitHub repository.
+
+- Open Obtainium on your Android phone.
+- Tap **Add App**.
+- Enter URL: `https://github.com/Antony-Gh/Universal-Donwloader`
+- Tap **Add** → Obtainium installs and manages automatic background updates.
+
+Or tap this deep-link directly on your mobile device:
+> [**📲 Add to Obtainium**](obtainium://add/https://github.com/Antony-Gh/Universal-Donwloader)
+
+### 2. Direct APK Download
+Download signed APK packages directly from [GitHub Releases](https://github.com/Antony-Gh/Universal-Donwloader/releases/latest):
+- `UniversalDownloader-android-arm64.apk` *(Recommended for modern Android phones)*
+- `UniversalDownloader-android-universal.apk` *(Compatible with all Android devices)*
+
+### 3. IzzyOnDroid & F-Droid
+Standard Fastlane metadata is maintained in `fastlane/metadata/android/` for automated indexing by IzzyOnDroid and F-Droid client frontends (Droid-ify, Neo Store).
+
+---
+
+## 💻 Desktop Installation (Windows, Linux, macOS)
+
+### Windows
+- **Installer**: Download and run `UniversalDownloader-Setup-x64.msi` from [Releases](https://github.com/Antony-Gh/Universal-Donwloader/releases/latest).
+- **Portable**: Download standalone `UniversalDownloader.exe`.
+
+### Linux
+Download `UniversalDownloader-linux-x64` or `UniversalDownloader-v4.0.0-linux-x64.tar.gz`:
 ```bash
-git clone https://github.com/your-username/Universal_Downloader.git
-cd Universal_Downloader
-pip install -r requirements.txt
+tar -xzf UniversalDownloader-v4.0.0-linux-x64.tar.gz
+chmod +x UniversalDownloader
+./UniversalDownloader
 ```
 
-Or install in editable mode:
-```bash
-pip install -e .
-```
-
-### 2. FFmpeg (Recommended)
-FFmpeg is required for merging high-res streams, audio conversion, subtitle embedding, time slicing, and metadata tagging.
-
-- **Windows**: `winget install Gyan.FFmpeg` or download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) and add `bin` to your `PATH`.
-- **macOS**: `brew install ffmpeg`
-- **Linux**: `sudo apt install ffmpeg`
-
-### 3. JavaScript Runtime (Optional)
-Having `node` or `deno` on your `PATH` allows yt-dlp to solve advanced player challenges (e.g. YouTube n-sig extraction).
+### macOS
+Download `UniversalDownloader-v4.0.0-macos-arm64.tar.gz` (Apple Silicon M1/M2/M3) or `UniversalDownloader-v4.0.0-macos-x64.tar.gz` (Intel).
 
 ---
 
-## CLI Usage & Examples
+## 🧩 Browser Companion Extension (Manifest V3)
 
-### Basic Downloads
+A Chrome, Edge, and Brave companion extension is bundled in [`browser/extension/`](browser/extension) and packaged as `UniversalDownloader-v4.0.0-browser-extension.zip`.
+
+### Features:
+- **1-Click Download**: Click the extension icon to download the current video or extract audio.
+- **Media Stream Sniffer**: Automatically detects embedded `.m3u8` (HLS), `.mpd` (DASH), and HTML5 `<video>` / `<audio>` streams on any webpage.
+- **Context Menu**: Right-click any link or media element to download directly with Universal Downloader.
+- **Native Host Communication**: Directly commands the local desktop app without requiring copy-pasting URLs.
+
+### Manual Installation (Developer Mode):
+1. Download `UniversalDownloader-v4.0.0-browser-extension.zip` from [Releases](https://github.com/Antony-Gh/Universal-Donwloader/releases/latest) and extract it.
+2. In Chrome / Brave / Edge, open `chrome://extensions`.
+3. Enable **Developer mode** (toggle in the top-right corner).
+4. Click **Load unpacked** and select the extracted `browser/extension/` folder.
+5. Register the Native Host in your terminal:
+   ```bash
+   python downloader.py --register-native-host
+   ```
+
+---
+
+## 🛠️ CLI Usage & Advanced Commands
+
+### 1. Basic Downloads
 ```bash
-# Download highest quality video + audio
+# Highest quality video + audio
 python downloader.py "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
-# Download in 1080p with H.264 codec (optimal Windows hardware playback)
-python downloader.py --quality 1080p --prefer-codec h264 "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-
-# List available formats without downloading
-python downloader.py --formats "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-```
-
-### Time-Range Slicing
-```bash
-# Download only from 1m30s to 3m00s of a video
-python downloader.py --download-sections "*00:01:30-00:03:00" "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-
-# Slicing with start and end times
-python downloader.py --start-time "00:00:45" --end-time "00:02:15" "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-```
-
-### High-Speed Fragment Downloading
-```bash
-# Download 8 DASH fragments simultaneously for maximum speed
-python downloader.py --concurrent-fragments 8 "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-```
-
-### Audio Extraction & Tagging
-```bash
-# Extract as MP3 at 320 kbps with embedded metadata and artwork
+# Extract audio as 320kbps MP3 with embedded metadata & cover art
 python downloader.py --audio-only --audio-format mp3 --audio-quality 320k --embed-metadata --embed-thumbnail "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
-# Lossless audio extraction (keeps original AAC/Opus stream without transcoding)
-python downloader.py --audio-only --audio-format best "https://soundcloud.com/artist/track"
+# 10x Download acceleration via aria2c
+python downloader.py --aria2 --aria2-connections 16 "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
 
-### Subtitles & Remuxing
+### 2. Local AI Whisper Transcription
 ```bash
-# Embed English and Spanish subtitles into the video
-python downloader.py --embed-subs --sub-langs "en,es" --auto-subs "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-
-# Remux to MP4 container and remove YouTube sponsor segments
-python downloader.py --remux-video mp4 --sponsorblock-remove "sponsor,intro" "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-
-# Split long video into separate chapter files
-python downloader.py --split-chapters "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+# Transcribe speech into subtitles (.srt) and summary text (.txt) offline
+python downloader.py --whisper --whisper-model base "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
 
-### SQLite History Management
+### 3. Video-to-GIF, Clips & Frames
 ```bash
-# Show recent 20 downloads
-python downloader.py --history
+# Convert a segment of video into a high-framerate animated GIF
+python downloader.py --to-gif --gif-start 00:00:10 --gif-duration 5 --gif-fps 15 "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
-# Search download history by title, artist, or URL
-python downloader.py --history-search "tutorial"
+# Extract a sub-clip without re-encoding
+python downloader.py --make-clip 00:01:00-00:01:30 "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
-# Export history as JSON
-python downloader.py --history --json
-
-# Clear history database
-python downloader.py --history-clear
+# Capture a full-resolution PNG video frame
+python downloader.py --grab-frame 00:00:45 "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
 
-### Batch Downloads
+### 4. Smart Scheduling & Duplicate Prevention
 ```bash
-# Multi-threaded batch download (3 workers) with download archive to skip duplicates
-python downloader.py --batch urls.txt --concurrency 3 --download-archive history.txt --limit-rate 5M
+# Automatically start batch download queue at 2:00 AM
+python downloader.py --batch urls.txt --schedule 02:00 --pause-on-battery
+
+# Skip downloading if the file or video ID already exists locally
+python downloader.py --skip-duplicates "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
 
-### Search, Autosuggest & Deep-Link Shortcuts
+### 5. Send to Phone over LAN (LocalShare)
 ```bash
-# Search YouTube directly by song/video name (table or JSON)
-python downloader.py --search "queen bohemian rhapsody" --search-limit 5
-python downloader.py --search "coldplay yellow" --json
-
-# Fetch real-time YouTube query autosuggestions
-python downloader.py --suggest "adele hel" --json
-
-# Instant deep-link format shortcuts (#ID/mp3, #ID/mp4, url#mp3)
-python downloader.py "#dQw4w9WgXcQ/mp3"
-python downloader.py "https://youtu.be/dQw4w9WgXcQ#audio"
+# Download and display a terminal QR code for instant phone download over Wi-Fi
+python downloader.py --local-share "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
 
-### Smart Organization, Webpage Sniffer, Local Converter & Live Recording
+### 6. Music Tagging via MusicBrainz
 ```bash
-# Route downloads into structured subfolders (none, platform, uploader, date) and strip clickbait tags/emojis
-python downloader.py --organize uploader --clean-filenames "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-
-# Scan any webpage HTML for embedded <video>, <audio>, OpenGraph, HLS (.m3u8), and DASH (.mpd) streams
-python downloader.py --sniff "https://example.com/article-with-video"
-
-# Convert local media files directly using bundled FFmpeg (no external tools required)
-python downloader.py --convert-audio mp3 "C:\Videos\lecture.mp4"
-python downloader.py --remux-video mp4 "C:\Videos\recording.mkv"
-
-# Record a live stream with an automatic FFmpeg duration cap
-python downloader.py --record-duration 00:15:00 --live-from-start "https://www.youtube.com/watch?v=LIVE_ID"
+# Query MusicBrainz & Cover Art Archive to tag an audio file
+python downloader.py --tag-music "downloads/track.mp3"
 ```
 
-### System Integration & Browser Companion
+### 7. Credits & Author Information
 ```bash
-# Run clipboard monitor: automatically downloads media URLs when copied
-python downloader.py --watch-clipboard
-
-# Register downloader:// protocol in Windows Registry (used by browser/universal_downloader.user.js)
-python downloader.py --register-protocol
-
-# Register Chrome/Edge/Firefox Native Messaging Host (CoApp) for browser extensions
-python downloader.py --register-native-host
-
-# Enable Windows desktop notification on completion
-python downloader.py --notify "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-
-# Update yt-dlp to latest release
-python downloader.py --update
+# Show project creator, GitHub profile, repository, and open-source acknowledgments
+python downloader.py --credits
 ```
 
 ---
 
-## External GUI Integration (C# / .NET / WinUI / WPF)
+## 🏗️ Multi-OS Build & Packaging
 
-The backend provides `--json-stream` specifically designed for native C# (WPF, WinUI 3, Avalonia, or MAUI) and Go/Rust desktop frontends. 
-
-When invoked with `--json-stream`, the process writes line-delimited JSON events to `stdout`:
+Universal Media Downloader features a one-click Python build orchestrator (`build_and_publish.py`) that compiles and stages the entire suite:
 
 ```bash
-python downloader.py --json-stream "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-```
-
-### Stream Events Format
-
-1. **Progress Event:**
-```json
-{"event": "progress", "status": "downloading", "downloaded_bytes": 1048576, "total_bytes": 10485760, "percent": 10.0, "speed": 1048576, "eta": 9, "filename": "video.mp4"}
-```
-2. **Post-processing Event:**
-```json
-{"event": "postprocess", "status": "processing"}
-```
-3. **Completion Event:**
-```json
-{"event": "complete", "url": "https://...", "files": ["downloads/youtube/video.mp4"], "title": "Video Title", "uploader": "Creator"}
-```
-4. **Error Event:**
-```json
-{"event": "error", "url": "https://...", "error": "Description of failure"}
-```
-
-### C# Integration Example
-
-```csharp
-using System;
-using System.Diagnostics;
-using System.Text.Json;
-
-var process = new Process
-{
-    StartInfo = new ProcessStartInfo
-    {
-        FileName = "python",
-        Arguments = "downloader.py --json-stream \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\"",
-        RedirectStandardOutput = true,
-        UseShellExecute = false,
-        CreateNoWindow = true
-    }
-};
-
-process.OutputDataReceived += (sender, e) =>
-{
-    if (string.IsNullOrWhiteSpace(e.Data)) return;
-
-    try
-    {
-        using var doc = JsonDocument.Parse(e.Data);
-        var root = doc.RootElement;
-        string eventType = root.GetProperty("event").GetString();
-
-        if (eventType == "progress")
-        {
-            double percent = root.GetProperty("percent").GetDouble();
-            long speed = root.GetProperty("speed").GetInt64();
-            Console.WriteLine($"Progress: {percent:F1}% at {speed / 1024 / 1024.0:F2} MB/s");
-        }
-        else if (eventType == "complete")
-        {
-            Console.WriteLine("Download finished successfully!");
-        }
-    }
-    catch (JsonException) { }
-};
-
-process.Start();
-process.BeginOutputReadLine();
-process.WaitForExit();
-```
-
-### Building Standalone Executable (PyInstaller)
-
-To ship a self-contained `downloader.exe` binary so users do not need Python or dependencies installed:
-
-```bash
-# Automatically installs PyInstaller if needed and compiles downloader.exe into dist/
-python build_exe.py
-```
-
-The resulting `dist/downloader.exe` is a single standalone executable that supports all CLI arguments and real-time `--json-stream` events.
-
----
-
-## One-Click Multi-OS Build & GitHub Release Publisher
-
-To compile the entire project (Python backend + C# Avalonia + C# WPF) into standalone executables for **Windows**, **Linux**, and **macOS**, and publish them directly to GitHub Releases in one command:
-
-```bash
-# Compile and publish release v1.1.0 to GitHub
-python build_and_publish.py -v 1.1.0
-
-# Or build and package all OS archives locally without uploading
+# Build all OS binaries and package the browser extension locally
 python build_and_publish.py --no-publish
+
+# Compile and publish official release to GitHub
+python build_and_publish.py -v 4.0.0
 ```
 
-### What It Does:
-1. **Compiles Standalone Python Engine**: Packages `downloader` via PyInstaller with the custom high-resolution application icon.
-2. **Publishes Native .NET 9 Frontends**: Compiles self-contained, single-file executables for:
-   - `win-x64` (Windows Avalonia & WPF apps)
-   - `linux-x64` (Linux Wayland & X11 binary)
-   - `osx-x64` (macOS Intel binary)
-   - `osx-arm64` (macOS Apple Silicon binary)
-3. **Creates Distribution Archives & Checksums**:
-   - `UniversalDownloader-v1.1.0-windows-x64.zip`
-   - `UniversalDownloader-v1.1.0-linux-x64.tar.gz`
-   - `UniversalDownloader-v1.1.0-macos-x64.tar.gz`
-   - `UniversalDownloader-v1.1.0-macos-arm64.tar.gz`
-   - `SHA256SUMS.txt`
-4. **Automated GitHub Release Publishing**:
-   - Tags the repository and pushes to GitHub.
-   - Publishes the GitHub Release via `gh` CLI or GitHub REST API with formatted changelog notes.
-   - Automatically triggers the cloud CI/CD matrix workflow ([.github/workflows/release.yml](file:///e:/Projects/Universal_Downloader/.github/workflows/release.yml)) for native cloud builds on genuine Windows, Ubuntu, and macOS runners.
+### Generated Distribution Assets in `releases/`:
+- `UniversalDownloader.exe` *(Windows Standalone Portable)*
+- `UniversalDownloader-Setup-x64.msi` *(Windows WiX Setup Installer)*
+- `UniversalDownloader-v4.0.0-windows-x64.zip` *(Windows Complete Bundle)*
+- `UniversalDownloader-linux-x64` *(Linux Standalone Executable)*
+- `UniversalDownloader-v4.0.0-linux-x64.tar.gz` *(Linux Archive)*
+- `UniversalDownloader-v4.0.0-macos-arm64.tar.gz` *(macOS Apple Silicon)*
+- `UniversalDownloader-v4.0.0-macos-x64.tar.gz` *(macOS Intel)*
+- `UniversalDownloader-android-arm64.apk` *(Android ARM64)*
+- `UniversalDownloader-android-universal.apk` *(Android Universal)*
+- `UniversalDownloader-v4.0.0-browser-extension.zip` *(Manifest V3 Companion Extension)*
+- `SHA256SUMS.txt` *(Cryptographic Verification Checksums)*
 
 ---
 
-## C# .NET Desktop Application Suite
+## 🧪 Testing
 
-The project includes a complete .NET 9 solution (`UniversalDownloader.sln`) with:
+The test suite covers CLI flags, engine pipelines, security boundaries, telemetry, and platform integrations:
 
-1. **`UniversalDownloader.Core`**:
-   - Cross-platform class library (.NET 9) with strongly-typed models (`DownloadProgressEvent`, `DownloadCompleteEvent`, `FormatInfoModel`, `HistoryRecordModel`, `DownloadOptions`).
-   - `DownloaderClient`: Asynchronous IPC client that automatically locates either compiled binaries (`downloader.exe` or `downloader`) or `downloader.py` (via `python` or `python3`), spawns the process in background, and streams real-time events.
-   - `PlatformUtils`: Unified cross-platform helpers for launching system file viewers (`xdg-open`, `open`, `explorer.exe`), opening containing folders, and resolving binaries.
-2. **`UniversalDownloader.Avalonia`**:
-   - Cross-platform modern desktop application built on **Avalonia 11** (.NET 9).
-   - Runs seamlessly on **Windows, Linux (Wayland & X11), and macOS**.
-   - Features real-time animated progress bars, speed and ETA indicators, format inspection, paste shortcuts, and a full SQLite download history browser with "▶ Play" and "📁 Folder" buttons.
-3. **`UniversalDownloader.App`**:
-   - Native Windows desktop app built with **WPF** (.NET 9).
-
-### Building & Running the C# Desktop Apps
-
-#### Cross-Platform (Windows, Linux, macOS) — Avalonia UI:
 ```bash
-# Build and run the cross-platform Avalonia desktop app
-dotnet build src/UniversalDownloader.Avalonia/UniversalDownloader.Avalonia.csproj
-dotnet run --project src/UniversalDownloader.Avalonia/UniversalDownloader.Avalonia.csproj
-```
+# Run all Python unit & integration tests (183 tests)
+pytest tests/ -v
 
-#### Windows Only — WPF App:
-```bash
-# Build and run the Windows-native WPF application
-dotnet build src/UniversalDownloader.App/UniversalDownloader.App.csproj
-dotnet run --project src/UniversalDownloader.App/UniversalDownloader.App.csproj
+# Run C# Core unit tests (17 tests)
+dotnet run --project tests/UniversalDownloader.Core.Tests/UniversalDownloader.Core.Tests.csproj
 ```
 
 ---
 
-## Configuration
+## 👤 Author & Lead Developer
 
-Settings can be defined via CLI arguments, `.env` file, or `config.json`. Generate starter configuration templates using:
+<table border="0">
+  <tr>
+    <td width="90" valign="top">
+      <img src="https://github.com/Antony-Gh.png" width="80" height="80" style="border-radius: 50%;" alt="Anthony Gaius" />
+    </td>
+    <td>
+      <strong>Anthony Gaius</strong> (<code>@Antony-Gh</code>)<br />
+      <em>Creator, Architect & Lead Developer</em><br /><br />
+      🌐 <strong>GitHub Profile</strong>: <a href="https://github.com/Antony-Gh">https://github.com/Antony-Gh</a><br />
+      ⭐ <strong>Project Repository</strong>: <a href="https://github.com/Antony-Gh/Universal-Donwloader">Universal-Donwloader</a><br />
+      ✉️ <strong>Contact & Support</strong>: <a href="mailto:knkmam05@gmail.com">knkmam05@gmail.com</a>
+    </td>
+  </tr>
+</table>
 
-```bash
-python downloader.py --init-config
-```
+### ❤️ Open-Source Acknowledgments
+Universal Media Downloader is proudly built upon exceptional open-source technologies:
+- **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**: World-class media extraction backend.
+- **[FFmpeg](https://ffmpeg.org/)**: The premier multimedia processing framework.
+- **[Avalonia UI](https://avaloniaui.net/)**: Cross-platform XAML .NET desktop GUI.
+- **[Jetpack Compose](https://developer.android.com/jetpack/compose)**: Modern Android UI toolkit.
+- **[aria2](https://github.com/aria2/aria2)**: High-speed multi-connection download utility.
+- **[OpenAI Whisper](https://github.com/openai/whisper)**: Robust offline speech recognition.
+- **[MusicBrainz](https://musicbrainz.org/)**: Open music encyclopedia and Cover Art Archive.
 
 ---
 
-## Testing
-
-Run the test suite using `pytest`:
-
-```bash
-pytest -v
-```
-
-All 109 unit and integration tests run across platforms.
-
----
-
-## Legal & Compliance Notice
+## ⚖️ Legal Notice
 
 Universal Media Downloader is designed for educational, archiving, and research purposes on **publicly accessible content** that the user is authorized to download. It does not circumvent digital rights management (DRM), bypass paywalls, extract private credentials, or solve CAPTCHAs. Always respect copyright laws and platform terms of service.
 
 ---
 
-## License
+## 📄 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is open-source software licensed under the **[MIT License](LICENSE)**.
