@@ -63,6 +63,7 @@ class AppConfig:
     embed_subs: bool = False
     sub_langs: Optional[str] = None
     auto_subs: bool = False
+    dual_subs: bool = False
     output_template: Optional[str] = None
     organize: str = "platform"
     clean_filenames: bool = False

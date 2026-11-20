@@ -235,6 +235,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include automatically generated speech-to-text subtitles if available.",
     )
+    sub_group.add_argument(
+        "--dual-subs",
+        action="store_true",
+        help="Merge two subtitle languages into a bilingual dual-subtitle track (e.g. --sub-langs 'en,ar').",
+    )
+    sub_group.add_argument(
+        "--merge-subs",
+        metavar="FILE1,FILE2",
+        help="Merge two local .srt files into a bilingual dual-subtitle file (e.g. 'primary.srt,secondary.srt').",
+    )
 
     # Video & Postprocessing
     post_group = parser.add_argument_group("Video & Postprocessing")
@@ -532,7 +542,7 @@ def build_parser() -> argparse.ArgumentParser:
     sched_group.add_argument(
         "--pause-on-battery",
         action="store_true",
-        help="Pause or postpone downloads if running on battery below 20% capacity.",
+        help="Pause or postpone downloads if running on battery below 20%% capacity.",
     )
     sched_group.add_argument(
         "--only-wifi",
@@ -1526,6 +1536,31 @@ def main() -> int:
                     print(json.dumps({"success": False, "error": str(pexc)}))
                 else:
                     failure(f"Preset compression failed: {pexc}", config)
+                return 1
+
+        # Standalone dual-subtitle merge
+        if getattr(args, "merge_subs", None):
+            try:
+                from universal_downloader.subtitles import merge_dual_subtitles
+                parts = [p.strip() for p in args.merge_subs.split(",") if p.strip()]
+                if len(parts) < 2:
+                    raise ValueError("Provide two files separated by comma: --merge-subs 'en.srt,ar.srt'")
+                p1 = Path(parts[0]).expanduser()
+                p2 = Path(parts[1]).expanduser()
+                if not p1.is_file() or not p2.is_file():
+                    raise FileNotFoundError(f"Subtitle files not found: {p1} or {p2}")
+                out_sub = p1.parent / f"{p1.stem}_dual.srt"
+                merge_dual_subtitles(p1, p2, output_path=out_sub)
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": True, "output": str(out_sub)}))
+                else:
+                    success(f"Bilingual dual-subtitles merged: {out_sub}", config)
+                return 0
+            except Exception as sexc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(sexc)}))
+                else:
+                    failure(f"Dual subtitle merge failed: {sexc}", config)
                 return 1
 
         # Direct local file sharing over Wi-Fi with QR code

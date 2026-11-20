@@ -19,6 +19,7 @@ public class DownloadOptions
     public bool EmbedSubs { get; set; }
     public string? SubLangs { get; set; }
     public bool AutoSubs { get; set; }
+    public bool DualSubs { get; set; }
 
     public string? OutputDirectory { get; set; }
     public string? OutputTemplate { get; set; }
@@ -113,6 +114,7 @@ public class DownloadOptions
             args.Add(SubLangs);
         }
         if (AutoSubs) args.Add("--auto-subs");
+        if (DualSubs) args.Add("--dual-subs");
 
         if (!string.IsNullOrWhiteSpace(OutputDirectory))
         {

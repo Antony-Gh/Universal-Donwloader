@@ -230,6 +230,11 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         or parse_config_bool(json_config.get("auto_subs"))
     )
 
+    dual_subs = (
+        getattr(args, "dual_subs", False)
+        or parse_config_bool(json_config.get("dual_subs"))
+    )
+
     # Templates & Paths
     output_template = (
         getattr(args, "output_template", None)
@@ -435,6 +440,7 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         embed_subs=embed_subs,
         sub_langs=sub_langs,
         auto_subs=auto_subs,
+        dual_subs=dual_subs,
         output_template=output_template,
         organize=organize,
         clean_filenames=clean_filenames,
