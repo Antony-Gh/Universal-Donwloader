@@ -76,6 +76,9 @@ public class DownloadOptions
     public string? RulesFile { get; set; }
     public bool Karaoke { get; set; }
     public bool IsolateVocals { get; set; }
+    public string? BackupTarget { get; set; }
+    public string? BackupUser { get; set; }
+    public string? BackupPassword { get; set; }
 
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
@@ -314,6 +317,24 @@ public class DownloadOptions
         {
             args.Add("--rules");
             args.Add(RulesFile.Contains(' ') ? $"\"{RulesFile}\"" : RulesFile);
+        }
+
+        if (!string.IsNullOrWhiteSpace(BackupTarget))
+        {
+            args.Add("--backup-target");
+            args.Add(BackupTarget.Contains(' ') ? $"\"{BackupTarget}\"" : BackupTarget);
+        }
+
+        if (!string.IsNullOrWhiteSpace(BackupUser))
+        {
+            args.Add("--backup-user");
+            args.Add(BackupUser);
+        }
+
+        if (!string.IsNullOrWhiteSpace(BackupPassword))
+        {
+            args.Add("--backup-pass");
+            args.Add(BackupPassword);
         }
 
         return args;

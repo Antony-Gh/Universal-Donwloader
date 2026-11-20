@@ -509,6 +509,9 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         rules_file=Path(getattr(args, "rules", None)) if getattr(args, "rules", None) else (Path(json_config["rules_file"]) if json_config.get("rules_file") else None),
         karaoke=getattr(args, "karaoke", False) or parse_config_bool(json_config.get("karaoke")),
         isolate_vocals=getattr(args, "isolate_vocals", False) or parse_config_bool(json_config.get("isolate_vocals")),
+        backup_target=getattr(args, "backup_target", None) or json_config.get("backup_target"),
+        backup_user=getattr(args, "backup_user", None) or json_config.get("backup_user"),
+        backup_pass=getattr(args, "backup_pass", None) or json_config.get("backup_pass"),
     )
 
     if config.retries > 20:

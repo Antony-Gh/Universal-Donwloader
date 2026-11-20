@@ -584,6 +584,27 @@ class DownloadEngine:
                     except Exception as s_exc:
                         LOGGER.warning("Local file sharing failed: %s", s_exc)
 
+                # Automatic NAS / Cloud Backup
+                if self.config.backup_target and res.files:
+                    from universal_downloader.backup import backup_media_file
+                    for f in res.files:
+                        try:
+                            if self.config.json_stream:
+                                emit_json_event(
+                                    "stage",
+                                    {"stage": "backup", "message": f"Backing up {f.name} to {self.config.backup_target}..."},
+                                )
+                            ok = backup_media_file(
+                                f,
+                                self.config.backup_target,
+                                username=self.config.backup_user,
+                                password=self.config.backup_pass,
+                            )
+                            if ok and not self.config.json_output and not self.config.json_stream:
+                                success(f"Backed up {f.name} -> {self.config.backup_target}", self.config)
+                        except Exception as b_exc:
+                            LOGGER.warning("Automatic backup failed for %s: %s", f.name, b_exc)
+
                 # JSON streaming event
                 if self.config.json_stream:
                     emit_json_event(

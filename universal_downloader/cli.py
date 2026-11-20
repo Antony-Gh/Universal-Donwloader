@@ -379,6 +379,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Check download history and local storage before downloading to avoid duplicates.",
     )
     post_group.add_argument(
+        "--backup-target",
+        metavar="TARGET",
+        help="Target NAS share path (e.g. '\\\\server\\share' or '/mnt/nas') or WebDAV URL for automatic backup.",
+    )
+    post_group.add_argument(
+        "--backup-user",
+        metavar="USER",
+        help="Username for authenticated NAS / WebDAV backup.",
+    )
+    post_group.add_argument(
+        "--backup-pass",
+        metavar="PASS",
+        help="Password for authenticated NAS / WebDAV backup.",
+    )
+    post_group.add_argument(
         "--split-chapters",
         action="store_true",
         help="Split video into multiple files based on internal chapters.",

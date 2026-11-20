@@ -132,6 +132,9 @@ class AppConfig:
     rules_file: Optional[Path] = None
     karaoke: bool = False
     isolate_vocals: bool = False
+    backup_target: Optional[str] = None
+    backup_user: Optional[str] = None
+    backup_pass: Optional[str] = None
 
 
 @dataclass

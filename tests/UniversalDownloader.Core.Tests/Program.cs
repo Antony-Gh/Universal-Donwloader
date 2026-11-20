@@ -378,5 +378,22 @@ RunTest("DownloadOptions builds stems and karaoke arguments", () =>
     AssertTrue(args.Contains("--isolate-vocals"), "Should contain --isolate-vocals");
 });
 
+RunTest("DownloadOptions builds backup target and credential arguments", () =>
+{
+    var opts = new DownloadOptions
+    {
+        BackupTarget = @"\\nas\media",
+        BackupUser = "admin",
+        BackupPassword = "secret"
+    };
+    var args = opts.BuildCliArguments();
+    AssertTrue(args.Contains("--backup-target"), "Should contain --backup-target");
+    AssertTrue(args.Contains(@"\\nas\media"), "Should contain backup target path");
+    AssertTrue(args.Contains("--backup-user"), "Should contain --backup-user");
+    AssertTrue(args.Contains("admin"), "Should contain username");
+    AssertTrue(args.Contains("--backup-pass"), "Should contain --backup-pass");
+    AssertTrue(args.Contains("secret"), "Should contain password");
+});
+
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;
