@@ -370,5 +370,13 @@ RunTest("DownloadOptions builds rules arguments", () =>
     AssertTrue(opts2.BuildCliArguments().Contains("custom_rules.json"), "Should contain rules path");
 });
 
+RunTest("DownloadOptions builds stems and karaoke arguments", () =>
+{
+    var opts = new DownloadOptions { Karaoke = true, IsolateVocals = true };
+    var args = opts.BuildCliArguments();
+    AssertTrue(args.Contains("--karaoke"), "Should contain --karaoke");
+    AssertTrue(args.Contains("--isolate-vocals"), "Should contain --isolate-vocals");
+});
+
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

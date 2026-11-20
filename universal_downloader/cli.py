@@ -346,6 +346,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enrich audio files with metadata and cover art from MusicBrainz & Cover Art Archive.",
     )
     post_group.add_argument(
+        "--karaoke",
+        "--instrumental",
+        action="store_true",
+        dest="karaoke",
+        help="Extract instrumental/karaoke track by attenuating center-channel vocals via Demucs or FFmpeg.",
+    )
+    post_group.add_argument(
+        "--isolate-vocals",
+        "--vocals-only",
+        action="store_true",
+        dest="isolate_vocals",
+        help="Extract isolated vocal track using center-channel frequency extraction or Demucs.",
+    )
+    post_group.add_argument(
         "--share",
         "--serve",
         action="store_true",

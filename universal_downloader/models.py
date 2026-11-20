@@ -130,6 +130,8 @@ class AppConfig:
     preset: Optional[str] = None
     rules_enabled: bool = True
     rules_file: Optional[Path] = None
+    karaoke: bool = False
+    isolate_vocals: bool = False
 
 
 @dataclass

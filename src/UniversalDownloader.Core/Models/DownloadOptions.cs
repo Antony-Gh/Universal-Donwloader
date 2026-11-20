@@ -74,6 +74,8 @@ public class DownloadOptions
     public string? Preset { get; set; }
     public bool RulesEnabled { get; set; } = true;
     public string? RulesFile { get; set; }
+    public bool Karaoke { get; set; }
+    public bool IsolateVocals { get; set; }
 
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
@@ -286,6 +288,16 @@ public class DownloadOptions
         if (CheckDuplicates)
         {
             args.Add("--check-duplicates");
+        }
+
+        if (Karaoke)
+        {
+            args.Add("--karaoke");
+        }
+
+        if (IsolateVocals)
+        {
+            args.Add("--isolate-vocals");
         }
 
         if (!string.IsNullOrWhiteSpace(Preset))

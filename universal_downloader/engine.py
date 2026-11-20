@@ -536,6 +536,25 @@ class DownloadEngine:
                             except Exception as m_exc:
                                 LOGGER.warning("Music tagging skipped or failed: %s", m_exc)
 
+                # Automatic Vocal & Instrumental Stem Separation / Karaoke
+                if self.config.karaoke or self.config.isolate_vocals:
+                    from universal_downloader.stems import separate_stems
+                    stem_mode = "both" if (self.config.karaoke and self.config.isolate_vocals) else ("karaoke" if self.config.karaoke else "vocals")
+                    for f in list(res.files):
+                        if f.suffix.lower() in {".mp3", ".m4a", ".flac", ".wav", ".aac", ".ogg", ".opus", ".mp4", ".mkv", ".webm"}:
+                            try:
+                                if self.config.json_stream:
+                                    emit_json_event(
+                                        "stage",
+                                        {"stage": "stems", "message": f"Separating stems for {f.name}..."},
+                                    )
+                                stem_files = separate_stems(f, output_dir=f.parent, mode=stem_mode)
+                                for sf in stem_files.values():
+                                    if sf not in res.files:
+                                        res.files.append(sf)
+                            except Exception as stem_exc:
+                                LOGGER.warning("Stems separation failed: %s", stem_exc)
+
                 # Desktop notification
                 if self.config.notify:
                     title_str = res.metadata.get("title") or "Download Complete"
