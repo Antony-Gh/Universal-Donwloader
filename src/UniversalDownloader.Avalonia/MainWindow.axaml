@@ -938,6 +938,42 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
+
+                        <!-- Integrated In-App Mini Media Player -->
+                        <Border x:Name="MiniPlayerCard" IsVisible="False"
+                                Background="#14141E" BorderBrush="#3B82F6" BorderThickness="1.5"
+                                CornerRadius="8" Padding="14,10" Margin="0,8,0,0">
+                            <Grid RowDefinitions="Auto,Auto">
+                                <!-- Top row: Title, format, time, close -->
+                                <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,8">
+                                    <Border Grid.Column="0" Background="#1E3A8A" CornerRadius="4" Padding="6,2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="MiniPlayerBadge" Text="NOW PLAYING" Foreground="#93C5FD" FontSize="10" FontWeight="Bold"/>
+                                    </Border>
+                                    <TextBlock x:Name="MiniPlayerTitle" Grid.Column="1" Text="Media Title" FontWeight="SemiBold" Foreground="#F8FAFC" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="MiniPlayerTimeText" Grid.Column="2" Text="00:00 / 00:00" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="10,0"/>
+                                    <Button x:Name="MiniPlayerCloseButton" Grid.Column="3" Padding="6,2" Background="Transparent" Foreground="#64748B" FontSize="12" Content="✕" Click="MiniPlayerCloseButton_Click" ToolTip.Tip="Close Player"/>
+                                </Grid>
+
+                                <!-- Bottom row: Controls and seek bar -->
+                                <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                                    <!-- Play/Pause Toggle -->
+                                    <Button x:Name="MiniPlayerPlayToggle" Grid.Column="0" Padding="10,5" Background="#2563EB" Foreground="White" FontWeight="Bold" FontSize="12" CornerRadius="4" Content="⏸" Click="MiniPlayerPlayToggle_Click" ToolTip.Tip="Play/Pause"/>
+                                    <Button x:Name="MiniPlayerStopButton" Grid.Column="1" Margin="6,0,8,0" Padding="8,5" Background="#27272A" Foreground="#E2E8F0" FontSize="12" CornerRadius="4" Content="⏹" Click="MiniPlayerStopButton_Click" ToolTip.Tip="Stop"/>
+
+                                    <!-- Position Seek Bar -->
+                                    <Slider x:Name="MiniPlayerSeekBar" Grid.Column="2" Minimum="0" Maximum="100" Value="0" VerticalAlignment="Center" Margin="6,0,12,0"/>
+
+                                    <!-- Volume Slider -->
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,10,0">
+                                        <TextBlock Text="🔊" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center"/>
+                                        <Slider x:Name="MiniPlayerVolumeSlider" Width="75" Minimum="0" Maximum="100" Value="85" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <!-- Open in external app -->
+                                    <Button x:Name="MiniPlayerExternalButton" Grid.Column="4" Padding="8,4" Background="#27272A" Foreground="#38BDF8" FontSize="11" Content="↗ External" Click="MiniPlayerExternalButton_Click" ToolTip.Tip="Open in default system media player"/>
+                                </Grid>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Border>
             </TabItem>

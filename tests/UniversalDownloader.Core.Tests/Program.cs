@@ -348,5 +348,27 @@ RunTest("BrowserLoginSession converts CDP cookies JSON with #HttpOnly_ and domai
     AssertTrue(lines.All(l => !l.Contains("google.com")), "non-matching domain filtered out");
 });
 
+RunTest("MiniMediaPlayer initializes and handles invalid or missing media gracefully", () =>
+{
+    using var player = new UniversalDownloader.Core.Media.MiniMediaPlayer();
+    AssertTrue(!player.IsLoaded, "Player should not be loaded on init");
+    AssertTrue(!player.IsPlaying, "Player should not be playing on init");
+    AssertEqual(0.0, player.DurationSeconds, "Duration should be 0 on init");
+
+    bool loaded = player.Load("non_existent_file.mp3");
+    AssertTrue(!loaded, "Loading missing file should return false");
+    AssertTrue(!player.IsLoaded, "Player should remain not loaded");
+});
+
+RunTest("DownloadOptions builds rules arguments", () =>
+{
+    var opts = new DownloadOptions { RulesEnabled = false };
+    AssertTrue(opts.BuildCliArguments().Contains("--no-rules"), "Should contain --no-rules");
+
+    var opts2 = new DownloadOptions { RulesEnabled = true, RulesFile = "custom_rules.json" };
+    AssertTrue(opts2.BuildCliArguments().Contains("--rules"), "Should contain --rules");
+    AssertTrue(opts2.BuildCliArguments().Contains("custom_rules.json"), "Should contain rules path");
+});
+
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

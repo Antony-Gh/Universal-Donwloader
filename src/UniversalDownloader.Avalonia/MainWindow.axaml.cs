@@ -36,6 +36,9 @@ public partial class MainWindow : Window
     private bool _isQueueRunning;
     private readonly DispatcherTimer _logBatchTimer;
     private readonly DispatcherTimer _clipboardTimer;
+    private readonly UniversalDownloader.Core.Media.MiniMediaPlayer _miniPlayer = new();
+    private readonly DispatcherTimer _miniPlayerTimer;
+    private bool _isMiniPlayerSeeking = false;
     private bool _isExiting = false;
     public void ForceExit() => _isExiting = true;
     private long _lastProgressUpdateMs = 0;
@@ -94,6 +97,29 @@ public partial class MainWindow : Window
         );
         _clipboardTimer.Start();
 
+        _miniPlayerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _miniPlayerTimer.Tick += MiniPlayerTimer_Tick;
+
+        MiniPlayerSeekBar.AddHandler(PointerReleasedEvent, (s, e) =>
+        {
+            if (_miniPlayer.IsLoaded && _miniPlayer.DurationSeconds > 0)
+            {
+                double targetSec = (_miniPlayer.DurationSeconds * MiniPlayerSeekBar.Value) / 100.0;
+                _miniPlayer.Seek(targetSec);
+            }
+            _isMiniPlayerSeeking = false;
+        }, RoutingStrategies.Bubble, true);
+
+        MiniPlayerSeekBar.AddHandler(PointerPressedEvent, (s, e) =>
+        {
+            _isMiniPlayerSeeking = true;
+        }, RoutingStrategies.Bubble, true);
+
+        MiniPlayerVolumeSlider.ValueChanged += (s, e) =>
+        {
+            _miniPlayer.SetVolume((int)MiniPlayerVolumeSlider.Value);
+        };
+
         _client = new DownloaderClient();
         _client.ProgressChanged += OnProgressChanged;
         _client.DownloadCompleted += OnDownloadCompleted;
@@ -143,6 +169,8 @@ public partial class MainWindow : Window
             }
             _playlistQualityCts?.Cancel();
             _clipboardTimer.Stop();
+            _miniPlayerTimer.Stop();
+            _miniPlayer.Dispose();
             SaveUserSettings();
         };
 
@@ -2518,10 +2546,83 @@ public partial class MainWindow : Window
     {
         if (sender is Button btn && btn.DataContext is HistoryRecordModel record)
         {
-            if (!string.IsNullOrWhiteSpace(record.PrimaryFilepath))
+            if (!string.IsNullOrWhiteSpace(record.PrimaryFilepath) && File.Exists(record.PrimaryFilepath))
+            {
+                if (_miniPlayer.Load(record.PrimaryFilepath))
+                {
+                    MiniPlayerCard.IsVisible = true;
+                    MiniPlayerTitle.Text = record.Title;
+                    string ext = Path.GetExtension(record.PrimaryFilepath).TrimStart('.').ToUpperInvariant();
+                    MiniPlayerBadge.Text = string.IsNullOrEmpty(ext) ? "MEDIA" : ext;
+                    _miniPlayer.Play();
+                    MiniPlayerPlayToggle.Content = "⏸";
+                    _miniPlayerTimer.Start();
+                    return;
+                }
+                PlatformUtils.OpenFile(record.PrimaryFilepath);
+            }
+            else if (!string.IsNullOrWhiteSpace(record.PrimaryFilepath))
             {
                 PlatformUtils.OpenFile(record.PrimaryFilepath);
             }
+        }
+    }
+
+    private void MiniPlayerTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_miniPlayer.IsLoaded && !_isMiniPlayerSeeking)
+        {
+            double pos = _miniPlayer.GetCurrentPositionSeconds();
+            double dur = _miniPlayer.DurationSeconds;
+            if (dur > 0)
+            {
+                MiniPlayerSeekBar.Value = Math.Clamp((pos / dur) * 100.0, 0, 100);
+                MiniPlayerTimeText.Text = $"{FormatPlayerTime(pos)} / {FormatPlayerTime(dur)}";
+            }
+        }
+    }
+
+    private static string FormatPlayerTime(double sec)
+    {
+        var ts = TimeSpan.FromSeconds(Math.Max(0, sec));
+        return ts.TotalHours >= 1 ? ts.ToString(@"hh\:mm\:ss") : ts.ToString(@"mm\:ss");
+    }
+
+    private void MiniPlayerPlayToggle_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!_miniPlayer.IsLoaded) return;
+        if (_miniPlayer.IsPlaying)
+        {
+            _miniPlayer.Pause();
+            MiniPlayerPlayToggle.Content = "▶";
+        }
+        else
+        {
+            _miniPlayer.Resume();
+            MiniPlayerPlayToggle.Content = "⏸";
+        }
+    }
+
+    private void MiniPlayerStopButton_Click(object? sender, RoutedEventArgs e)
+    {
+        _miniPlayer.Stop();
+        MiniPlayerPlayToggle.Content = "▶";
+        MiniPlayerSeekBar.Value = 0;
+    }
+
+    private void MiniPlayerCloseButton_Click(object? sender, RoutedEventArgs e)
+    {
+        _miniPlayer.Stop();
+        _miniPlayer.Close();
+        _miniPlayerTimer.Stop();
+        MiniPlayerCard.IsVisible = false;
+    }
+
+    private void MiniPlayerExternalButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_miniPlayer.CurrentFilePath))
+        {
+            PlatformUtils.OpenFile(_miniPlayer.CurrentFilePath);
         }
     }
 
