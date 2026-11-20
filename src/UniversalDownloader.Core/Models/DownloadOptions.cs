@@ -72,6 +72,8 @@ public class DownloadOptions
     public int SharePort { get; set; }
     public bool CheckDuplicates { get; set; }
     public string? Preset { get; set; }
+    public bool RulesEnabled { get; set; } = true;
+    public string? RulesFile { get; set; }
 
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
@@ -290,6 +292,16 @@ public class DownloadOptions
         {
             args.Add("--preset");
             args.Add(Preset.Trim());
+        }
+
+        if (!RulesEnabled)
+        {
+            args.Add("--no-rules");
+        }
+        else if (!string.IsNullOrWhiteSpace(RulesFile))
+        {
+            args.Add("--rules");
+            args.Add(RulesFile.Contains(' ') ? $"\"{RulesFile}\"" : RulesFile);
         }
 
         return args;

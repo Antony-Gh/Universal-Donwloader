@@ -505,6 +505,8 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         share_port=int(getattr(args, "share_port", 0) or json_config.get("share_port") or 0),
         check_duplicates=getattr(args, "check_duplicates", False) or parse_config_bool(json_config.get("check_duplicates")),
         preset=preset_val,
+        rules_enabled=not getattr(args, "no_rules", False) and parse_config_bool(json_config.get("rules_enabled", True)),
+        rules_file=Path(getattr(args, "rules", None)) if getattr(args, "rules", None) else (Path(json_config["rules_file"]) if json_config.get("rules_file") else None),
     )
 
     if config.retries > 20:

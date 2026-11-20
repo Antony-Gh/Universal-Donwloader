@@ -390,6 +390,19 @@ class DownloadEngine:
                 },
             )
 
+        if self.config.rules_enabled:
+            from universal_downloader.rules import RulesEngine
+            try:
+                engine_rules = RulesEngine(rules_path=self.config.rules_file)
+                applied = engine_rules.apply(
+                    config=self.config,
+                    platform=target.platform.value,
+                )
+                if applied:
+                    LOGGER.info("Applied platform smart rules: %s", applied)
+            except Exception as rexc:
+                LOGGER.warning("Initial rules evaluation error: %s", rexc)
+
         if self.config.check_duplicates:
             from universal_downloader.duplicate_detector import find_existing_duplicate
             dup = find_existing_duplicate(target.normalized_url, self.config.output_dir)
@@ -429,6 +442,23 @@ class DownloadEngine:
                         res.metadata,
                         status="completed",
                     )
+
+                # Post-metadata rules evaluation (keywords, duration, uploader)
+                if self.config.rules_enabled and res.metadata:
+                    from universal_downloader.rules import RulesEngine
+                    try:
+                        engine_rules = RulesEngine(rules_path=self.config.rules_file)
+                        post_applied = engine_rules.apply(
+                            config=self.config,
+                            platform=target.platform.value,
+                            title=res.metadata.get("title", ""),
+                            uploader=res.metadata.get("uploader", ""),
+                            duration=res.metadata.get("duration"),
+                        )
+                        if post_applied:
+                            LOGGER.info("Applied post-metadata smart rules: %s", post_applied)
+                    except Exception as prexc:
+                        LOGGER.warning("Post-metadata rules evaluation error: %s", prexc)
 
                 # Automatic Whisper transcription
                 if self.config.transcribe:

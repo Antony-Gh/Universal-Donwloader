@@ -384,6 +384,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="List available device and social media optimization presets.",
     )
+    post_group.add_argument(
+        "--rules",
+        metavar="PATH",
+        help="Path to custom JSON file with smart routing and automation rules.",
+    )
+    post_group.add_argument(
+        "--rules-list",
+        action="store_true",
+        help="List configured smart routing and automation rules.",
+    )
+    post_group.add_argument(
+        "--no-rules",
+        action="store_true",
+        help="Disable automatic smart routing and automation rules.",
+    )
 
     # Output & Paths
     out_group = parser.add_argument_group("Output & Paths")
@@ -1211,6 +1226,48 @@ def main() -> int:
                     print(f"    {p['description']}")
                 print("=" * 70)
                 print("Usage: python downloader.py --preset <preset_name> <URL_or_File>")
+            return 0
+
+        # Smart Routing Rules List
+        if getattr(args, "rules_list", False):
+            from universal_downloader.rules import RulesEngine
+            engine_rules = RulesEngine(rules_path=config.rules_file)
+            if config.json_output or config.json_stream:
+                data = [
+                    {
+                        "name": r.name,
+                        "platforms": r.platforms,
+                        "keywords": r.keywords,
+                        "uploaders": r.uploaders,
+                        "min_duration": r.min_duration,
+                        "max_duration": r.max_duration,
+                        "actions": r.actions,
+                    }
+                    for r in engine_rules.rules
+                ]
+                print(json.dumps({"success": True, "rules": data}, indent=2))
+            else:
+                print("=" * 75)
+                print("Smart Routing & Automation Rules")
+                print("=" * 75)
+                for idx, r in enumerate(engine_rules.rules, start=1):
+                    conds = []
+                    if r.platforms:
+                        conds.append(f"Platforms: [{', '.join(r.platforms)}]")
+                    if r.keywords:
+                        conds.append(f"Keywords: [{', '.join(r.keywords)}]")
+                    if r.uploaders:
+                        conds.append(f"Uploaders: [{', '.join(r.uploaders)}]")
+                    if r.min_duration:
+                        conds.append(f"Min Duration: {int(r.min_duration)}s")
+                    if r.max_duration:
+                        conds.append(f"Max Duration: {int(r.max_duration)}s")
+                    print(f"  {idx}. {r.name}")
+                    if conds:
+                        print(f"     IF: { ' AND '.join(conds) }")
+                    print(f"     THEN: {r.actions}")
+                print("=" * 75)
+                print("Configure rules in ~/.universal_downloader/rules.json or use --rules <path>")
             return 0
 
         # Credits & Creator Acknowledgments

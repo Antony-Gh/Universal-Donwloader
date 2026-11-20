@@ -128,6 +128,8 @@ class AppConfig:
     share_port: int = 0
     check_duplicates: bool = False
     preset: Optional[str] = None
+    rules_enabled: bool = True
+    rules_file: Optional[Path] = None
 
 
 @dataclass
