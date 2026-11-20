@@ -778,6 +778,10 @@ public partial class MainWindow : Window
                 DetailsLabel.Text = $"{e.DownloadedFormatted} / {e.TotalFormatted} • {e.SpeedFormatted}";
                 EtaLabel.Text = $"ETA: {e.EtaFormatted}";
                 GlobalStatusText.Text = $"Downloading: {e.Percent:F1}% at {e.SpeedFormatted}";
+                if (e.Speed.HasValue)
+                {
+                    LiveBandwidthGraph.AddSample(e.Speed.Value);
+                }
             }, DispatcherPriority.Background);
         }
     }
@@ -1109,6 +1113,7 @@ public partial class MainWindow : Window
     {
         SetDownloading(true);
         ProgressCard.IsVisible = true;
+        LiveBandwidthGraph.Reset();
         DownloadProgressBar.IsIndeterminate = true;
         DownloadProgressBar.Value = 0;
         PercentLabel.Text = "0.0%";

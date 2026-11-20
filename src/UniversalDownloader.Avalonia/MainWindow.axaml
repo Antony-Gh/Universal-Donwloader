@@ -659,6 +659,7 @@
                                     <TextBlock x:Name="DetailsLabel" Grid.Column="0" Text="0 B / 0 B • 0 B/s" FontSize="12" Foreground="#9CA3AF"/>
                                     <TextBlock x:Name="EtaLabel" Grid.Column="1" Text="ETA: --:--" FontSize="12" Foreground="#9CA3AF"/>
                                 </Grid>
+                                <local:BandwidthGraphControl x:Name="LiveBandwidthGraph" Height="68" Margin="0,4,0,0"/>
                             </StackPanel>
                         </Border>
 
