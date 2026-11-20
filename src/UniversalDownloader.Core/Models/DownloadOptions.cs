@@ -70,6 +70,7 @@ public class DownloadOptions
     public bool ShareOnLan { get; set; }
     public int SharePort { get; set; }
     public bool CheckDuplicates { get; set; }
+    public string? Preset { get; set; }
 
     /// <summary>
     /// Builds CLI argument list corresponding to these options.
@@ -281,6 +282,12 @@ public class DownloadOptions
         if (CheckDuplicates)
         {
             args.Add("--check-duplicates");
+        }
+
+        if (!string.IsNullOrWhiteSpace(Preset))
+        {
+            args.Add("--preset");
+            args.Add(Preset.Trim());
         }
 
         return args;

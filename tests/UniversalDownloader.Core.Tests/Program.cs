@@ -138,11 +138,13 @@ RunTest("DownloadOptions.BuildCliArguments builds cookies, clip, playlist, and s
     opts.PauseOnBattery = true;
     opts.OnlyWifi = true;
     opts.UseAria2 = true;
+    opts.Preset = "discord";
     var smartArgs = opts.BuildCliArguments();
     AssertTrue(smartArgs.Contains("--schedule") && smartArgs.Contains("02:00"), "schedule flag");
     AssertTrue(smartArgs.Contains("--pause-on-battery"), "pause-on-battery flag");
     AssertTrue(smartArgs.Contains("--only-wifi"), "only-wifi flag");
     AssertTrue(smartArgs.Contains("--aria2"), "aria2 flag");
+    AssertTrue(smartArgs.Contains("--preset") && smartArgs.Contains("discord"), "preset flag");
 });
 
 RunTest("UserSettings saves and reloads cleanly via source-generated JSON", () =>

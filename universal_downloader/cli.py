@@ -364,6 +364,16 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="CATEGORIES",
         help="Remove segments via SponsorBlock (e.g. 'sponsor,intro,outro').",
     )
+    post_group.add_argument(
+        "--preset",
+        metavar="PRESET",
+        help="Device & social optimization preset ('discord', 'discord_10mb', 'whatsapp', 'car_audio', 'tv_theater').",
+    )
+    post_group.add_argument(
+        "--preset-list",
+        action="store_true",
+        help="List available device and social media optimization presets.",
+    )
 
     # Output & Paths
     out_group = parser.add_argument_group("Output & Paths")
@@ -1108,6 +1118,24 @@ def main() -> int:
                     failure("GDPR erasure request failed or remote telemetry server not configured.", config)
             return 0 if ok else 1
 
+        # Preset List
+        if getattr(args, "preset_list", False):
+            from universal_downloader.presets import list_presets
+            presets = list_presets()
+            if config.json_output or config.json_stream:
+                print(json.dumps({"success": True, "presets": presets}, indent=2))
+            else:
+                print("=" * 70)
+                print("Available Device & Social Media Optimization Presets")
+                print("=" * 70)
+                for p in presets:
+                    size_note = f" (Max: {p['max_size_mb']}MB)" if p.get("max_size_mb") else ""
+                    print(f"  • {p['id']:<14} : {p['name']}{size_note}")
+                    print(f"    {p['description']}")
+                print("=" * 70)
+                print("Usage: python downloader.py --preset <preset_name> <URL_or_File>")
+            return 0
+
         # Credits & Creator Acknowledgments
         if getattr(args, "credits", False):
             if config.json_output or config.json_stream:
@@ -1479,6 +1507,27 @@ def main() -> int:
                     failure(f"Music tagging failed: {texc}", config)
                 return 1
 
+        # Direct local file compression via preset
+        if getattr(args, "preset", None) and requested_url:
+            try:
+                local_path = Path(requested_url).expanduser()
+                if local_path.is_file():
+                    from universal_downloader.presets import compress_video_to_target_size, get_preset
+                    preset_obj = get_preset(args.preset)
+                    if preset_obj and preset_obj.max_size_mb:
+                        out_path = compress_video_to_target_size(local_path, target_mb=preset_obj.max_size_mb)
+                        if config.json_output or config.json_stream:
+                            print(json.dumps({"success": True, "output": str(out_path), "preset": preset_obj.id}))
+                        else:
+                            success(f"Video compressed to fit under {preset_obj.max_size_mb}MB: {out_path}", config)
+                        return 0
+            except Exception as pexc:
+                if config.json_output or config.json_stream:
+                    print(json.dumps({"success": False, "error": str(pexc)}))
+                else:
+                    failure(f"Preset compression failed: {pexc}", config)
+                return 1
+
         # Direct local file sharing over Wi-Fi with QR code
         if getattr(args, "share", False) and requested_url:
             try:
@@ -1825,6 +1874,23 @@ def main() -> int:
                     formats=formats_tuple,
                     summarize=config.summarize,
                 )
+                if config.preset and result.files:
+                    from universal_downloader.presets import compress_video_to_target_size, get_preset
+                    preset_obj = get_preset(config.preset)
+                    if preset_obj and preset_obj.max_size_mb:
+                        compressed_list = []
+                        for f in result.files:
+                            if f.suffix.lower() in {".mp4", ".mkv", ".mov", ".webm"}:
+                                try:
+                                    compressed = compress_video_to_target_size(f, target_mb=preset_obj.max_size_mb)
+                                    compressed_list.append(compressed)
+                                except Exception as c_exc:
+                                    LOGGER.warning(f"Target size compression warning: {c_exc}")
+                                    compressed_list.append(f)
+                            else:
+                                compressed_list.append(f)
+                        result.files = compressed_list
+
                 if config.json_output:
                     print(json.dumps({"success": True, "files": [str(p) for p in out_files.values()]}))
                 else:
@@ -1859,6 +1925,23 @@ def main() -> int:
                     info("Processing...", config)
 
                 result = engine.download(target.normalized_url)
+
+                if config.preset and result.files:
+                    from universal_downloader.presets import compress_video_to_target_size, get_preset
+                    preset_obj = get_preset(config.preset)
+                    if preset_obj and preset_obj.max_size_mb:
+                        compressed_list = []
+                        for f in result.files:
+                            if f.suffix.lower() in {".mp4", ".mkv", ".mov", ".webm"}:
+                                try:
+                                    compressed = compress_video_to_target_size(f, target_mb=preset_obj.max_size_mb)
+                                    compressed_list.append(compressed)
+                                except Exception as c_exc:
+                                    LOGGER.warning(f"Target size compression warning: {c_exc}")
+                                    compressed_list.append(f)
+                            else:
+                                compressed_list.append(f)
+                        result.files = compressed_list
 
                 if config.json_output:
                     print(

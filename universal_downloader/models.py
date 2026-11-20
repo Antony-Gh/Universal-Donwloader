@@ -126,6 +126,7 @@ class AppConfig:
     share: bool = False
     share_port: int = 0
     check_duplicates: bool = False
+    preset: Optional[str] = None
 
 
 @dataclass

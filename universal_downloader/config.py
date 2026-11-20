@@ -402,6 +402,22 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         or json_config.get("friend")
     )
 
+    preset_val = getattr(args, "preset", None) or json_config.get("preset")
+    if preset_val:
+        from universal_downloader.presets import get_preset
+        preset_obj = get_preset(preset_val)
+        if preset_obj:
+            if preset_obj.audio_only:
+                audio_only = True
+                audio_format = preset_obj.audio_format
+                audio_quality = preset_obj.audio_quality
+            if preset_obj.quality and not getattr(args, "quality", None):
+                quality = preset_obj.quality
+            if preset_obj.prefer_codec and not getattr(args, "prefer_codec", None):
+                prefer_codec = preset_obj.prefer_codec
+            if preset_obj.normalize_audio:
+                normalize_audio = True
+
     config = AppConfig(
         output_dir=output_dir,
         log_dir=log_dir,
@@ -482,6 +498,7 @@ def build_config(args: argparse.Namespace) -> AppConfig:
         share=getattr(args, "share", False) or parse_config_bool(json_config.get("share")),
         share_port=int(getattr(args, "share_port", 0) or json_config.get("share_port") or 0),
         check_duplicates=getattr(args, "check_duplicates", False) or parse_config_bool(json_config.get("check_duplicates")),
+        preset=preset_val,
     )
 
     if config.retries > 20:
