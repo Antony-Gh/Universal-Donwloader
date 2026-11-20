@@ -1,0 +1,115 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="UniversalDownloader.Avalonia.QuickDownloadWindow"
+        Title="⚡ Quick Download HUD"
+        Width="580" Height="360"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Topmost="True"
+        Background="#0F1117">
+
+    <Border BorderBrush="#3B82F6" BorderThickness="1.5" CornerRadius="10" Padding="18">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+            <!-- Header -->
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+                <StackPanel Grid.Column="0" Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Border Background="#1E3A8A" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                            <TextBlock Text="HUD" Foreground="#93C5FD" FontSize="11" FontWeight="Bold"/>
+                        </Border>
+                        <TextBlock Text="Quick Download HUD" FontSize="16" FontWeight="Bold" Foreground="#F8FAFC"/>
+                    </StackPanel>
+                    <TextBlock Text="Instant download or queue from anywhere (Ctrl+Shift+D)" FontSize="11" Foreground="#94A3B8"/>
+                </StackPanel>
+                <Button x:Name="CloseButton" Grid.Column="1" Padding="8,4" Background="Transparent" Foreground="#64748B" FontSize="14" Content="✕" Click="CloseButton_Click" ToolTip.Tip="Close (Esc)"/>
+            </Grid>
+
+            <!-- URL Input Bar -->
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+                <TextBox x:Name="HudUrlTextBox" Grid.Column="0"
+                         FlowDirection="LeftToRight"
+                         FontSize="13"
+                         Watermark="Paste video/playlist URL here..."
+                         Background="#181824" Foreground="#F8FAFC"
+                         BorderBrush="#334155"
+                         CornerRadius="6,0,0,6"/>
+                <Button x:Name="HudPasteButton" Grid.Column="1"
+                        Padding="12,8"
+                        Background="#27272A" Foreground="#38BDF8"
+                        FontWeight="SemiBold" FontSize="12"
+                        CornerRadius="0,6,6,0"
+                        Content="📋 Paste"
+                        Click="HudPasteButton_Click"/>
+            </Grid>
+
+            <!-- Options Row -->
+            <Grid Grid.Row="2" ColumnDefinitions="*,*" Margin="0,0,0,14">
+                <!-- Quality -->
+                <StackPanel Grid.Column="0" Margin="0,0,6,0" Spacing="4">
+                    <TextBlock Text="Format &amp; Quality:" Foreground="#94A3B8" FontSize="11" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="HudQualityCombo" HorizontalAlignment="Stretch" SelectedIndex="0">
+                        <ComboBoxItem Content="Best Available (Video)"/>
+                        <ComboBoxItem Content="1080p Full HD (Video)"/>
+                        <ComboBoxItem Content="720p HD (Video)"/>
+                        <ComboBoxItem Content="480p SD (Video)"/>
+                        <ComboBoxItem Content="Audio (MP3 320k)"/>
+                        <ComboBoxItem Content="Audio (M4A Best)"/>
+                        <ComboBoxItem Content="Audio (FLAC Lossless)"/>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- Preset -->
+                <StackPanel Grid.Column="1" Margin="6,0,0,0" Spacing="4">
+                    <TextBlock Text="Social / Device Preset:" Foreground="#94A3B8" FontSize="11" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="HudPresetCombo" HorizontalAlignment="Stretch" SelectedIndex="0">
+                        <ComboBoxItem Content="None (Standard)"/>
+                        <ComboBoxItem Content="Discord (&lt;25 MB)"/>
+                        <ComboBoxItem Content="Discord Nitro (&lt;10 MB)"/>
+                        <ComboBoxItem Content="WhatsApp (&lt;16 MB)"/>
+                        <ComboBoxItem Content="Car Audio (MP3 Normalized)"/>
+                        <ComboBoxItem Content="TV Theater (4K/Surround)"/>
+                    </ComboBox>
+                </StackPanel>
+            </Grid>
+
+            <!-- Action Buttons Grid -->
+            <Grid Grid.Row="3" ColumnDefinitions="*,*,*" Margin="0,0,0,12">
+                <Button x:Name="HudDownloadVideoButton" Grid.Column="0" Margin="0,0,4,0"
+                        Padding="0,10" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Background="#2563EB" Foreground="White" FontWeight="Bold" FontSize="12"
+                        CornerRadius="6"
+                        Content="🎬 Download Video"
+                        Click="HudDownloadVideoButton_Click"/>
+
+                <Button x:Name="HudDownloadAudioButton" Grid.Column="1" Margin="4,0,4,0"
+                        Padding="0,10" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Background="#059669" Foreground="White" FontWeight="Bold" FontSize="12"
+                        CornerRadius="6"
+                        Content="🎵 Download Audio"
+                        Click="HudDownloadAudioButton_Click"/>
+
+                <Button x:Name="HudQueueButton" Grid.Column="2" Margin="4,0,0,0"
+                        Padding="0,10" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Background="#D97706" Foreground="White" FontWeight="Bold" FontSize="12"
+                        CornerRadius="6"
+                        Content="📥 Add to Queue"
+                        Click="HudQueueButton_Click"/>
+            </Grid>
+
+            <!-- Status Banner -->
+            <Border x:Name="HudStatusBorder" Grid.Row="4" IsVisible="False"
+                    Background="#1E293B" BorderBrush="#475569" BorderThickness="1"
+                    CornerRadius="6" Padding="10,6" Margin="0,0,0,10">
+                <TextBlock x:Name="HudStatusText" Text="" Foreground="#E2E8F0" FontSize="12" TextWrapping="Wrap" HorizontalAlignment="Center"/>
+            </Border>
+
+            <!-- Footer / Tip -->
+            <Grid Grid.Row="5" ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="Tip: Press Enter to download video immediately, or Esc to dismiss."
+                           FontSize="11" Foreground="#64748B" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Padding="10,4" Background="Transparent" Foreground="#94A3B8" FontSize="11"
+                        Content="Dismiss" Click="CloseButton_Click"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

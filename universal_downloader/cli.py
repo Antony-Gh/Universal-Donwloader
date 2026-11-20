@@ -65,7 +65,7 @@ from universal_downloader.telemetry import (
 )
 from universal_downloader.utils.net import detect_target
 from universal_downloader.version_policy import enforce_version_policy
-from universal_downloader.watcher import watch_clipboard
+from universal_downloader.watcher import get_clipboard_text, watch_clipboard
 
 
 def platform_python_version() -> str:
@@ -635,6 +635,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run clipboard monitor daemon to automatically download copied media URLs.",
     )
     integ_group.add_argument(
+        "--quick",
+        "--hud",
+        action="store_true",
+        help="Interactive Quick Download HUD (auto-detects clipboard media URL with 1-key actions).",
+    )
+    integ_group.add_argument(
         "--watch-interval",
         type=float,
         default=1.0,
@@ -984,6 +990,67 @@ def _build_playlist_entries(
     return result
 
 
+def run_quick_hud(engine: Any, config: AppConfig) -> int:
+    """Interactive quick download terminal HUD with clipboard auto-detection."""
+    print("=" * 60)
+    print("  ⚡ Universal Downloader Quick HUD")
+    print("=" * 60)
+
+    cb = get_clipboard_text()
+    candidate_url = ""
+    if cb and (cb.startswith("http://") or cb.startswith("https://")):
+        candidate_url = cb.strip()
+        print(f"📋 Found copied URL: {candidate_url}")
+        try:
+            resp = input("Use this link? [Y/n/enter new URL]: ").strip()
+        except EOFError:
+            resp = "y"
+        if not resp or resp.lower() in ("y", "yes"):
+            target_url = candidate_url
+        elif resp.lower() in ("n", "no"):
+            try:
+                target_url = input("Enter media URL: ").strip()
+            except EOFError:
+                target_url = ""
+        else:
+            target_url = resp
+    else:
+        try:
+            target_url = input("Enter media URL: ").strip()
+        except EOFError:
+            target_url = ""
+
+    if not target_url:
+        print("No URL provided. Exiting Quick HUD.")
+        return 1
+
+    print("\nSelect Download Action:")
+    print("  [1] 🎬 Best Video (Default)")
+    print("  [2] 🎵 Audio Only (MP3 320k)")
+    print("  [3] 📱 Discord (<25 MB)")
+    print("  [4] 💬 WhatsApp (<16 MB)")
+    print("  [5] 📺 TV Theater (4K Max)")
+    try:
+        choice = input("Choice [1-5, default 1]: ").strip()
+    except EOFError:
+        choice = "1"
+
+    if choice == "2":
+        config.format = "audio"
+    elif choice == "3":
+        config.preset = "discord"
+    elif choice == "4":
+        config.preset = "whatsapp"
+    elif choice == "5":
+        config.preset = "tv_theater"
+    else:
+        config.format = "video"
+
+    print(f"\n🚀 Starting Quick Download for: {target_url} ...\n")
+    summary = engine.download(target_url, config=config)
+    return 0 if summary.successful else 1
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -1285,6 +1352,10 @@ def main() -> int:
         if getattr(args, "watch_clipboard", False):
             watch_clipboard(engine, interval=config.watch_interval)
             return 0
+
+        # Quick HUD Mode
+        if getattr(args, "quick", False):
+            return run_quick_hud(engine, config)
 
         requested_url = validate_url_option(args)
         if requested_url:

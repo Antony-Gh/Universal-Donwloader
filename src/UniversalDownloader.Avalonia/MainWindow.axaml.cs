@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
@@ -131,6 +132,7 @@ public partial class MainWindow : Window
             await CheckClipboardForMediaUrlAsync();
         };
         Activated += async (s, e) => await CheckClipboardForMediaUrlAsync();
+        KeyDown += MainWindow_KeyDown;
         Closing += (s, e) =>
         {
             if (_settings.MinimizeToTray && !_isExiting)
@@ -410,6 +412,59 @@ public partial class MainWindow : Window
             OnRawOutputReceived(this, $"[Complete] Saved {dialog.SavedCookieCount} session cookie(s) to {dialog.SavedCookiesPath}");
             GlobalStatusText.Text = $"Applied {dialog.SavedCookieCount} session cookie(s) — ready to inspect or download.";
         }
+    }
+
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.D && e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            OpenQuickHud();
+            e.Handled = true;
+        }
+    }
+
+    private void QuickHudButton_Click(object? sender, RoutedEventArgs e)
+    {
+        OpenQuickHud();
+    }
+
+    private void OpenQuickHud()
+    {
+        var hud = new QuickDownloadWindow();
+        hud.DownloadTriggered += (url, quality, preset, queueOnly) =>
+        {
+            UrlTextBox.Text = url;
+            if (string.Equals(quality, "Audio", StringComparison.OrdinalIgnoreCase))
+            {
+                QualityComboBox.SelectedIndex = 4; // Audio Only (MP3)
+            }
+            else if (string.Equals(quality, "1080p", StringComparison.OrdinalIgnoreCase))
+            {
+                QualityComboBox.SelectedIndex = 1;
+            }
+            else if (string.Equals(quality, "720p", StringComparison.OrdinalIgnoreCase))
+            {
+                QualityComboBox.SelectedIndex = 2;
+            }
+            else if (string.Equals(quality, "480p", StringComparison.OrdinalIgnoreCase))
+            {
+                QualityComboBox.SelectedIndex = 3;
+            }
+            else
+            {
+                QualityComboBox.SelectedIndex = 0; // Best
+            }
+
+            if (queueOnly)
+            {
+                AddToQueueButton_Click(this, new RoutedEventArgs());
+            }
+            else
+            {
+                DownloadButton_Click(this, new RoutedEventArgs());
+            }
+        };
+        hud.Show(this);
     }
 
     private async void BrowseCookiesButton_Click(object? sender, RoutedEventArgs e)
