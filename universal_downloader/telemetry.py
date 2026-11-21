@@ -490,8 +490,6 @@ def detect_friend_tag(
 
     # Extract from binary filename (e.g. downloader_ahmed.exe, UniversalDownloader_sara)
     try:
-        import re
-
         prog_stem = Path(sys.argv[0]).stem
         m = re.search(
             r"(?:universal[_-]?downloader|downloader)[_-]([a-zA-Z0-9_\-]+)$",

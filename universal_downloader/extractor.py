@@ -245,7 +245,6 @@ class YTDLPExtractor:
             options["concurrent_fragment_downloads"] = max(1, self.config.concurrent_fragments)
 
         if getattr(self.config, "aria2", False):
-            import shutil
             aria2_bin = shutil.which("aria2c")
             if aria2_bin or Path("aria2c.exe").is_file():
                 options["external_downloader"] = {"default": "aria2c"}

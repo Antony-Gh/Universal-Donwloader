@@ -490,5 +490,22 @@ def test_cli_credits(capsys):
     assert "Universal-Donwloader" in data["repository"]
 
 
+def test_cli_history_and_utility_flags(monkeypatch, tmp_path):
+    from universal_downloader.cli import main
+
+    monkeypatch.chdir(tmp_path)
+    # Test --history, --history-search, --history-clear
+    assert main(["--history"]) == 0
+    assert main(["--history-search", "nonexistent"]) == 0
+    assert main(["--history-clear"]) == 0
+
+    # Test --export-rss with nonexistent target
+    assert main(["--export-rss", "nonexistent_sub"]) == 0
+
+    # Test --rules-list
+    assert main(["--rules-list"]) == 0
+
+
+
 
 

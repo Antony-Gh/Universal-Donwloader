@@ -1108,9 +1108,9 @@ def run_quick_hud(engine: Any, config: AppConfig) -> int:
     return 0 if summary.successful else 1
 
 
-def main() -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Starter config generation
     if getattr(args, "init_config", False):
@@ -1450,7 +1450,6 @@ def main() -> int:
         # Export Podcast RSS Feed for Subscriptions
         if getattr(args, "export_rss", None) is not None:
             from universal_downloader.feed import export_subscription_feed
-            from universal_downloader.history import get_history
 
             subs = list_subscriptions(db_path)
             export_target = str(args.export_rss).strip()
@@ -2131,22 +2130,6 @@ def main() -> int:
                     formats=formats_tuple,
                     summarize=config.summarize,
                 )
-                if config.preset and result.files:
-                    from universal_downloader.presets import compress_video_to_target_size, get_preset
-                    preset_obj = get_preset(config.preset)
-                    if preset_obj and preset_obj.max_size_mb:
-                        compressed_list = []
-                        for f in result.files:
-                            if f.suffix.lower() in {".mp4", ".mkv", ".mov", ".webm"}:
-                                try:
-                                    compressed = compress_video_to_target_size(f, target_mb=preset_obj.max_size_mb)
-                                    compressed_list.append(compressed)
-                                except Exception as c_exc:
-                                    LOGGER.warning(f"Target size compression warning: {c_exc}")
-                                    compressed_list.append(f)
-                            else:
-                                compressed_list.append(f)
-                        result.files = compressed_list
 
                 if config.json_output:
                     print(json.dumps({"success": True, "files": [str(p) for p in out_files.values()]}))
