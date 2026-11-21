@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     private string? _versionBlockedMessage = null;
     private string? _detectedClipboardUrl;
     private string? _dismissedClipboardUrl;
+    private string? _lastNotifiedClipboardUrl;
     private static readonly string[] SupportedClipboardHosts =
     [
         "youtube.com", "youtu.be", "instagram.com", "tiktok.com", "facebook.com", "fb.watch",
@@ -165,6 +166,9 @@ public partial class MainWindow : Window
             {
                 e.Cancel = true;
                 Hide();
+                var notifTitle = Localization.Get(_settings.Language, "TrayMinimizedTitle");
+                var notifMsg = Localization.Get(_settings.Language, "TrayMinimizedNotification");
+                PlatformUtils.ShowNotification(notifTitle, notifMsg);
                 return;
             }
             _isExiting = true;
@@ -218,7 +222,6 @@ public partial class MainWindow : Window
 
     private async Task CheckClipboardForMediaUrlAsync()
     {
-        if (!IsVisible) return;
         try
         {
             var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
@@ -242,13 +245,33 @@ public partial class MainWindow : Window
             if (string.Equals(raw, currentInput, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(raw, _dismissedClipboardUrl, StringComparison.OrdinalIgnoreCase))
             {
-                ClipboardBanner.IsVisible = false;
+                if (IsVisible)
+                {
+                    ClipboardBanner.IsVisible = false;
+                }
                 return;
             }
 
             _detectedClipboardUrl = raw;
             ClipboardBannerText.Text = $"Copied link detected: {raw}";
-            ClipboardBanner.IsVisible = true;
+            if (IsVisible)
+            {
+                ClipboardBanner.IsVisible = true;
+            }
+
+            // Only notify once per newly copied URL
+            if (!string.Equals(raw, _lastNotifiedClipboardUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                _lastNotifiedClipboardUrl = raw;
+                if (string.IsNullOrWhiteSpace(UrlTextBox.Text))
+                {
+                    UrlTextBox.Text = raw;
+                }
+                var notifTitle = Localization.Get(_settings.Language, "LinkDetectedNotificationTitle");
+                var notifMsgTemplate = Localization.Get(_settings.Language, "LinkDetectedNotificationMessage");
+                var notifMsg = string.Format(notifMsgTemplate, raw);
+                PlatformUtils.ShowNotification(notifTitle, notifMsg);
+            }
         }
         catch
         {

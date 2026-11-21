@@ -120,6 +120,61 @@ public static class PlatformUtils
     }
 
     /// <summary>
+    /// Displays a native desktop OS notification (Windows tray balloon / toast, Linux notify-send, macOS osascript).
+    /// Safe to invoke from any thread; executes asynchronously without blocking the caller.
+    /// </summary>
+    public static void ShowNotification(string title, string message)
+    {
+        try
+        {
+            if (IsWindows)
+            {
+                var safeTitle = (title ?? "Universal Downloader").Replace("'", "''").Replace("\"", "`\"");
+                var safeMessage = (message ?? string.Empty).Replace("'", "''").Replace("\"", "`\"");
+                var script = $"Add-Type -AssemblyName System.Windows.Forms; $notify = New-Object System.Windows.Forms.NotifyIcon; $notify.Icon = [System.Drawing.SystemIcons]::Information; $notify.Visible = $true; $notify.ShowBalloonTip(4000, '{safeTitle}', '{safeMessage}', [System.Windows.Forms.ToolTipIcon]::Info); Start-Sleep -Milliseconds 2500; $notify.Dispose()";
+
+                var psi = new ProcessStartInfo("powershell", $"-NoProfile -WindowStyle Hidden -Command \"{script}\"")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                Process.Start(psi);
+                return;
+            }
+
+            if (IsMacOS)
+            {
+                var safeTitle = (title ?? "Universal Downloader").Replace("\"", "\\\"");
+                var safeMessage = (message ?? string.Empty).Replace("\"", "\\\"");
+                var psi = new ProcessStartInfo("osascript", $"-e 'display notification \"{safeMessage}\" with title \"{safeTitle}\"'")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                Process.Start(psi);
+                return;
+            }
+
+            if (IsLinux)
+            {
+                var safeTitle = title ?? "Universal Downloader";
+                var safeMessage = message ?? string.Empty;
+                var psi = new ProcessStartInfo("notify-send", $"\"{safeTitle}\" \"{safeMessage}\"")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+                Process.Start(psi);
+            }
+        }
+        catch
+        {
+            // Silent fallback if notification daemon or command is unavailable
+        }
+    }
+
+    /// <summary>
     /// Locate a binary filename with appropriate OS extension.
     /// </summary>
     public static string GetBinaryName(string baseName)
