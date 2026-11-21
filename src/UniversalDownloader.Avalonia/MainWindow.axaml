@@ -593,10 +593,16 @@
                                                   ToolTip.Tip="Embeds available subtitle tracks directly into video containers (MKV/MP4) using FFmpeg without burning them permanently into the video picture."/>
                                     </StackPanel>
 
-                                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,0,16,0" VerticalAlignment="Center">
                                         <CheckBox x:Name="WriteThumbnailCheck" Content="Save Thumbnail File" IsChecked="False"/>
                                         <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                   ToolTip.Tip="Saves the original thumbnail image file (JPG/PNG/WebP) alongside the downloaded media in your destination folder."/>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                        <CheckBox x:Name="MinimizeToTrayCheck" Content="Minimize to System Tray on Close" IsChecked="False"/>
+                                        <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                  ToolTip.Tip="When enabled, clicking the window close button minimizes Universal Downloader to the Windows notification tray instead of exiting."/>
                                     </StackPanel>
                                 </WrapPanel>
 

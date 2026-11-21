@@ -167,11 +167,29 @@ public partial class MainWindow : Window
                 Hide();
                 return;
             }
+            _isExiting = true;
+            _cts?.Cancel();
+            _queueCts?.Cancel();
+            _metadataCts?.Cancel();
+            _streamPreviewCts?.Cancel();
             _playlistQualityCts?.Cancel();
+            _client.Cancel();
             _clipboardTimer.Stop();
+            _logBatchTimer.Stop();
             _miniPlayerTimer.Stop();
             _miniPlayer.Dispose();
             SaveUserSettings();
+        };
+
+        Closed += (s, e) =>
+        {
+            if (!_settings.MinimizeToTray || _isExiting)
+            {
+                if (global::Avalonia.Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                {
+                    desktop.Shutdown();
+                }
+            }
         };
 
         ResetInstallIdButton.Click += (s, e) =>
@@ -200,6 +218,7 @@ public partial class MainWindow : Window
 
     private async Task CheckClipboardForMediaUrlAsync()
     {
+        if (!IsVisible) return;
         try
         {
             var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
@@ -230,12 +249,6 @@ public partial class MainWindow : Window
             _detectedClipboardUrl = raw;
             ClipboardBannerText.Text = $"Copied link detected: {raw}";
             ClipboardBanner.IsVisible = true;
-            if (!IsVisible)
-            {
-                Show();
-                WindowState = WindowState.Normal;
-                Activate();
-            }
         }
         catch
         {
@@ -271,6 +284,7 @@ public partial class MainWindow : Window
         EmbedThumbnailCheck.IsChecked = _settings.EmbedThumbnail;
         EmbedSubsCheck.IsChecked = _settings.EmbedSubs;
         WriteThumbnailCheck.IsChecked = _settings.WriteThumbnail;
+        MinimizeToTrayCheck.IsChecked = _settings.MinimizeToTray;
         SponsorBlockCheck.IsChecked = _settings.SponsorBlockEnabled;
         ThemeComboBox.SelectedIndex = _settings.ThemePreset switch
         {
@@ -373,6 +387,7 @@ public partial class MainWindow : Window
         EmbedThumbnailCheck.Content = T("EmbedCoverArt");
         EmbedSubsCheck.Content = T("EmbedSubtitles");
         WriteThumbnailCheck.Content = T("SaveThumbnail");
+        MinimizeToTrayCheck.Content = T("MinimizeToTray");
         AdvancedExpanderHeader.Text = T("AdvancedHeader");
         StartTimeHeader.Text = T("StartTime");
         EndTimeHeader.Text = T("EndTime");
@@ -491,6 +506,7 @@ public partial class MainWindow : Window
         _settings.EmbedThumbnail = EmbedThumbnailCheck.IsChecked ?? true;
         _settings.EmbedSubs = EmbedSubsCheck.IsChecked ?? false;
         _settings.WriteThumbnail = WriteThumbnailCheck.IsChecked ?? false;
+        _settings.MinimizeToTray = MinimizeToTrayCheck.IsChecked ?? false;
         _settings.SponsorBlockEnabled = SponsorBlockCheck.IsChecked ?? false;
         _settings.TelemetryEnabled = !(OptOutTelemetryCheckBox.IsChecked ?? false);
         _settings.Save();
