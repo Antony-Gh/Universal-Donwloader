@@ -2085,7 +2085,6 @@ public partial class MainWindow : Window
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, thumbnailUrl);
-            request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
             if (thumbnailUrl.Contains("tiktok") || thumbnailUrl.Contains("tiktokcdn"))
             {
                 request.Headers.Referrer = new Uri("https://www.tiktok.com/");

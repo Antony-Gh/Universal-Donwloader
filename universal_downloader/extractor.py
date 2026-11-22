@@ -276,22 +276,9 @@ class YTDLPExtractor:
         platform: Platform,
         attempt: int = 1,
     ) -> dict[str, Any]:
-        if platform == Platform.TIKTOK:
-            return {
-                "extractor_retries": 3,
-                "sleep_interval_requests": 1,
-                "http_headers": {
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-                    ),
-                    "Referer": "https://www.tiktok.com/",
-                },
-            }
-        if platform == Platform.INSTAGRAM:
+        if platform in (Platform.TIKTOK, Platform.INSTAGRAM):
             return {
                 "extractor_retries": 2,
-                "sleep_interval_requests": 1,
             }
         if platform == Platform.YOUTUBE:
             # Attempt 1 uses yt-dlp's native default clients & PO-token filtering (no missing_pot)
