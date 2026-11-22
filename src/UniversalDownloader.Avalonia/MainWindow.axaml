@@ -300,16 +300,16 @@
                                         <TextBlock x:Name="VideoTitleLabel" Text="Video Title" FontSize="15" FontWeight="Bold" Foreground="#F4F4F8" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
 
                                         <!-- Uploader / Channel & View Count -->
-                                        <StackPanel Orientation="Horizontal" Spacing="14">
-                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                        <WrapPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                            <StackPanel x:Name="UploaderContainer" Orientation="Horizontal" Spacing="6" Margin="0,0,14,2" VerticalAlignment="Center">
                                                 <PathIcon Data="{StaticResource UserIcon}" Width="12" Height="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="UploaderLabel" Text="Channel Name" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="UploaderLabel" Text="Channel Name" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center" MaxWidth="320" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
-                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                            <StackPanel x:Name="ViewsContainer" Orientation="Horizontal" Spacing="6" Margin="0,0,0,2" VerticalAlignment="Center" IsVisible="False">
                                                 <PathIcon Data="{StaticResource EyeIcon}" Width="12" Height="12" Foreground="#64748B" VerticalAlignment="Center"/>
                                                 <TextBlock x:Name="ViewsLabel" Text="" FontSize="12" Foreground="#64748B" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                        </StackPanel>
+                                        </WrapPanel>
 
                                         <!-- Click-to-Copy Public Profile Bio -->
                                         <Button x:Name="ProfileBioButton" IsVisible="False" Padding="0" Background="Transparent" BorderThickness="0" HorizontalAlignment="Left" Click="ProfileBioButton_Click" ToolTip.Tip="Click to copy bio">

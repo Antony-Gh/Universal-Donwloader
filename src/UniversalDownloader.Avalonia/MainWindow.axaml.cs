@@ -1237,6 +1237,7 @@ public partial class MainWindow : Window
                     VideoTitleLabel.Text = Path.GetFileName(savedPath);
                     UploaderLabel.Text = savedPath;
                     ViewsLabel.Text = PlatformUtils.FormatBytes(bytes.Length);
+                    ViewsContainer.IsVisible = true;
                     DurationBadge.IsVisible = false;
                     MetadataLoadingText.IsVisible = false;
                     MetadataCard.IsVisible = true;
@@ -1758,6 +1759,7 @@ public partial class MainWindow : Window
                             VideoTitleLabel.Text = Path.GetFileName(savedPath);
                             UploaderLabel.Text = savedPath;
                             ViewsLabel.Text = PlatformUtils.FormatBytes(bytes.Length);
+                            ViewsContainer.IsVisible = true;
                             DurationBadge.IsVisible = false;
                             MetadataLoadingText.IsVisible = false;
                             MetadataCard.IsVisible = true;
@@ -1962,6 +1964,7 @@ public partial class MainWindow : Window
         VideoTitleLabel.Text = "Fetching media details...";
         UploaderLabel.Text = uri.Host;
         ViewsLabel.Text = "";
+        ViewsContainer.IsVisible = false;
         DurationBadge.IsVisible = false;
         ThumbnailImage.Source = null;
         ThumbnailSpinner.IsVisible = true;
@@ -1978,6 +1981,12 @@ public partial class MainWindow : Window
             var cookiesBrowser = string.IsNullOrWhiteSpace(cookiesFile) ? GetSelectedCookiesBrowser() : null;
             var meta = await _client.GetMetadataAsync(rawUrl, token, cookiesFromBrowser: cookiesBrowser, cookiesFile: cookiesFile);
             if (token.IsCancellationRequested) return;
+
+            if (meta == null && (uri.Host.Contains("tiktok.com", StringComparison.OrdinalIgnoreCase) || rawUrl.Contains("tiktok.com", StringComparison.OrdinalIgnoreCase)))
+            {
+                meta = await DownloaderClient.FetchTikTokMetadataDirectAsync(rawUrl, token);
+                if (token.IsCancellationRequested) return;
+            }
 
             if (meta != null && meta.IsPlaylist && meta.Entries.Count > 0)
             {
@@ -2024,6 +2033,7 @@ public partial class MainWindow : Window
                 }
 
                 ViewsLabel.Text = meta.ViewCountFormatted;
+                ViewsContainer.IsVisible = !string.IsNullOrWhiteSpace(meta.ViewCountFormatted);
 
                 if (meta.Qualities.Count > 0)
                 {
@@ -2043,9 +2053,21 @@ public partial class MainWindow : Window
                 MetadataLoadingText.IsVisible = false;
                 MetadataHeaderSpinner.IsVisible = false;
                 ThumbnailSpinner.IsVisible = false;
-                var fallbackTitle = uri.Segments.LastOrDefault()?.Trim('/');
-                VideoTitleLabel.Text = !string.IsNullOrWhiteSpace(fallbackTitle) ? fallbackTitle : uri.Host;
-                UploaderLabel.Text = uri.Host;
+                ViewsLabel.Text = "";
+                ViewsContainer.IsVisible = false;
+                if (uri.Host.Contains("tiktok.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    var authorSegment = uri.Segments.FirstOrDefault(s => s.StartsWith("@"))?.Trim('/', '@');
+                    var author = !string.IsNullOrWhiteSpace(authorSegment) ? $"@{authorSegment}" : "TikTok Creator";
+                    VideoTitleLabel.Text = $"TikTok Video by {author}";
+                    UploaderLabel.Text = author;
+                }
+                else
+                {
+                    var fallbackTitle = uri.Segments.LastOrDefault()?.Trim('/');
+                    VideoTitleLabel.Text = !string.IsNullOrWhiteSpace(fallbackTitle) ? fallbackTitle : uri.Host;
+                    UploaderLabel.Text = uri.Host;
+                }
                 DownloadOptionsCard.IsVisible = true;
                 GlobalStatusText.Text = "Ready to download";
             }
@@ -2061,9 +2083,21 @@ public partial class MainWindow : Window
                 MetadataLoadingText.IsVisible = false;
                 MetadataHeaderSpinner.IsVisible = false;
                 ThumbnailSpinner.IsVisible = false;
-                var fallbackTitle = uri.Segments.LastOrDefault()?.Trim('/');
-                VideoTitleLabel.Text = !string.IsNullOrWhiteSpace(fallbackTitle) ? fallbackTitle : uri.Host;
-                UploaderLabel.Text = uri.Host;
+                ViewsLabel.Text = "";
+                ViewsContainer.IsVisible = false;
+                if (uri.Host.Contains("tiktok.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    var authorSegment = uri.Segments.FirstOrDefault(s => s.StartsWith("@"))?.Trim('/', '@');
+                    var author = !string.IsNullOrWhiteSpace(authorSegment) ? $"@{authorSegment}" : "TikTok Creator";
+                    VideoTitleLabel.Text = $"TikTok Video by {author}";
+                    UploaderLabel.Text = author;
+                }
+                else
+                {
+                    var fallbackTitle = uri.Segments.LastOrDefault()?.Trim('/');
+                    VideoTitleLabel.Text = !string.IsNullOrWhiteSpace(fallbackTitle) ? fallbackTitle : uri.Host;
+                    UploaderLabel.Text = uri.Host;
+                }
                 DownloadOptionsCard.IsVisible = true;
                 GlobalStatusText.Text = "Ready to download";
             }

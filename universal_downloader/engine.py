@@ -133,11 +133,127 @@ class DownloadEngine:
             extra_opts["extract_flat"] = "in_playlist"
         if playlist_items:
             extra_opts["playlist_items"] = playlist_items
-        return self.extractor.extract_info(
-            url,
-            download=False,
-            extra=extra_opts,
-        )
+        try:
+            return self.extractor.extract_info(
+                url,
+                download=False,
+                extra=extra_opts,
+            )
+        except Exception:
+            if platform == Platform.TIKTOK or "tiktok.com" in url.lower():
+                fb = self._fallback_tiktok_inspect(url)
+                if fb:
+                    return fb
+            raise
+
+    @staticmethod
+    def _fallback_tiktok_inspect(url: str) -> Optional[dict[str, Any]]:
+        clean_url = url.split("?")[0].strip()
+        # 1. TikMate lookup
+        try:
+            import urllib.request
+            import urllib.parse
+            import json as _json
+            data = urllib.parse.urlencode({"url": clean_url}).encode()
+            req = urllib.request.Request(
+                "https://api.tikmate.app/api/lookup",
+                data=data,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            )
+            with urllib.request.urlopen(req, timeout=8) as r:
+                res = _json.loads(r.read().decode("utf-8"))
+                if res.get("success"):
+                    author = res.get("author_name") or res.get("author_id") or "TikTok Creator"
+                    desc = res.get("desc") or f"TikTok Video by {author}"
+                    cover = res.get("cover") or res.get("dynamic_cover")
+                    token = res.get("token")
+                    vid_id = str(res.get("id") or "")
+                    dl_url = f"https://tikmate.app/download/{token}/{vid_id}.mp4" if token and vid_id else None
+                    formats = [
+                        {
+                            "format_id": "best",
+                            "ext": "mp4",
+                            "resolution": "1080p",
+                            "vcodec": "h264",
+                            "acodec": "aac",
+                            "format_note": "Best (HD No Watermark)",
+                            "url": dl_url,
+                        }
+                    ] if dl_url else []
+                    return {
+                        "id": vid_id,
+                        "title": desc,
+                        "uploader": author,
+                        "channel": author,
+                        "creator": author,
+                        "description": desc,
+                        "thumbnail": cover,
+                        "duration": None,
+                        "duration_string": None,
+                        "view_count": res.get("like_count"),
+                        "like_count": res.get("like_count"),
+                        "comment_count": res.get("comment_count"),
+                        "formats": formats,
+                        "webpage_url": clean_url,
+                        "extractor": "tiktok",
+                        "extractor_key": "TikTok",
+                        "_fallback_download_url": dl_url,
+                    }
+        except Exception as e:
+            LOGGER.debug("TikMate fallback inspect failed: %s", e)
+
+        # 2. TikWM lookup
+        try:
+            import urllib.request
+            import urllib.parse
+            import json as _json
+            api_url = f"https://www.tikwm.com/api/?url={urllib.parse.quote(clean_url)}"
+            req = urllib.request.Request(
+                api_url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            )
+            with urllib.request.urlopen(req, timeout=8) as r:
+                res = _json.loads(r.read().decode("utf-8"))
+                d = res.get("data")
+                if res.get("code") == 0 and isinstance(d, dict):
+                    author = (d.get("author") or {}).get("nickname") or "TikTok Creator"
+                    desc = d.get("title") or f"TikTok Video by {author}"
+                    cover = d.get("cover")
+                    dl_url = d.get("play")
+                    duration = d.get("duration")
+                    formats = [
+                        {
+                            "format_id": "best",
+                            "ext": "mp4",
+                            "resolution": "1080p",
+                            "vcodec": "h264",
+                            "acodec": "aac",
+                            "format_note": "Best (HD No Watermark)",
+                            "url": dl_url,
+                        }
+                    ] if dl_url else []
+                    return {
+                        "id": str(d.get("id") or ""),
+                        "title": desc,
+                        "uploader": author,
+                        "channel": author,
+                        "creator": author,
+                        "description": desc,
+                        "thumbnail": cover,
+                        "duration": duration,
+                        "duration_string": f"{duration}s" if duration else None,
+                        "view_count": d.get("play_count"),
+                        "like_count": d.get("digg_count"),
+                        "formats": formats,
+                        "webpage_url": clean_url,
+                        "extractor": "tiktok",
+                        "extractor_key": "TikTok",
+                        "_fallback_download_url": dl_url,
+                    }
+        except Exception as e:
+            LOGGER.debug("TikWM fallback inspect failed: %s", e)
+
+        return None
 
     def download_once(self, target: DetectedTarget, attempt: int = 1) -> DownloadResult:
         if target.platform == Platform.WHATSAPP:
@@ -360,9 +476,57 @@ class DownloadEngine:
                 time.sleep(delay)
 
         if last_error:
+            # Fallback to direct download via TikMate / TikWM if yt-dlp was blocked
+            fb_info = self._fallback_tiktok_inspect(target.normalized_url)
+            if fb_info and fb_info.get("_fallback_download_url"):
+                LOGGER.info("Falling back to direct stream download for TikTok video.")
+                return self._download_direct_fallback(target, fb_info, output_template, progress)
             raise last_error
 
         raise DownloadError("TikTok download failed after internal retries.")
+
+    def _download_direct_fallback(
+        self,
+        target: DetectedTarget,
+        info_data: dict[str, Any],
+        output_template: str,
+        progress: ProgressRenderer,
+    ) -> dict[str, Any]:
+        import urllib.request
+        import re
+        dl_url = info_data["_fallback_download_url"]
+        clean_title = re.sub(r'[\\/*?:"<>|]', "_", info_data.get("title") or "tiktok_video")[:60].strip() or "tiktok_video"
+        out_dir = self.config.output_dir / platform_directory(target.platform)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        dest_file = out_dir / f"{clean_title}.mp4"
+
+        req = urllib.request.Request(
+            dl_url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            total_size = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+            with open(dest_file, "wb") as f:
+                while True:
+                    chunk = resp.read(64 * 1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        progress.update({
+                            "status": "downloading",
+                            "downloaded_bytes": downloaded,
+                            "total_bytes": total_size,
+                            "filename": str(dest_file),
+                        })
+
+        progress.finish()
+        res = dict(info_data)
+        res["_filename"] = str(dest_file)
+        res["requested_downloads"] = [{"filepath": str(dest_file)}]
+        return res
 
     def download(self, url: str) -> DownloadResult:
         if self.config.json_stream:

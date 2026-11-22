@@ -1925,53 +1925,33 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return 0
             except Exception as exc:
                 # Fallback for TikTok video URLs if primary engine inspection encounters network/blocking issues
-                if target.platform == Platform.TIKTOK and "/video/" in target.normalized_url:
-                    try:
-                        import urllib.request
-                        import urllib.parse
-                        import json as _json
-                        oembed_endpoint = f"https://www.tiktok.com/oembed?url={urllib.parse.quote(target.normalized_url)}"
-                        req = urllib.request.Request(
-                            oembed_endpoint,
-                            headers={
-                                "User-Agent": (
-                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                                    "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-                                ),
-                                "Referer": "https://www.tiktok.com/",
-                            },
-                        )
-                        with urllib.request.urlopen(req, timeout=10) as resp:
-                            oembed_data = _json.loads(resp.read().decode("utf-8"))
-                            fb_title = oembed_data.get("title") or "TikTok Video"
-                            fb_uploader = oembed_data.get("author_name") or target.normalized_url.split("/@")[-1].split("/")[0]
-                            fb_thumb = oembed_data.get("thumbnail_url")
-                            payload = {
-                                "url": target.normalized_url,
-                                "platform": "tiktok",
-                                "title": fb_title,
-                                "uploader": fb_uploader,
-                                "duration": None,
-                                "duration_string": None,
-                                "thumbnail": fb_thumb,
-                                "description": fb_title,
-                                "view_count": None,
-                                "is_playlist": False,
-                                "playlist_count": 0,
-                                "qualities": ["Best (Video+Audio)", "Audio"],
-                                "codecs": ["h264"],
-                                "is_profile": False,
-                                "entries": [],
-                            }
-                            if config.json_output or config.json_stream:
-                                print(json.dumps(payload, indent=2))
-                            else:
-                                print(f"Title:     {payload['title']}")
-                                print(f"Uploader:  {payload['uploader']}")
-                                print(f"Thumbnail: {payload['thumbnail']}")
-                            return 0
-                    except Exception:
-                        pass
+                if target.platform == Platform.TIKTOK or "tiktok.com" in target.normalized_url.lower():
+                    fb_info = DownloadEngine._fallback_tiktok_inspect(target.normalized_url)
+                    if fb_info:
+                        payload = {
+                            "url": target.normalized_url,
+                            "platform": "tiktok",
+                            "title": fb_info.get("title") or "TikTok Video",
+                            "uploader": fb_info.get("uploader") or "TikTok Creator",
+                            "duration": fb_info.get("duration"),
+                            "duration_string": fb_info.get("duration_string"),
+                            "thumbnail": fb_info.get("thumbnail"),
+                            "description": fb_info.get("description") or "",
+                            "view_count": fb_info.get("view_count"),
+                            "is_playlist": False,
+                            "playlist_count": 0,
+                            "qualities": ["Best (HD No Watermark)", "Audio Only (MP3)"],
+                            "codecs": ["h264"],
+                            "is_profile": False,
+                            "entries": [],
+                        }
+                        if config.json_output or config.json_stream:
+                            print(json.dumps(payload, indent=2))
+                        else:
+                            print(f"Title:     {payload['title']}")
+                            print(f"Uploader:  {payload['uploader']}")
+                            print(f"Thumbnail: {payload['thumbnail']}")
+                        return 0
 
                 if config.json_output or config.json_stream:
                     print(json.dumps({"success": False, "error": str(exc)}))

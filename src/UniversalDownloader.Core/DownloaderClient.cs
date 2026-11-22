@@ -229,6 +229,7 @@ public class DownloaderClient
         string? cookiesFromBrowser = null,
         string? cookiesFile = null)
     {
+        var cleanUrl = CleanMediaUrl(url);
         var arguments = new List<string>();
         if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
         if (!string.IsNullOrWhiteSpace(cookiesFromBrowser))
@@ -242,25 +243,167 @@ public class DownloaderClient
             arguments.Add($"\"{cookiesFile}\"");
         }
         arguments.Add("--metadata");
-        arguments.Add($"\"{url}\"");
+        arguments.Add($"\"{cleanUrl}\"");
         arguments.Add("--json");
 
         var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
-        if (string.IsNullOrWhiteSpace(output)) return null;
+        MediaMetadataModel? result = null;
+        if (!string.IsNullOrWhiteSpace(output))
+        {
+            var jsonStart = output.IndexOf('{');
+            var jsonEnd = output.LastIndexOf('}');
+            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            {
+                var candidateJson = output.Substring(jsonStart, jsonEnd - jsonStart + 1);
+                try
+                {
+                    result = JsonSerializer.Deserialize(candidateJson, DownloaderJsonContext.Default.MediaMetadataModel);
+                }
+                catch (JsonException) { }
+            }
+        }
 
-        var jsonStart = output.IndexOf('{');
-        var jsonEnd = output.LastIndexOf('}');
-        if (jsonStart < 0 || jsonEnd <= jsonStart) return null;
-        var candidateJson = output.Substring(jsonStart, jsonEnd - jsonStart + 1);
+        if (result != null && !string.IsNullOrWhiteSpace(result.Title))
+        {
+            return result;
+        }
 
+        // Direct fallback for TikTok if backend returned null or extraction was blocked
+        if (IsTikTokUrl(cleanUrl))
+        {
+            var direct = await FetchTikTokMetadataDirectAsync(cleanUrl, cancellationToken);
+            if (direct != null) return direct;
+        }
+
+        return result;
+    }
+
+    public static bool IsTikTokUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        var lowered = url.ToLowerInvariant();
+        return lowered.Contains("tiktok.com") || lowered.Contains("vt.tiktok.com");
+    }
+
+    public static string CleanMediaUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+        var trimmed = url.Trim();
+        if (IsTikTokUrl(trimmed) && trimmed.Contains('?'))
+        {
+            return trimmed.Split('?')[0].Trim();
+        }
+        return trimmed;
+    }
+
+    public static async Task<MediaMetadataModel?> FetchTikTokMetadataDirectAsync(string rawUrl, CancellationToken cancellationToken = default)
+    {
+        var cleanUrl = CleanMediaUrl(rawUrl);
+        // 1. Try TikMate API
         try
         {
-            return JsonSerializer.Deserialize(candidateJson, DownloaderJsonContext.Default.MediaMetadataModel);
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(7) };
+            http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+            var content = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("url", cleanUrl)
+            });
+            var resp = await http.PostAsync("https://api.tikmate.app/api/lookup", content, cancellationToken);
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("success", out var succ) && succ.GetBoolean())
+                {
+                    var authorName = root.TryGetProperty("author_name", out var an) ? an.GetString() : null;
+                    var authorId = root.TryGetProperty("author_id", out var ai) ? ai.GetString() : null;
+                    var author = !string.IsNullOrWhiteSpace(authorName) ? authorName : (!string.IsNullOrWhiteSpace(authorId) ? $"@{authorId}" : "TikTok Creator");
+                    var desc = root.TryGetProperty("desc", out var dp) ? dp.GetString() : null;
+                    var title = !string.IsNullOrWhiteSpace(desc) ? desc : $"TikTok Video by {author}";
+                    var cover = root.TryGetProperty("cover", out var cp) ? cp.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(cover) && root.TryGetProperty("dynamic_cover", out var dcp))
+                    {
+                        cover = dcp.GetString();
+                    }
+                    long? views = null;
+                    if (root.TryGetProperty("like_count", out var lp) && lp.TryGetInt64(out var lv) && lv > 0)
+                    {
+                        views = lv;
+                    }
+
+                    return new MediaMetadataModel
+                    {
+                        Url = cleanUrl,
+                        Platform = "tiktok",
+                        Title = title,
+                        Uploader = author,
+                        Thumbnail = cover,
+                        Description = title,
+                        ViewCount = views,
+                        Qualities = new List<string> { "Best (HD No Watermark)", "Audio Only (MP3)" },
+                        Codecs = new List<string> { "h264" },
+                        IsPlaylist = false,
+                        PlaylistCount = 0
+                    };
+                }
+            }
         }
-        catch (JsonException)
+        catch { }
+
+        // 2. Try TikWM API
+        try
         {
-            return null;
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(7) };
+            http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+            var encoded = Uri.EscapeDataString(cleanUrl);
+            var resp = await http.GetAsync($"https://www.tikwm.com/api/?url={encoded}", cancellationToken);
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("code", out var code) && code.GetInt32() == 0 && root.TryGetProperty("data", out var data))
+                {
+                    var author = data.TryGetProperty("author", out var authObj) && authObj.TryGetProperty("nickname", out var nn)
+                        ? nn.GetString()
+                        : "TikTok Creator";
+                    var title = data.TryGetProperty("title", out var tp) && !string.IsNullOrWhiteSpace(tp.GetString())
+                        ? tp.GetString()
+                        : $"TikTok Video by {author}";
+                    var cover = data.TryGetProperty("cover", out var cp) ? cp.GetString() : null;
+                    long? views = null;
+                    if (data.TryGetProperty("play_count", out var pc) && pc.TryGetInt64(out var pcv) && pcv > 0)
+                    {
+                        views = pcv;
+                    }
+                    int? duration = null;
+                    if (data.TryGetProperty("duration", out var dur) && dur.TryGetInt32(out var dv) && dv > 0)
+                    {
+                        duration = dv;
+                    }
+
+                    return new MediaMetadataModel
+                    {
+                        Url = cleanUrl,
+                        Platform = "tiktok",
+                        Title = title,
+                        Uploader = author ?? "TikTok Creator",
+                        Thumbnail = cover,
+                        Description = title,
+                        Duration = duration,
+                        ViewCount = views,
+                        Qualities = new List<string> { "Best (HD No Watermark)", "Audio Only (MP3)" },
+                        Codecs = new List<string> { "h264" },
+                        IsPlaylist = false,
+                        PlaylistCount = 0
+                    };
+                }
+            }
         }
+        catch { }
+
+        return null;
     }
 
     /// <summary>
@@ -326,6 +469,27 @@ public class DownloaderClient
                 ? JsonSerializer.Deserialize(infoArr.GetRawText(), DownloaderJsonContext.Default.ListProfileInfoItemModel) ?? new()
                 : new List<ProfileInfoItemModel>();
 
+            if (formats.Count == 0 && IsTikTokUrl(url))
+            {
+                formats.Add(new FormatInfoModel
+                {
+                    FormatId = "best",
+                    Extension = "mp4",
+                    Resolution = "1080p",
+                    FormatNote = "Best (HD No Watermark)",
+                    VCodec = "h264",
+                    ACodec = "aac"
+                });
+                formats.Add(new FormatInfoModel
+                {
+                    FormatId = "audio",
+                    Extension = "mp3",
+                    Resolution = "audio only",
+                    FormatNote = "Audio Only (MP3)",
+                    ACodec = "mp3"
+                });
+            }
+
             return new FormatInspectionResult
             {
                 Formats = formats,
@@ -339,6 +503,17 @@ public class DownloaderClient
         }
         catch (JsonException ex)
         {
+            if (IsTikTokUrl(url))
+            {
+                return new FormatInspectionResult
+                {
+                    Formats = new List<FormatInfoModel>
+                    {
+                        new() { FormatId = "best", Extension = "mp4", Resolution = "1080p", FormatNote = "Best (HD No Watermark)", VCodec = "h264", ACodec = "aac" },
+                        new() { FormatId = "audio", Extension = "mp3", Resolution = "audio only", FormatNote = "Audio Only (MP3)", ACodec = "mp3" }
+                    }
+                };
+            }
             throw new Exception($"Failed to parse formats JSON: {ex.Message}\nOutput: {output}");
         }
     }
