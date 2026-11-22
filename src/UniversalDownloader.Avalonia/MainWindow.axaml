@@ -1290,9 +1290,9 @@
                             <!-- Main Author Hero Card -->
                             <Border Background="#18181B" BorderBrush="#38BDF8" BorderThickness="1" CornerRadius="10" Padding="20">
                                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
-                                    <!-- Avatar badge -->
-                                    <Border Grid.RowSpan="2" Grid.Column="0" Width="64" Height="64" CornerRadius="32" Background="#0284C7" Margin="0,0,20,0" VerticalAlignment="Top">
-                                        <TextBlock Text="AG" FontSize="26" FontWeight="Bold" Foreground="#FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    <!-- Author Avatar Image -->
+                                    <Border Grid.RowSpan="2" Grid.Column="0" Width="72" Height="72" CornerRadius="36" ClipToBounds="True" Background="#18181B" BorderBrush="#38BDF8" BorderThickness="2" Margin="0,0,20,0" VerticalAlignment="Top">
+                                        <Image Source="/Assets/author.jpg" Stretch="UniformToFill"/>
                                     </Border>
 
                                     <!-- Author Info -->

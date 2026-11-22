@@ -34,21 +34,32 @@ public class DownloaderClient
         // 2. Check for packaged dist/downloader (.exe on Windows, executable on Linux/macOS)
         var binaryName = PlatformUtils.GetBinaryName("downloader");
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        var relativeDistExe = Path.Combine(baseDir, binaryName);
-        var projectDistExe = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "dist", binaryName));
 
-        if (File.Exists(relativeDistExe))
+        // Search in base directory, current working directory, and upwards up to 8 directory levels for dist/downloader or downloader
+        var candidatePaths = new List<string>
         {
-            _executableOrPython = relativeDistExe;
-            _scriptPath = null;
-            return;
+            Path.Combine(baseDir, binaryName),
+            Path.Combine(baseDir, "dist", binaryName),
+            Path.Combine(Directory.GetCurrentDirectory(), binaryName),
+            Path.Combine(Directory.GetCurrentDirectory(), "dist", binaryName),
+        };
+
+        var curDir = new DirectoryInfo(baseDir);
+        for (int i = 0; i < 8 && curDir != null; i++)
+        {
+            candidatePaths.Add(Path.Combine(curDir.FullName, "dist", binaryName));
+            candidatePaths.Add(Path.Combine(curDir.FullName, binaryName));
+            curDir = curDir.Parent;
         }
 
-        if (File.Exists(projectDistExe))
+        foreach (var path in candidatePaths)
         {
-            _executableOrPython = projectDistExe;
-            _scriptPath = null;
-            return;
+            if (File.Exists(path))
+            {
+                _executableOrPython = Path.GetFullPath(path);
+                _scriptPath = null;
+                return;
+            }
         }
 
         // 2.5. Check embedded resource (for single-file all-in-one executable distribution)
@@ -65,8 +76,30 @@ public class DownloaderClient
 
         // 3. Fallback to python/python3 + downloader.py
         _executableOrPython = PlatformUtils.ResolvePythonExecutable();
-        var candidateScript = customScriptPath ?? Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "downloader.py"));
-        _scriptPath = File.Exists(candidateScript) ? candidateScript : "downloader.py";
+        var pythonCandidates = new List<string>
+        {
+            Path.Combine(baseDir, "downloader.py"),
+            Path.Combine(Directory.GetCurrentDirectory(), "downloader.py")
+        };
+        curDir = new DirectoryInfo(baseDir);
+        for (int i = 0; i < 8 && curDir != null; i++)
+        {
+            pythonCandidates.Add(Path.Combine(curDir.FullName, "downloader.py"));
+            curDir = curDir.Parent;
+        }
+        string? resolvedScript = customScriptPath;
+        if (string.IsNullOrWhiteSpace(resolvedScript))
+        {
+            foreach (var p in pythonCandidates)
+            {
+                if (File.Exists(p))
+                {
+                    resolvedScript = Path.GetFullPath(p);
+                    break;
+                }
+            }
+        }
+        _scriptPath = resolvedScript ?? "downloader.py";
     }
 
     /// <summary>
@@ -215,9 +248,14 @@ public class DownloaderClient
         var output = await RunProcessAndCaptureOutputAsync(arguments, cancellationToken);
         if (string.IsNullOrWhiteSpace(output)) return null;
 
+        var jsonStart = output.IndexOf('{');
+        var jsonEnd = output.LastIndexOf('}');
+        if (jsonStart < 0 || jsonEnd <= jsonStart) return null;
+        var candidateJson = output.Substring(jsonStart, jsonEnd - jsonStart + 1);
+
         try
         {
-            return JsonSerializer.Deserialize(output, DownloaderJsonContext.Default.MediaMetadataModel);
+            return JsonSerializer.Deserialize(candidateJson, DownloaderJsonContext.Default.MediaMetadataModel);
         }
         catch (JsonException)
         {
@@ -867,6 +905,16 @@ public class DownloaderClient
         }
         catch { }
 
+        string workingDir = localAppDataDir;
+        if (!string.IsNullOrWhiteSpace(_scriptPath) && File.Exists(_scriptPath))
+        {
+            workingDir = Path.GetDirectoryName(_scriptPath) ?? localAppDataDir;
+        }
+        else if (File.Exists(_executableOrPython))
+        {
+            workingDir = Path.GetDirectoryName(_executableOrPython) ?? localAppDataDir;
+        }
+
         var psi = new ProcessStartInfo
         {
             FileName = _executableOrPython,
@@ -875,7 +923,7 @@ public class DownloaderClient
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = Directory.Exists(localAppDataDir) ? localAppDataDir : Path.GetTempPath(),
+            WorkingDirectory = Directory.Exists(workingDir) ? workingDir : (Directory.Exists(localAppDataDir) ? localAppDataDir : Path.GetTempPath()),
         };
 
         var logsDir = Path.Combine(localAppDataDir, "logs");

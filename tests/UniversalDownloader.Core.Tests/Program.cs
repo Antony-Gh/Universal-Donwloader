@@ -402,5 +402,6 @@ RunTest("PlatformUtils.ShowNotification executes without throwing", () =>
     PlatformUtils.ShowNotification("O'Reilly \"Media\"", "Special chars & <xml> test");
 });
 
+
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

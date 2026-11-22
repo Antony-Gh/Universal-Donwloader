@@ -63,7 +63,15 @@ public partial class MainWindow : Window
         "twitter.com", "x.com", "soundcloud.com", "vimeo.com", "reddit.com", "redd.it",
         "twitch.tv", "threads.net", "pinterest.com", "pin.it", "dailymotion.com", "bilibili.com"
     ];
-    private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(12) };
+    private static readonly HttpClient _httpClient = CreateHttpClient();
+
+    private static HttpClient CreateHttpClient()
+    {
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
+        client.DefaultRequestHeaders.Add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8");
+        return client;
+    }
 
     public MainWindow()
     {
@@ -2032,8 +2040,14 @@ public partial class MainWindow : Window
             }
             else
             {
-                MetadataLoadingText.Text = "Ready to download";
-                GlobalStatusText.Text = "Ready";
+                MetadataLoadingText.IsVisible = false;
+                MetadataHeaderSpinner.IsVisible = false;
+                ThumbnailSpinner.IsVisible = false;
+                var fallbackTitle = uri.Segments.LastOrDefault()?.Trim('/');
+                VideoTitleLabel.Text = !string.IsNullOrWhiteSpace(fallbackTitle) ? fallbackTitle : uri.Host;
+                UploaderLabel.Text = uri.Host;
+                DownloadOptionsCard.IsVisible = true;
+                GlobalStatusText.Text = "Ready to download";
             }
         }
         catch (OperationCanceledException)
@@ -2044,8 +2058,14 @@ public partial class MainWindow : Window
         {
             if (!token.IsCancellationRequested)
             {
-                MetadataLoadingText.Text = "Ready to download";
-                GlobalStatusText.Text = "Ready";
+                MetadataLoadingText.IsVisible = false;
+                MetadataHeaderSpinner.IsVisible = false;
+                ThumbnailSpinner.IsVisible = false;
+                var fallbackTitle = uri.Segments.LastOrDefault()?.Trim('/');
+                VideoTitleLabel.Text = !string.IsNullOrWhiteSpace(fallbackTitle) ? fallbackTitle : uri.Host;
+                UploaderLabel.Text = uri.Host;
+                DownloadOptionsCard.IsVisible = true;
+                GlobalStatusText.Text = "Ready to download";
             }
         }
         finally
@@ -2064,18 +2084,32 @@ public partial class MainWindow : Window
     {
         try
         {
-            var bytes = await _httpClient.GetByteArrayAsync(thumbnailUrl, token);
+            using var request = new HttpRequestMessage(HttpMethod.Get, thumbnailUrl);
+            request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
+            if (thumbnailUrl.Contains("tiktok") || thumbnailUrl.Contains("tiktokcdn"))
+            {
+                request.Headers.Referrer = new Uri("https://www.tiktok.com/");
+            }
+
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+            response.EnsureSuccessStatusCode();
+            var bytes = await response.Content.ReadAsByteArrayAsync(token);
             if (token.IsCancellationRequested || bytes == null || bytes.Length == 0) return;
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 using var ms = new MemoryStream(bytes);
                 ThumbnailImage.Source = new Bitmap(ms);
+                ThumbnailSpinner.IsVisible = false;
             });
         }
         catch
         {
             // Thumbnail failed or cancelled - keep default empty thumbnail
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                ThumbnailSpinner.IsVisible = false;
+            });
         }
     }
 

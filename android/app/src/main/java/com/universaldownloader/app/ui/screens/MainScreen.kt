@@ -10,10 +10,14 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.universaldownloader.app.BuildConfig
+import com.universaldownloader.app.R
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -552,25 +556,47 @@ fun MainScreen(viewModel: MainViewModel) {
                 Text(strings.aboutCredits, color = TextPrimary, fontWeight = FontWeight.Bold)
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Anthony Gaius (@Antony-Gh)",
-                        fontWeight = FontWeight.Bold,
-                        color = AccentSky,
-                        fontSize = 16.sp,
-                    )
-                    Text(
-                        text = strings.aboutCreatorRole,
-                        fontWeight = FontWeight.SemiBold,
-                        color = SuccessGreen,
-                        fontSize = 12.sp,
-                    )
-                    Text(
-                        text = strings.aboutStatement,
-                        color = TextSecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                    )
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, AccentSky, CircleShape)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.author_img),
+                            contentDescription = "Anthony Gaius",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Anthony Gaius (@Antony-Gh)",
+                            fontWeight = FontWeight.Bold,
+                            color = AccentSky,
+                            fontSize = 16.sp,
+                        )
+                        Text(
+                            text = strings.aboutCreatorRole,
+                            fontWeight = FontWeight.SemiBold,
+                            color = SuccessGreen,
+                            fontSize = 12.sp,
+                        )
+                        Text(
+                            text = strings.aboutStatement,
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                        )
+                    }
                 }
             },
             confirmButton = {
