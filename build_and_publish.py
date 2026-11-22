@@ -181,10 +181,60 @@ def build_python_backend() -> Optional[Path]:
     dist_bin = ROOT_DIR / "dist" / exe_name
     if dist_bin.exists():
         print_success(f"Built Python standalone binary: {dist_bin} ({dist_bin.stat().st_size / 1024 / 1024:.1f} MB)")
+        # Verify compiled backend execution sanity
+        try:
+            test_proc = run_command([str(dist_bin), "--version"], check=False)
+            if test_proc.returncode == 0:
+                print_success(f"Verified backend execution sanity: {test_proc.stdout.strip()}")
+            else:
+                print_warning(f"Backend verification returned non-zero code {test_proc.returncode}: {test_proc.stderr}")
+        except Exception as test_err:
+            print_warning(f"Backend smoke test encountered error: {test_err}")
         return dist_bin
 
-    print_warning(f"Compiled binary not found at expected location: {dist_bin}")
-    return None
+    raise RuntimeError(f"Compiled binary not found at expected location: {dist_bin}")
+
+
+def ensure_release_assets() -> None:
+    """Ensure author and branding assets are in sync across desktop and android."""
+    print_step("Synchronizing Release Assets & Brand Graphics")
+    author_src = ROOT_DIR / "assets" / "img.jpg"
+    if author_src.exists():
+        avalonia_asset = ROOT_DIR / "src" / "UniversalDownloader.Avalonia" / "Assets" / "author.jpg"
+        avalonia_asset.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(author_src, avalonia_asset)
+
+        android_drawable = ROOT_DIR / "android" / "app" / "src" / "main" / "res" / "drawable" / "author_img.jpg"
+        android_drawable.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(author_src, android_drawable)
+        print_success("Synchronized author credit photo across Desktop and Android.")
+    else:
+        print_warning(f"Author photo not found at {author_src}; keeping existing assets.")
+
+
+def run_preflight_checks() -> bool:
+    """Run unit tests and verification checks before building and publishing releases."""
+    print_step("Running Pre-flight Quality & Test Suite")
+
+    # 1. Run Python unit tests
+    print("  Running Python pytest suite...")
+    res = run_command([sys.executable, "-m", "pytest", "tests/"], check=False)
+    if res.returncode != 0:
+        print_error("Python pytest suite failed! Aborting release build to prevent broken binaries.")
+        return False
+    print_success("Python test suite passed.")
+
+    # 2. Run C# Core Unit tests
+    test_proj = ROOT_DIR / "tests" / "UniversalDownloader.Core.Tests" / "UniversalDownloader.Core.Tests.csproj"
+    if test_proj.exists():
+        print("  Running .NET Core test suite...")
+        res_dotnet = run_command(["dotnet", "run", "--no-restore", "--project", str(test_proj)], check=False)
+        if res_dotnet.returncode != 0:
+            print_error(".NET Core test suite failed! Aborting release build to prevent broken binaries.")
+            return False
+        print_success(".NET Core test suite passed.")
+
+    return True
 
 
 def ensure_release_ffmpeg() -> None:
@@ -218,6 +268,14 @@ def ensure_release_ffmpeg() -> None:
 def publish_dotnet_target(project_path: Path, rid: str, output_dir: Path) -> bool:
     """Publish a self-contained, single-file .NET 9 application for a target RID with fallback."""
     print(f"  Building {project_path.stem} for {rid}...")
+    # Clean previous output binaries to ensure no stale artifacts are packaged
+    if output_dir.exists():
+        for old_file in output_dir.glob("UniversalDownloader*"):
+            try:
+                if old_file.is_file():
+                    old_file.unlink()
+            except Exception:
+                pass
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Try single-file self-contained publish
@@ -331,6 +389,9 @@ def package_windows_release(version: str) -> List[Path]:
     results: List[Path] = []
     if candidate_exe and candidate_exe.exists():
         direct_exe = RELEASES_DIR / "UniversalDownloader.exe"
+        root_exe = ROOT_DIR / "UniversalDownloader.exe"
+        build_out_exe = ROOT_DIR / "build_out" / "win-x64" / "UniversalDownloader.exe"
+
         try:
             shutil.copy2(candidate_exe, direct_exe)
             print_success(f"Generated Standalone Windows Executable: {direct_exe.name} ({direct_exe.stat().st_size / 1024 / 1024:.1f} MB)")
@@ -338,6 +399,18 @@ def package_windows_release(version: str) -> List[Path]:
         except Exception as copy_err:
             print_warning(f"Could not copy to {direct_exe.name} (may be in use): {copy_err}")
             results.append(candidate_exe)
+
+        try:
+            shutil.copy2(candidate_exe, root_exe)
+            print_success(f"Synchronized root repository executable: {root_exe.name}")
+        except Exception as copy_err:
+            print_warning(f"Could not copy to root {root_exe.name}: {copy_err}")
+
+        try:
+            build_out_exe.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(candidate_exe, build_out_exe)
+        except Exception:
+            pass
 
         # 2. Also package clean zip containing only UniversalDownloader.exe and documentation
         pkg_name = f"UniversalDownloader-v{version}-windows-x64"
@@ -818,6 +891,7 @@ def main() -> None:
     parser.add_argument("--prerelease", action="store_true", help="Mark release as a pre-release")
     parser.add_argument("--skip-android", action="store_true", help="Skip Android APK build and packaging")
     parser.add_argument("--skip-browser-extension", action="store_true", help="Skip packaging browser companion extension")
+    parser.add_argument("--skip-tests", action="store_true", help="Skip pre-flight test suites")
     args = parser.parse_args()
 
     version = (args.version or get_default_version()).lstrip("v")
@@ -857,6 +931,14 @@ def main() -> None:
             print_error(f"No built release files found in {RELEASES_DIR} for v{version}. Run without --publish-only first.")
             sys.exit(1)
     else:
+        # Pre-flight quality gates
+        if not args.skip_tests:
+            if not run_preflight_checks():
+                sys.exit(1)
+
+        # Synchronize credit and branding assets
+        ensure_release_assets()
+
         # 1. Build Standalone Python Backend
         python_bin = build_python_backend()
         ensure_release_ffmpeg()
