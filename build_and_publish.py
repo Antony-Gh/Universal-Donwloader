@@ -69,11 +69,21 @@ def print_error(msg: str) -> None:
     print(f"{Colors.RED}[✗] {msg}{Colors.RESET}")
 
 
-def run_command(cmd: List[str], cwd: Optional[Path] = None, check: bool = True) -> subprocess.CompletedProcess:
-    """Execute a system command and stream output."""
+def run_command(
+    cmd: List[str],
+    cwd: Optional[Path] = None,
+    check: bool = True,
+    capture_output: bool = False,
+) -> subprocess.CompletedProcess:
+    """Execute a system command and stream or capture output."""
     cmd_str = " ".join(cmd)
     print(f"  {Colors.BOLD}$ {cmd_str}{Colors.RESET}")
-    proc = subprocess.run(cmd, cwd=str(cwd or ROOT_DIR), text=True)
+    proc = subprocess.run(
+        cmd,
+        cwd=str(cwd or ROOT_DIR),
+        text=True,
+        capture_output=capture_output,
+    )
     if check and proc.returncode != 0:
         raise RuntimeError(f"Command failed with exit code {proc.returncode}: {cmd_str}")
     return proc
@@ -183,11 +193,13 @@ def build_python_backend() -> Optional[Path]:
         print_success(f"Built Python standalone binary: {dist_bin} ({dist_bin.stat().st_size / 1024 / 1024:.1f} MB)")
         # Verify compiled backend execution sanity
         try:
-            test_proc = run_command([str(dist_bin), "--version"], check=False)
+            test_proc = run_command([str(dist_bin), "--version"], check=False, capture_output=True)
             if test_proc.returncode == 0:
-                print_success(f"Verified backend execution sanity: {test_proc.stdout.strip()}")
+                out_ver = (test_proc.stdout or "").strip()
+                print_success(f"Verified backend execution sanity: {out_ver}")
             else:
-                print_warning(f"Backend verification returned non-zero code {test_proc.returncode}: {test_proc.stderr}")
+                err_msg = (test_proc.stderr or "").strip()
+                print_warning(f"Backend verification returned non-zero code {test_proc.returncode}: {err_msg}")
         except Exception as test_err:
             print_warning(f"Backend smoke test encountered error: {test_err}")
         return dist_bin
