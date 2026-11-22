@@ -2138,6 +2138,27 @@ public partial class MainWindow : Window
         }
         catch
         {
+            // If direct thumbnail fails (e.g. TikTok CDN SSL/handshake timeout), try fast image proxy fallback
+            try
+            {
+                var proxyUrl = $"https://wsrv.nl/?url={Uri.EscapeDataString(thumbnailUrl)}";
+                using var fallbackReq = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
+                using var fallbackResp = await _httpClient.SendAsync(fallbackReq, HttpCompletionOption.ResponseHeadersRead, token);
+                fallbackResp.EnsureSuccessStatusCode();
+                var fallbackBytes = await fallbackResp.Content.ReadAsByteArrayAsync(token);
+                if (!token.IsCancellationRequested && fallbackBytes != null && fallbackBytes.Length > 0)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        using var ms = new MemoryStream(fallbackBytes);
+                        ThumbnailImage.Source = new Bitmap(ms);
+                        ThumbnailSpinner.IsVisible = false;
+                    });
+                    return;
+                }
+            }
+            catch { }
+
             // Thumbnail failed or cancelled - keep default empty thumbnail
             await Dispatcher.UIThread.InvokeAsync(() =>
             {

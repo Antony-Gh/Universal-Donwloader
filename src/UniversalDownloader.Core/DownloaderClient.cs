@@ -230,6 +230,17 @@ public class DownloaderClient
         string? cookiesFile = null)
     {
         var cleanUrl = CleanMediaUrl(url);
+
+        // Fast-path for TikTok: avoid backend process launch + yt-dlp bot blocks by querying direct in ~400ms
+        if (IsTikTokUrl(cleanUrl) && string.IsNullOrWhiteSpace(cookiesFromBrowser) && string.IsNullOrWhiteSpace(cookiesFile))
+        {
+            var direct = await FetchTikTokMetadataDirectAsync(cleanUrl, cancellationToken);
+            if (direct != null && !string.IsNullOrWhiteSpace(direct.Title))
+            {
+                return direct;
+            }
+        }
+
         var arguments = new List<string>();
         if (_scriptPath != null) arguments.Add($"\"{_scriptPath}\"");
         if (!string.IsNullOrWhiteSpace(cookiesFromBrowser))

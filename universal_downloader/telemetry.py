@@ -480,13 +480,13 @@ def detect_friend_tag(
     id_file = directory / "device_id.json"
 
     # Check already persisted friend tag
-    if id_file.is_file():
-        try:
+    try:
+        if id_file.is_file():
             saved = json.loads(id_file.read_text(encoding="utf-8"))
             if saved.get("friend_tag"):
                 return str(saved["friend_tag"]).strip().lower()
-        except Exception:
-            pass
+    except (PermissionError, OSError, Exception):
+        pass
 
     # Extract from binary filename (e.g. downloader_ahmed.exe, UniversalDownloader_sara)
     try:

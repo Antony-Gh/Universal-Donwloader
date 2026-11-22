@@ -124,6 +124,12 @@ class DownloadEngine:
         flat_playlist: bool = False,
         playlist_items: Optional[str] = None,
     ) -> dict[str, Any]:
+        # Fast inspection for TikTok without cookies to avoid Cloudflare/Akamai bot detection & timeouts
+        if (platform == Platform.TIKTOK or "tiktok.com" in url.lower()) and not getattr(self.config, "cookies_file", None) and not getattr(self.config, "cookies_from_browser", None):
+            fb = self._fallback_tiktok_inspect(url)
+            if fb:
+                return fb
+
         extra_opts: dict[str, Any] = {
             "skip_download": True,
             "ignoreerrors": True,
@@ -442,9 +448,14 @@ class DownloadEngine:
                 is_playlist=(target.content_type == ContentType.PLAYLIST),
             )
 
-        last_error: Optional[DownloadError] = None
+        if target.platform == Platform.TIKTOK:
+            # If no cookies provided, use fast direct fallback first to avoid Cloudflare/Akamai bot blocking
+            if not getattr(self.config, "cookies_file", None) and not getattr(self.config, "cookies_from_browser", None):
+                fb_info = self._fallback_tiktok_inspect(target.normalized_url)
+                if fb_info and fb_info.get("_fallback_download_url"):
+                    LOGGER.info("Downloading TikTok video directly via HD stream...")
+                    return self._download_direct_fallback(target, fb_info, output_template, progress)
 
-        for attempt in range(TIKTOK_INTERNAL_RETRIES):
             try:
                 progress.reset()
                 return self.extractor.download(
@@ -453,37 +464,16 @@ class DownloadEngine:
                     selector,
                     progress,
                     platform=target.platform,
+                    attempt=attempt,
+                    is_playlist=(target.content_type == ContentType.PLAYLIST),
                 )
-            except DownloadError as exc:
-                last_error = exc
-                if not is_tiktok_rehydration_error(str(exc)):
-                    raise
-
-                if attempt >= TIKTOK_INTERNAL_RETRIES - 1:
-                    break
-
-                delay = TIKTOK_RETRY_DELAYS[
-                    min(attempt, len(TIKTOK_RETRY_DELAYS) - 1)
-                ] + random.uniform(0.25, 1.25)
-
-                progress.clear_line()
-                LOGGER.info(
-                    "TikTok access blocked (attempt %d/%d); retrying in %ds",
-                    attempt + 1,
-                    TIKTOK_INTERNAL_RETRIES,
-                    delay,
-                )
-                time.sleep(delay)
-
-        if last_error:
-            # Fallback to direct download via TikMate / TikWM if yt-dlp was blocked
-            fb_info = self._fallback_tiktok_inspect(target.normalized_url)
-            if fb_info and fb_info.get("_fallback_download_url"):
-                LOGGER.info("Falling back to direct stream download for TikTok video.")
-                return self._download_direct_fallback(target, fb_info, output_template, progress)
-            raise last_error
-
-        raise DownloadError("TikTok download failed after internal retries.")
+            except Exception as exc:
+                LOGGER.info("Primary TikTok extraction failed (%s); downloading via direct HD stream...", exc)
+                fb_info = self._fallback_tiktok_inspect(target.normalized_url)
+                if fb_info and fb_info.get("_fallback_download_url"):
+                    LOGGER.info("Falling back to direct stream download for TikTok video.")
+                    return self._download_direct_fallback(target, fb_info, output_template, progress)
+                raise
 
     def _download_direct_fallback(
         self,
@@ -502,9 +492,14 @@ class DownloadEngine:
 
         req = urllib.request.Request(
             dl_url,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Referer": "https://tikmate.app/",
+                "Accept": "*/*",
+                "Connection": "keep-alive",
+            },
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=45) as resp:
             total_size = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
             with open(dest_file, "wb") as f:
@@ -515,17 +510,41 @@ class DownloadEngine:
                     f.write(chunk)
                     downloaded += len(chunk)
                     if total_size > 0:
-                        progress.update({
+                        progress({
                             "status": "downloading",
                             "downloaded_bytes": downloaded,
                             "total_bytes": total_size,
                             "filename": str(dest_file),
                         })
 
-        progress.finish()
+        progress.clear_line()
+
+        # Handle audio extraction if requested
+        if self.config.audio_only:
+            audio_dest = dest_file.with_suffix(".mp3")
+            ffmpeg_bin = find_ffmpeg() or ensure_ffmpeg(auto_download=True)
+            if ffmpeg_bin:
+                import subprocess
+                cmd = [
+                    str(ffmpeg_bin),
+                    "-y",
+                    "-i", str(dest_file),
+                    "-vn",
+                    "-acodec", "libmp3lame",
+                    "-q:a", "2",
+                    str(audio_dest),
+                ]
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                if audio_dest.is_file() and audio_dest.stat().st_size > 0:
+                    try:
+                        dest_file.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    dest_file = audio_dest
+
         res = dict(info_data)
-        res["_filename"] = str(dest_file)
-        res["requested_downloads"] = [{"filepath": str(dest_file)}]
+        res["_filename"] = str(dest_file.resolve())
+        res["requested_downloads"] = [{"filepath": str(dest_file.resolve())}]
         return res
 
     def download(self, url: str) -> DownloadResult:
