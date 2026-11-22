@@ -2048,7 +2048,23 @@ def main(argv: Optional[list[str]] = None) -> int:
 
                 if config.json_output or config.json_stream:
                     formats_data = [fmt.raw for fmt in parse_format(info_data)]
-                    print(json.dumps({"url": target.normalized_url, "formats": formats_data}, indent=2))
+                    thumb = _pick_thumbnail(info_data, target.platform)
+                    uploader = (
+                        info_data.get("uploader")
+                        or info_data.get("channel")
+                        or info_data.get("creator")
+                    )
+                    payload = {
+                        "url": target.normalized_url,
+                        "formats": formats_data,
+                        "title": info_data.get("title"),
+                        "uploader": uploader,
+                        "thumbnail": thumb,
+                        "duration": info_data.get("duration"),
+                        "duration_string": info_data.get("duration_string"),
+                        "view_count": info_data.get("view_count"),
+                    }
+                    print(json.dumps(payload, indent=2))
                 else:
                     print(f"Title: {info_data.get('title') or 'unknown'}")
                     print_formats(info_data, config)

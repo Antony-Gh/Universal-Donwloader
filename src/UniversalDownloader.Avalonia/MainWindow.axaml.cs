@@ -1612,6 +1612,31 @@ public partial class MainWindow : Window
             // Sync Download tab preview card qualities, lock badge, ID & public profile info chips with refreshed stream list
             if (MetadataCard.IsVisible)
             {
+                if (!string.IsNullOrWhiteSpace(inspection.Title))
+                {
+                    var lastSegment = Uri.TryCreate(url, UriKind.Absolute, out var parsedUri) && parsedUri != null
+                        ? parsedUri.Segments.LastOrDefault()?.Trim('/')
+                        : null;
+                    if (VideoTitleLabel.Text == "Fetching media details..." ||
+                        VideoTitleLabel.Text.StartsWith("TikTok Video by") ||
+                        (!string.IsNullOrWhiteSpace(lastSegment) && VideoTitleLabel.Text == lastSegment))
+                    {
+                        VideoTitleLabel.Text = inspection.Title;
+                        if (!string.IsNullOrWhiteSpace(inspection.Uploader)) UploaderLabel.Text = inspection.Uploader;
+                        if (!string.IsNullOrWhiteSpace(inspection.Thumbnail)) _ = LoadThumbnailAsync(inspection.Thumbnail, previewToken);
+                        if (!string.IsNullOrWhiteSpace(inspection.DurationFormatted))
+                        {
+                            DurationLabel.Text = inspection.DurationFormatted;
+                            DurationBadge.IsVisible = true;
+                        }
+                        if (!string.IsNullOrWhiteSpace(inspection.ViewCountFormatted))
+                        {
+                            ViewsLabel.Text = inspection.ViewCountFormatted;
+                            ViewsContainer.IsVisible = true;
+                        }
+                    }
+                }
+
                 if (isImageList || !string.IsNullOrWhiteSpace(inspection.ProfileId) || inspection.ProfileInfo.Count > 0 || inspection.ProfileLocked)
                 {
                     ApplyProfileMetadataToCard(
@@ -2043,7 +2068,11 @@ public partial class MainWindow : Window
 
                 if (!string.IsNullOrWhiteSpace(meta.Thumbnail))
                 {
-                    await LoadThumbnailAsync(meta.Thumbnail, token);
+                    _ = LoadThumbnailAsync(meta.Thumbnail, token);
+                }
+                else
+                {
+                    ThumbnailSpinner.IsVisible = false;
                 }
 
                 GlobalStatusText.Text = $"Loaded media preview: {meta.Title}";
@@ -2076,30 +2105,35 @@ public partial class MainWindow : Window
         {
             // Normal cancellation
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             if (!token.IsCancellationRequested)
             {
-                MetadataLoadingText.IsVisible = false;
-                MetadataHeaderSpinner.IsVisible = false;
-                ThumbnailSpinner.IsVisible = false;
-                ViewsLabel.Text = "";
-                ViewsContainer.IsVisible = false;
-                if (uri.Host.Contains("tiktok.com", StringComparison.OrdinalIgnoreCase))
+                OnRawOutputReceived(this, $"[Metadata Error] {ex.Message}");
+                // Never overwrite already-displayed media title/uploader with fallback
+                if (VideoTitleLabel.Text == "Fetching media details...")
                 {
-                    var authorSegment = uri.Segments.FirstOrDefault(s => s.StartsWith("@"))?.Trim('/', '@');
-                    var author = !string.IsNullOrWhiteSpace(authorSegment) ? $"@{authorSegment}" : "TikTok Creator";
-                    VideoTitleLabel.Text = $"TikTok Video by {author}";
-                    UploaderLabel.Text = author;
+                    MetadataLoadingText.IsVisible = false;
+                    MetadataHeaderSpinner.IsVisible = false;
+                    ThumbnailSpinner.IsVisible = false;
+                    ViewsLabel.Text = "";
+                    ViewsContainer.IsVisible = false;
+                    if (uri.Host.Contains("tiktok.com", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var authorSegment = uri.Segments.FirstOrDefault(s => s.StartsWith("@"))?.Trim('/', '@');
+                        var author = !string.IsNullOrWhiteSpace(authorSegment) ? $"@{authorSegment}" : "TikTok Creator";
+                        VideoTitleLabel.Text = $"TikTok Video by {author}";
+                        UploaderLabel.Text = author;
+                    }
+                    else
+                    {
+                        var fallbackTitle = uri.Segments.LastOrDefault()?.Trim('/');
+                        VideoTitleLabel.Text = !string.IsNullOrWhiteSpace(fallbackTitle) ? fallbackTitle : uri.Host;
+                        UploaderLabel.Text = uri.Host;
+                    }
+                    DownloadOptionsCard.IsVisible = true;
+                    GlobalStatusText.Text = "Ready to download";
                 }
-                else
-                {
-                    var fallbackTitle = uri.Segments.LastOrDefault()?.Trim('/');
-                    VideoTitleLabel.Text = !string.IsNullOrWhiteSpace(fallbackTitle) ? fallbackTitle : uri.Host;
-                    UploaderLabel.Text = uri.Host;
-                }
-                DownloadOptionsCard.IsVisible = true;
-                GlobalStatusText.Text = "Ready to download";
             }
         }
         finally
@@ -2116,55 +2150,79 @@ public partial class MainWindow : Window
 
     private async Task LoadThumbnailAsync(string thumbnailUrl, CancellationToken token)
     {
+        if (string.IsNullOrWhiteSpace(thumbnailUrl))
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => { ThumbnailSpinner.IsVisible = false; });
+            return;
+        }
+
+        // 1. Try direct fetch
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, thumbnailUrl);
-            if (thumbnailUrl.Contains("tiktok") || thumbnailUrl.Contains("tiktokcdn"))
+            if (thumbnailUrl.Contains("tiktok", StringComparison.OrdinalIgnoreCase))
             {
                 request.Headers.Referrer = new Uri("https://www.tiktok.com/");
             }
 
             using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
-            response.EnsureSuccessStatusCode();
-            var bytes = await response.Content.ReadAsByteArrayAsync(token);
-            if (token.IsCancellationRequested || bytes == null || bytes.Length == 0) return;
-
-            await Dispatcher.UIThread.InvokeAsync(() =>
+            if (response.IsSuccessStatusCode)
             {
-                using var ms = new MemoryStream(bytes);
-                ThumbnailImage.Source = new Bitmap(ms);
-                ThumbnailSpinner.IsVisible = false;
-            });
+                var bytes = await response.Content.ReadAsByteArrayAsync(token);
+                if (!token.IsCancellationRequested && bytes != null && bytes.Length > 0)
+                {
+                    try
+                    {
+                        using var ms = new MemoryStream(bytes);
+                        ms.Position = 0;
+                        var bmp = new Bitmap(ms);
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            ThumbnailImage.Source = bmp;
+                            ThumbnailSpinner.IsVisible = false;
+                        });
+                        return;
+                    }
+                    catch { }
+                }
+            }
         }
-        catch
+        catch { }
+
+        // 2. Direct failed or encoded in unusual format: try reliable fast transcode proxy (&output=jpg)
+        try
         {
-            // If direct thumbnail fails (e.g. TikTok CDN SSL/handshake timeout), try fast image proxy fallback
-            try
+            var proxyUrl = $"https://wsrv.nl/?url={Uri.EscapeDataString(thumbnailUrl)}&output=jpg";
+            using var fallbackReq = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
+            using var fallbackResp = await _httpClient.SendAsync(fallbackReq, HttpCompletionOption.ResponseHeadersRead, token);
+            if (fallbackResp.IsSuccessStatusCode)
             {
-                var proxyUrl = $"https://wsrv.nl/?url={Uri.EscapeDataString(thumbnailUrl)}";
-                using var fallbackReq = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
-                using var fallbackResp = await _httpClient.SendAsync(fallbackReq, HttpCompletionOption.ResponseHeadersRead, token);
-                fallbackResp.EnsureSuccessStatusCode();
                 var fallbackBytes = await fallbackResp.Content.ReadAsByteArrayAsync(token);
                 if (!token.IsCancellationRequested && fallbackBytes != null && fallbackBytes.Length > 0)
                 {
-                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    try
                     {
                         using var ms = new MemoryStream(fallbackBytes);
-                        ThumbnailImage.Source = new Bitmap(ms);
-                        ThumbnailSpinner.IsVisible = false;
-                    });
-                    return;
+                        ms.Position = 0;
+                        var bmp = new Bitmap(ms);
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            ThumbnailImage.Source = bmp;
+                            ThumbnailSpinner.IsVisible = false;
+                        });
+                        return;
+                    }
+                    catch { }
                 }
             }
-            catch { }
-
-            // Thumbnail failed or cancelled - keep default empty thumbnail
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                ThumbnailSpinner.IsVisible = false;
-            });
         }
+        catch { }
+
+        // 3. Keep placeholder cleanly without throwing
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            ThumbnailSpinner.IsVisible = false;
+        });
     }
 
     private void ApplyProfileMetadataToCard(

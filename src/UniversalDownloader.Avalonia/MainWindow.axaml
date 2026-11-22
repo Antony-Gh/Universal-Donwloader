@@ -259,7 +259,7 @@
                             <StackPanel Spacing="10">
                                 <Grid ColumnDefinitions="Auto,*">
                                     <!-- Thumbnail Container -->
-                                    <Border Grid.Column="0" Width="170" Height="96" CornerRadius="8" ClipToBounds="True" Background="#090A0F" Margin="0,0,16,0" VerticalAlignment="Center">
+                                    <Border Grid.Column="0" Width="170" Height="96" CornerRadius="8" ClipToBounds="True" Background="#090A0F" Margin="0,0,16,0" VerticalAlignment="Top">
                                         <Panel>
                                             <Image x:Name="ThumbnailImage" Stretch="UniformToFill"/>
                                             <PathIcon x:Name="ThumbnailSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="26" Height="26" Foreground="#38BDF8" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False"/>
@@ -271,9 +271,9 @@
                                     </Border>
 
                                     <!-- Metadata Details -->
-                                    <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Top">
                                         <!-- Platform & Status Badges -->
-                                        <WrapPanel Orientation="Horizontal">
+                                        <WrapPanel Orientation="Horizontal" Margin="0,0,0,2">
                                             <Border Background="#3B82F6" CornerRadius="4" Padding="6,2" Margin="0,0,6,3" VerticalAlignment="Center">
                                                 <TextBlock x:Name="PlatformBadge" Text="YOUTUBE" Foreground="White" FontSize="10" FontWeight="Bold"/>
                                             </Border>
@@ -297,7 +297,7 @@
                                         </WrapPanel>
 
                                         <!-- Title -->
-                                        <TextBlock x:Name="VideoTitleLabel" Text="Video Title" FontSize="15" FontWeight="Bold" Foreground="#F4F4F8" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="VideoTitleLabel" Text="Video Title" FontSize="15" FontWeight="Bold" Foreground="#F4F4F8" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" Margin="0,1,0,1"/>
 
                                         <!-- Uploader / Channel & View Count -->
                                         <WrapPanel Orientation="Horizontal" Margin="0,2,0,0">
@@ -319,27 +319,27 @@
                                         <!-- Click-to-Copy Public Profile Info Chips (ID, @handle, Followers, Likes, Posts, Channel ID, DID, etc.) -->
                                         <ItemsControl x:Name="ProfileInfoItems" IsVisible="False" Margin="0,2,0,0">
                                             <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <WrapPanel Orientation="Horizontal"/>
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="local:ProfileInfoChipViewModel">
-                                                    <Button Padding="7,2" Margin="0,0,5,4" CornerRadius="4"
-                                                            Background="#162032"
-                                                            BorderBrush="{Binding BorderHex}"
-                                                            BorderThickness="1"
-                                                            ToolTip.Tip="{Binding TooltipText}"
-                                                            Click="ProfileInfoChip_Click">
-                                                        <TextBlock Text="{Binding DisplayText}" Foreground="{Binding ForegroundHex}" FontSize="10" FontWeight="SemiBold"/>
-                                                    </Button>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
+                                                 <ItemsPanelTemplate>
+                                                     <WrapPanel Orientation="Horizontal"/>
+                                                 </ItemsPanelTemplate>
+                                             </ItemsControl.ItemsPanel>
+                                             <ItemsControl.ItemTemplate>
+                                                 <DataTemplate x:DataType="local:ProfileInfoChipViewModel">
+                                                     <Button Padding="7,2" Margin="0,0,5,4" CornerRadius="4"
+                                                             Background="#162032"
+                                                             BorderBrush="{Binding BorderHex}"
+                                                             BorderThickness="1"
+                                                             ToolTip.Tip="{Binding TooltipText}"
+                                                             Click="ProfileInfoChip_Click">
+                                                         <TextBlock Text="{Binding DisplayText}" Foreground="{Binding ForegroundHex}" FontSize="10" FontWeight="SemiBold"/>
+                                                     </Button>
+                                                 </DataTemplate>
+                                             </ItemsControl.ItemTemplate>
+                                         </ItemsControl>
 
                                         <!-- Single-video Supported Qualities Pills -->
-                                        <StackPanel x:Name="SingleVideoQualitiesPanel" IsVisible="False" Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
-                                            <TextBlock x:Name="SupportedQualitiesLabel" Text="Qualities:" FontSize="11" Foreground="#64748B" VerticalAlignment="Center"/>
+                                        <WrapPanel x:Name="SingleVideoQualitiesPanel" IsVisible="False" Orientation="Horizontal" Margin="0,2,0,0">
+                                            <TextBlock x:Name="SupportedQualitiesLabel" Text="Qualities:" FontSize="11" Foreground="#64748B" VerticalAlignment="Center" Margin="0,0,8,3"/>
                                             <ItemsControl x:Name="SingleVideoQualitiesItems">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
@@ -354,7 +354,7 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
-                                        </StackPanel>
+                                        </WrapPanel>
                                     </StackPanel>
                                 </Grid>
                                 <ProgressBar x:Name="MetadataProgressBar" IsIndeterminate="True" Height="3" Foreground="#38BDF8" IsVisible="False"/>

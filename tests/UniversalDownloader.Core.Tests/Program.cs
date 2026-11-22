@@ -402,6 +402,24 @@ RunTest("PlatformUtils.ShowNotification executes without throwing", () =>
     PlatformUtils.ShowNotification("O'Reilly \"Media\"", "Special chars & <xml> test");
 });
 
+RunTest("GetMetadataAsync extracts full TikTok and Facebook metadata", () =>
+{
+    var client = new DownloaderClient();
+    var ttTask = client.GetMetadataAsync("https://www.tiktok.com/@.yassin119/video/7689512144894790964");
+    ttTask.Wait(TimeSpan.FromSeconds(15));
+    var ttMeta = ttTask.Result;
+    Console.WriteLine($"   -> TikTok Meta: Title='{ttMeta?.Title}', Uploader='{ttMeta?.Uploader}', Thumb='{ttMeta?.Thumbnail?[..Math.Min(40, ttMeta.Thumbnail.Length)]}'");
+    AssertTrue(ttMeta != null && !string.IsNullOrWhiteSpace(ttMeta.Title) && !ttMeta.Title.StartsWith("TikTok Video by"), "TikTok title must be extracted");
+    AssertTrue(!string.IsNullOrWhiteSpace(ttMeta.Thumbnail), "TikTok thumbnail must be present");
+
+    var fbTask = client.GetMetadataAsync("https://www.facebook.com/share/v/1DjY9DJcy5/");
+    fbTask.Wait(TimeSpan.FromSeconds(20));
+    var fbMeta = fbTask.Result;
+    Console.WriteLine($"   -> Facebook Meta: Title='{fbMeta?.Title}', Uploader='{fbMeta?.Uploader}', Thumb='{fbMeta?.Thumbnail?[..Math.Min(40, fbMeta.Thumbnail.Length)]}'");
+    AssertTrue(fbMeta != null && !string.IsNullOrWhiteSpace(fbMeta.Title) && fbMeta.Title != "1DjY9DJcy5", "Facebook title must be extracted");
+    AssertTrue(!string.IsNullOrWhiteSpace(fbMeta.Thumbnail), "Facebook thumbnail must be present");
+});
+
 
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

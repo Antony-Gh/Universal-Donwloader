@@ -480,6 +480,25 @@ public class DownloaderClient
                 ? JsonSerializer.Deserialize(infoArr.GetRawText(), DownloaderJsonContext.Default.ListProfileInfoItemModel) ?? new()
                 : new List<ProfileInfoItemModel>();
 
+            var title = root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String
+                ? titleProp.GetString()
+                : null;
+            var uploader = root.TryGetProperty("uploader", out var upProp) && upProp.ValueKind == JsonValueKind.String
+                ? upProp.GetString()
+                : null;
+            var thumbnail = root.TryGetProperty("thumbnail", out var thumbProp) && thumbProp.ValueKind == JsonValueKind.String
+                ? thumbProp.GetString()
+                : null;
+            var durString = root.TryGetProperty("duration_string", out var dsProp) && dsProp.ValueKind == JsonValueKind.String
+                ? dsProp.GetString()
+                : null;
+            long? views = root.TryGetProperty("view_count", out var vcProp) && vcProp.TryGetInt64(out var vcv) && vcv > 0
+                ? vcv
+                : null;
+            string? viewsFormatted = views.HasValue
+                ? (views.Value >= 1_000_000 ? $"{views.Value / 1_000_000.0:F1}M views" : (views.Value >= 1_000 ? $"{views.Value / 1_000.0:F1}K views" : $"{views.Value:N0} views"))
+                : null;
+
             if (formats.Count == 0 && IsTikTokUrl(url))
             {
                 formats.Add(new FormatInfoModel
@@ -510,6 +529,11 @@ public class DownloaderClient
                 Bio = bio,
                 IsVerified = isVerified,
                 ProfileInfo = profileInfo,
+                Title = title,
+                Uploader = uploader,
+                Thumbnail = thumbnail,
+                DurationFormatted = durString,
+                ViewCountFormatted = viewsFormatted,
             };
         }
         catch (JsonException ex)

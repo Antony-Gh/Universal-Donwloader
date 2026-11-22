@@ -96,6 +96,11 @@ public record FormatInspectionResult
     public string? Bio { get; init; }
     public bool IsVerified { get; init; }
     public List<ProfileInfoItemModel> ProfileInfo { get; init; } = new();
+    public string? Title { get; init; }
+    public string? Uploader { get; init; }
+    public string? Thumbnail { get; init; }
+    public string? DurationFormatted { get; init; }
+    public string? ViewCountFormatted { get; init; }
 }
 
 public record HistoryRecordModel

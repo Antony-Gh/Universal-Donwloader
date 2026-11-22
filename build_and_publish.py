@@ -400,6 +400,13 @@ def package_windows_release(version: str) -> List[Path]:
 
     results: List[Path] = []
     if candidate_exe and candidate_exe.exists():
+        if sys.platform.startswith("win"):
+            try:
+                subprocess.run(["taskkill", "/F", "/IM", "UniversalDownloader.exe"], capture_output=True)
+                time.sleep(0.5)
+            except Exception:
+                pass
+
         direct_exe = RELEASES_DIR / "UniversalDownloader.exe"
         root_exe = ROOT_DIR / "UniversalDownloader.exe"
         build_out_exe = ROOT_DIR / "build_out" / "win-x64" / "UniversalDownloader.exe"
