@@ -722,9 +722,6 @@ fun MainScreen(viewModel: MainViewModel) {
                             fontSize = 12.sp,
                             modifier = Modifier.padding(vertical = 12.dp),
                         )
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(vertical = 12.dp),
-                        )
                     } else {
                         LazyColumn(
                             modifier = Modifier
