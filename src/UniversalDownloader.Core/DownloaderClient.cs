@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using UniversalDownloader.Core.Models;
 
 namespace UniversalDownloader.Core;
@@ -231,10 +232,28 @@ public class DownloaderClient
     {
         var cleanUrl = CleanMediaUrl(url);
 
-        // Fast-path for TikTok: avoid backend process launch + yt-dlp bot blocks by querying direct in ~400ms
+        // Fast-path for TikTok: avoid backend process launch + yt-dlp bot blocks by querying direct in ~300ms
         if (IsTikTokUrl(cleanUrl) && string.IsNullOrWhiteSpace(cookiesFromBrowser) && string.IsNullOrWhiteSpace(cookiesFile))
         {
             var direct = await FetchTikTokMetadataDirectAsync(cleanUrl, cancellationToken);
+            if (direct != null && !string.IsNullOrWhiteSpace(direct.Title))
+            {
+                return direct;
+            }
+        }
+
+        // Fast-path for TikTok & Facebook: avoid 15-30s yt-dlp extraction, timeouts and bot blocks by querying direct APIs in <1s
+        if (IsTikTokUrl(cleanUrl))
+        {
+            var direct = await FetchTikTokMetadataDirectAsync(cleanUrl, cancellationToken);
+            if (direct != null && !string.IsNullOrWhiteSpace(direct.Title))
+            {
+                return direct;
+            }
+        }
+        if (IsFacebookUrl(cleanUrl) && string.IsNullOrWhiteSpace(cookiesFromBrowser) && string.IsNullOrWhiteSpace(cookiesFile))
+        {
+            var direct = await FetchFacebookMetadataDirectAsync(cleanUrl, cancellationToken);
             if (direct != null && !string.IsNullOrWhiteSpace(direct.Title))
             {
                 return direct;
@@ -279,11 +298,23 @@ public class DownloaderClient
             return result;
         }
 
-        // Direct fallback for TikTok if backend returned null or extraction was blocked
+        // Direct fallbacks if backend returned null or extraction was blocked
         if (IsTikTokUrl(cleanUrl))
         {
             var direct = await FetchTikTokMetadataDirectAsync(cleanUrl, cancellationToken);
             if (direct != null) return direct;
+        }
+        if (IsFacebookUrl(cleanUrl))
+        {
+            var direct = await FetchFacebookMetadataDirectAsync(cleanUrl, cancellationToken);
+            if (direct != null) return direct;
+        }
+
+        // Universal OpenGraph fallback for any media URL
+        var ogDirect = await FetchOpenGraphMetadataDirectAsync(cleanUrl, cancellationToken);
+        if (ogDirect != null && !string.IsNullOrWhiteSpace(ogDirect.Title))
+        {
+            return ogDirect;
         }
 
         return result;
@@ -296,11 +327,18 @@ public class DownloaderClient
         return lowered.Contains("tiktok.com") || lowered.Contains("vt.tiktok.com");
     }
 
+    public static bool IsFacebookUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        var lowered = url.ToLowerInvariant();
+        return lowered.Contains("facebook.com") || lowered.Contains("fb.watch") || lowered.Contains("fb.com");
+    }
+
     public static string CleanMediaUrl(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) return string.Empty;
         var trimmed = url.Trim();
-        if (IsTikTokUrl(trimmed) && trimmed.Contains('?'))
+        if ((IsTikTokUrl(trimmed) || IsFacebookUrl(trimmed)) && trimmed.Contains('?'))
         {
             return trimmed.Split('?')[0].Trim();
         }
@@ -310,10 +348,67 @@ public class DownloaderClient
     public static async Task<MediaMetadataModel?> FetchTikTokMetadataDirectAsync(string rawUrl, CancellationToken cancellationToken = default)
     {
         var cleanUrl = CleanMediaUrl(rawUrl);
-        // 1. Try TikMate API
+
+        // 1. Try TikWM API (fastest, ~300ms)
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(7) };
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+            var encoded = Uri.EscapeDataString(cleanUrl);
+            var resp = await http.GetAsync($"https://www.tikwm.com/api/?url={encoded}", cancellationToken);
+            if (resp.IsSuccessStatusCode)
+            {
+                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("code", out var code) && code.GetInt32() == 0 && root.TryGetProperty("data", out var data))
+                {
+                    var authorRaw = data.TryGetProperty("author", out var authObj) && authObj.TryGetProperty("nickname", out var nn)
+                        ? nn.GetString()
+                        : null;
+                    var author = !string.IsNullOrWhiteSpace(authorRaw) ? System.Net.WebUtility.HtmlDecode(authorRaw) : "TikTok Creator";
+                    var rawTitle = data.TryGetProperty("title", out var tp) ? tp.GetString() : null;
+                    var title = !string.IsNullOrWhiteSpace(rawTitle)
+                        ? System.Net.WebUtility.HtmlDecode(rawTitle)
+                        : $"TikTok Video by {author}";
+                    var cover = data.TryGetProperty("cover", out var cp) ? cp.GetString() : null;
+                    if (!string.IsNullOrWhiteSpace(cover)) cover = System.Net.WebUtility.HtmlDecode(cover);
+
+                    long? views = null;
+                    if (data.TryGetProperty("play_count", out var pc) && pc.TryGetInt64(out var pcv) && pcv > 0)
+                    {
+                        views = pcv;
+                    }
+                    int? duration = null;
+                    if (data.TryGetProperty("duration", out var dur) && dur.TryGetInt32(out var dv) && dv > 0)
+                    {
+                        duration = dv;
+                    }
+
+                    return new MediaMetadataModel
+                    {
+                        Url = cleanUrl,
+                        Platform = "tiktok",
+                        Title = title,
+                        Uploader = author,
+                        Thumbnail = cover,
+                        Description = title,
+                        Duration = duration,
+                        ViewCount = views,
+                        Qualities = new List<string> { "Best (HD No Watermark)", "Audio Only (MP3)" },
+                        Codecs = new List<string> { "h264" },
+                        IsPlaylist = false,
+                        PlaylistCount = 0
+                    };
+                }
+            }
+        }
+        catch { }
+
+        // 2. Try TikMate API
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
             http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
             var content = new FormUrlEncodedContent(new[]
             {
@@ -329,14 +424,19 @@ public class DownloaderClient
                 {
                     var authorName = root.TryGetProperty("author_name", out var an) ? an.GetString() : null;
                     var authorId = root.TryGetProperty("author_id", out var ai) ? ai.GetString() : null;
-                    var author = !string.IsNullOrWhiteSpace(authorName) ? authorName : (!string.IsNullOrWhiteSpace(authorId) ? $"@{authorId}" : "TikTok Creator");
+                    var authorRaw = !string.IsNullOrWhiteSpace(authorName) ? authorName : (!string.IsNullOrWhiteSpace(authorId) ? $"@{authorId}" : "TikTok Creator");
+                    var author = System.Net.WebUtility.HtmlDecode(authorRaw);
+
                     var desc = root.TryGetProperty("desc", out var dp) ? dp.GetString() : null;
-                    var title = !string.IsNullOrWhiteSpace(desc) ? desc : $"TikTok Video by {author}";
+                    var title = !string.IsNullOrWhiteSpace(desc) ? System.Net.WebUtility.HtmlDecode(desc) : $"TikTok Video by {author}";
+
                     var cover = root.TryGetProperty("cover", out var cp) ? cp.GetString() : null;
                     if (string.IsNullOrWhiteSpace(cover) && root.TryGetProperty("dynamic_cover", out var dcp))
                     {
                         cover = dcp.GetString();
                     }
+                    if (!string.IsNullOrWhiteSpace(cover)) cover = System.Net.WebUtility.HtmlDecode(cover);
+
                     long? views = null;
                     if (root.TryGetProperty("like_count", out var lp) && lp.TryGetInt64(out var lv) && lv > 0)
                     {
@@ -362,49 +462,97 @@ public class DownloaderClient
         }
         catch { }
 
-        // 2. Try TikWM API
+        // 3. Fallback: try OpenGraph scraping
+        return await FetchOpenGraphMetadataDirectAsync(cleanUrl, cancellationToken);
+    }
+
+    public static async Task<MediaMetadataModel?> FetchFacebookMetadataDirectAsync(string rawUrl, CancellationToken cancellationToken = default)
+    {
+        var cleanUrl = CleanMediaUrl(rawUrl);
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(7) };
-            http.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-            var encoded = Uri.EscapeDataString(cleanUrl);
-            var resp = await http.GetAsync($"https://www.tikwm.com/api/?url={encoded}", cancellationToken);
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
+            http.DefaultRequestHeaders.Add("User-Agent", "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)");
+            http.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            http.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
+
+            var resp = await http.GetAsync(cleanUrl, cancellationToken);
             if (resp.IsSuccessStatusCode)
             {
-                var json = await resp.Content.ReadAsStringAsync(cancellationToken);
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-                if (root.TryGetProperty("code", out var code) && code.GetInt32() == 0 && root.TryGetProperty("data", out var data))
+                var htmlContent = await resp.Content.ReadAsStringAsync(cancellationToken);
+                var rawTitle = Regex.Match(htmlContent, @"property=""og:title""\s+content=""([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value;
+                var rawDesc = Regex.Match(htmlContent, @"property=""og:description""\s+content=""([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value;
+                var rawImage = Regex.Match(htmlContent, @"property=""og:image""\s+content=""([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value;
+
+                if (!string.IsNullOrWhiteSpace(rawTitle) || !string.IsNullOrWhiteSpace(rawImage))
                 {
-                    var author = data.TryGetProperty("author", out var authObj) && authObj.TryGetProperty("nickname", out var nn)
-                        ? nn.GetString()
-                        : "TikTok Creator";
-                    var title = data.TryGetProperty("title", out var tp) && !string.IsNullOrWhiteSpace(tp.GetString())
-                        ? tp.GetString()
-                        : $"TikTok Video by {author}";
-                    var cover = data.TryGetProperty("cover", out var cp) ? cp.GetString() : null;
-                    long? views = null;
-                    if (data.TryGetProperty("play_count", out var pc) && pc.TryGetInt64(out var pcv) && pcv > 0)
+                    var cleanTitle = System.Net.WebUtility.HtmlDecode(rawTitle);
+                    var cleanDesc = System.Net.WebUtility.HtmlDecode(rawDesc);
+                    var cleanImage = System.Net.WebUtility.HtmlDecode(rawImage);
+
+                    string author = "Facebook Creator";
+                    if (cleanTitle.Contains('|'))
                     {
-                        views = pcv;
-                    }
-                    int? duration = null;
-                    if (data.TryGetProperty("duration", out var dur) && dur.TryGetInt32(out var dv) && dv > 0)
-                    {
-                        duration = dv;
+                        var parts = cleanTitle.Split('|');
+                        var lastPart = parts.Last().Trim();
+                        if (!string.IsNullOrWhiteSpace(lastPart) && lastPart.Length < 60)
+                        {
+                            author = lastPart;
+                        }
                     }
 
                     return new MediaMetadataModel
                     {
                         Url = cleanUrl,
-                        Platform = "tiktok",
-                        Title = title,
-                        Uploader = author ?? "TikTok Creator",
-                        Thumbnail = cover,
-                        Description = title,
-                        Duration = duration,
-                        ViewCount = views,
-                        Qualities = new List<string> { "Best (HD No Watermark)", "Audio Only (MP3)" },
+                        Platform = "facebook",
+                        Title = !string.IsNullOrWhiteSpace(cleanTitle) ? cleanTitle : $"Facebook Video by {author}",
+                        Uploader = author,
+                        Thumbnail = cleanImage,
+                        Description = cleanDesc,
+                        Qualities = new List<string> { "Best (HD)", "Audio Only (MP3)" },
+                        Codecs = new List<string> { "h264" },
+                        IsPlaylist = false,
+                        PlaylistCount = 0
+                    };
+                }
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
+    public static async Task<MediaMetadataModel?> FetchOpenGraphMetadataDirectAsync(string rawUrl, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            http.DefaultRequestHeaders.Add("User-Agent", "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)");
+            var resp = await http.GetAsync(rawUrl, cancellationToken);
+            if (resp.IsSuccessStatusCode)
+            {
+                var htmlContent = await resp.Content.ReadAsStringAsync(cancellationToken);
+                var rawTitle = Regex.Match(htmlContent, @"property=""og:title""\s+content=""([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value;
+                var rawDesc = Regex.Match(htmlContent, @"property=""og:description""\s+content=""([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value;
+                var rawImage = Regex.Match(htmlContent, @"property=""og:image""\s+content=""([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value;
+                var siteName = Regex.Match(htmlContent, @"property=""og:site_name""\s+content=""([^""]+)""", RegexOptions.IgnoreCase).Groups[1].Value;
+
+                if (!string.IsNullOrWhiteSpace(rawTitle) || !string.IsNullOrWhiteSpace(rawImage))
+                {
+                    var cleanTitle = System.Net.WebUtility.HtmlDecode(rawTitle);
+                    var cleanDesc = System.Net.WebUtility.HtmlDecode(rawDesc);
+                    var cleanImage = System.Net.WebUtility.HtmlDecode(rawImage);
+                    var cleanSite = System.Net.WebUtility.HtmlDecode(siteName);
+
+                    return new MediaMetadataModel
+                    {
+                        Url = rawUrl,
+                        Platform = !string.IsNullOrWhiteSpace(cleanSite) ? cleanSite.ToLowerInvariant() : "media",
+                        Title = cleanTitle,
+                        Uploader = !string.IsNullOrWhiteSpace(cleanSite) ? cleanSite : "Creator",
+                        Thumbnail = cleanImage,
+                        Description = cleanDesc,
+                        Qualities = new List<string> { "Best Quality", "Audio Only (MP3)" },
                         Codecs = new List<string> { "h264" },
                         IsPlaylist = false,
                         PlaylistCount = 0
@@ -499,6 +647,37 @@ public class DownloaderClient
                 ? (views.Value >= 1_000_000 ? $"{views.Value / 1_000_000.0:F1}M views" : (views.Value >= 1_000 ? $"{views.Value / 1_000.0:F1}K views" : $"{views.Value:N0} views"))
                 : null;
 
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(thumbnail))
+            {
+                MediaMetadataModel? fallbackMeta = null;
+                if (IsTikTokUrl(url))
+                {
+                    fallbackMeta = await FetchTikTokMetadataDirectAsync(url, cancellationToken);
+                }
+                else if (IsFacebookUrl(url))
+                {
+                    fallbackMeta = await FetchFacebookMetadataDirectAsync(url, cancellationToken);
+                }
+                else
+                {
+                    fallbackMeta = await FetchOpenGraphMetadataDirectAsync(url, cancellationToken);
+                }
+
+                if (fallbackMeta != null)
+                {
+                    if (string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(fallbackMeta.Title))
+                        title = fallbackMeta.Title;
+                    if (string.IsNullOrWhiteSpace(uploader) && !string.IsNullOrWhiteSpace(fallbackMeta.Uploader))
+                        uploader = fallbackMeta.Uploader;
+                    if (string.IsNullOrWhiteSpace(thumbnail) && !string.IsNullOrWhiteSpace(fallbackMeta.Thumbnail))
+                        thumbnail = fallbackMeta.Thumbnail;
+                    if (string.IsNullOrWhiteSpace(durString) && !string.IsNullOrWhiteSpace(fallbackMeta.DurationFormatted))
+                        durString = fallbackMeta.DurationFormatted;
+                    if (string.IsNullOrWhiteSpace(viewsFormatted) && !string.IsNullOrWhiteSpace(fallbackMeta.ViewCountFormatted))
+                        viewsFormatted = fallbackMeta.ViewCountFormatted;
+                }
+            }
+
             if (formats.Count == 0 && IsTikTokUrl(url))
             {
                 formats.Add(new FormatInfoModel
@@ -538,7 +717,12 @@ public class DownloaderClient
         }
         catch (JsonException ex)
         {
-            if (IsTikTokUrl(url))
+            MediaMetadataModel? fallbackMeta = null;
+            if (IsTikTokUrl(url)) fallbackMeta = await FetchTikTokMetadataDirectAsync(url, cancellationToken);
+            else if (IsFacebookUrl(url)) fallbackMeta = await FetchFacebookMetadataDirectAsync(url, cancellationToken);
+            else fallbackMeta = await FetchOpenGraphMetadataDirectAsync(url, cancellationToken);
+
+            if (fallbackMeta != null || IsTikTokUrl(url))
             {
                 return new FormatInspectionResult
                 {
@@ -546,7 +730,12 @@ public class DownloaderClient
                     {
                         new() { FormatId = "best", Extension = "mp4", Resolution = "1080p", FormatNote = "Best (HD No Watermark)", VCodec = "h264", ACodec = "aac" },
                         new() { FormatId = "audio", Extension = "mp3", Resolution = "audio only", FormatNote = "Audio Only (MP3)", ACodec = "mp3" }
-                    }
+                    },
+                    Title = fallbackMeta?.Title,
+                    Uploader = fallbackMeta?.Uploader,
+                    Thumbnail = fallbackMeta?.Thumbnail,
+                    DurationFormatted = fallbackMeta?.DurationFormatted,
+                    ViewCountFormatted = fallbackMeta?.ViewCountFormatted,
                 };
             }
             throw new Exception($"Failed to parse formats JSON: {ex.Message}\nOutput: {output}");

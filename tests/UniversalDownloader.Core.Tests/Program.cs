@@ -405,19 +405,48 @@ RunTest("PlatformUtils.ShowNotification executes without throwing", () =>
 RunTest("GetMetadataAsync extracts full TikTok and Facebook metadata", () =>
 {
     var client = new DownloaderClient();
-    var ttTask = client.GetMetadataAsync("https://www.tiktok.com/@.yassin119/video/7689512144894790964");
-    ttTask.Wait(TimeSpan.FromSeconds(15));
-    var ttMeta = ttTask.Result;
-    Console.WriteLine($"   -> TikTok Meta: Title='{ttMeta?.Title}', Uploader='{ttMeta?.Uploader}', Thumb='{ttMeta?.Thumbnail?[..Math.Min(40, ttMeta.Thumbnail.Length)]}'");
-    AssertTrue(ttMeta != null && !string.IsNullOrWhiteSpace(ttMeta.Title) && !ttMeta.Title.StartsWith("TikTok Video by"), "TikTok title must be extracted");
-    AssertTrue(!string.IsNullOrWhiteSpace(ttMeta.Thumbnail), "TikTok thumbnail must be present");
+    var ttTask1 = client.GetMetadataAsync("https://www.tiktok.com/@ahmedabdelnbey7/video/7703286950026808597?is_from_webapp=1&sender_device=pc");
+    ttTask1.Wait(TimeSpan.FromSeconds(15));
+    var ttMeta1 = ttTask1.Result;
+    Console.WriteLine($"   -> TikTok Meta 1: Title='{ttMeta1?.Title}', Uploader='{ttMeta1?.Uploader}', Thumb='{ttMeta1?.Thumbnail?[..Math.Min(40, ttMeta1?.Thumbnail?.Length ?? 0)]}'");
+    AssertTrue(ttMeta1 != null && !string.IsNullOrWhiteSpace(ttMeta1.Title) && !ttMeta1.Title.StartsWith("TikTok Video by"), "TikTok 1 title must be extracted");
+    AssertTrue(!string.IsNullOrWhiteSpace(ttMeta1?.Thumbnail), "TikTok 1 thumbnail must be present");
+
+    var ttTask2 = client.GetMetadataAsync("https://www.tiktok.com/@.yassin119/video/7689512144894790964");
+    ttTask2.Wait(TimeSpan.FromSeconds(15));
+    var ttMeta2 = ttTask2.Result;
+    Console.WriteLine($"   -> TikTok Meta 2: Title='{ttMeta2?.Title}', Uploader='{ttMeta2?.Uploader}', Thumb='{ttMeta2?.Thumbnail?[..Math.Min(40, ttMeta2?.Thumbnail?.Length ?? 0)]}'");
+    AssertTrue(ttMeta2 != null && !string.IsNullOrWhiteSpace(ttMeta2.Title) && !ttMeta2.Title.StartsWith("TikTok Video by"), "TikTok 2 title must be extracted");
+    AssertTrue(!string.IsNullOrWhiteSpace(ttMeta2?.Thumbnail), "TikTok 2 thumbnail must be present");
 
     var fbTask = client.GetMetadataAsync("https://www.facebook.com/share/v/1DjY9DJcy5/");
-    fbTask.Wait(TimeSpan.FromSeconds(20));
+    fbTask.Wait(TimeSpan.FromSeconds(15));
     var fbMeta = fbTask.Result;
-    Console.WriteLine($"   -> Facebook Meta: Title='{fbMeta?.Title}', Uploader='{fbMeta?.Uploader}', Thumb='{fbMeta?.Thumbnail?[..Math.Min(40, fbMeta.Thumbnail.Length)]}'");
+    Console.WriteLine($"   -> Facebook Meta: Title='{fbMeta?.Title}', Uploader='{fbMeta?.Uploader}', Thumb='{fbMeta?.Thumbnail?[..Math.Min(40, fbMeta?.Thumbnail?.Length ?? 0)]}'");
     AssertTrue(fbMeta != null && !string.IsNullOrWhiteSpace(fbMeta.Title) && fbMeta.Title != "1DjY9DJcy5", "Facebook title must be extracted");
-    AssertTrue(!string.IsNullOrWhiteSpace(fbMeta.Thumbnail), "Facebook thumbnail must be present");
+    AssertTrue(!string.IsNullOrWhiteSpace(fbMeta?.Thumbnail), "Facebook thumbnail must be present");
+
+    // Verify thumbnail download
+    using var httpImg = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+    httpImg.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
+    if (!string.IsNullOrWhiteSpace(ttMeta1?.Thumbnail))
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, ttMeta1.Thumbnail);
+        req.Headers.Referrer = new Uri("https://www.tiktok.com/");
+        var resp = httpImg.Send(req);
+        var bytes = resp.Content.ReadAsByteArrayAsync().Result;
+        Console.WriteLine($"   -> TikTok 1 Image Download: Status={resp.StatusCode}, Bytes={bytes.Length}");
+        AssertTrue(resp.IsSuccessStatusCode && bytes.Length > 500, "TikTok 1 image download must succeed");
+    }
+    if (!string.IsNullOrWhiteSpace(fbMeta?.Thumbnail))
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, fbMeta.Thumbnail);
+        req.Headers.Referrer = new Uri("https://www.facebook.com/");
+        var resp = httpImg.Send(req);
+        var bytes = resp.Content.ReadAsByteArrayAsync().Result;
+        Console.WriteLine($"   -> Facebook Image Download: Status={resp.StatusCode}, Bytes={bytes.Length}");
+        AssertTrue(resp.IsSuccessStatusCode && bytes.Length > 500, "Facebook image download must succeed");
+    }
 });
 
 

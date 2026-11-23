@@ -155,22 +155,77 @@ class DownloadEngine:
     @staticmethod
     def _fallback_tiktok_inspect(url: str) -> Optional[dict[str, Any]]:
         clean_url = url.split("?")[0].strip()
-        # 1. TikMate lookup
+        # 1. TikWM lookup (faster & provides direct play links)
         try:
             import urllib.request
             import urllib.parse
             import json as _json
+            import html as _html
+            api_url = f"https://www.tikwm.com/api/?url={urllib.parse.quote(clean_url)}"
+            req = urllib.request.Request(
+                api_url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            )
+            with urllib.request.urlopen(req, timeout=5) as r:
+                res = _json.loads(r.read().decode("utf-8"))
+                d = res.get("data")
+                if res.get("code") == 0 and isinstance(d, dict):
+                    author = (d.get("author") or {}).get("nickname") or "TikTok Creator"
+                    raw_title = d.get("title") or f"TikTok Video by {author}"
+                    desc = _html.unescape(raw_title)
+                    cover = d.get("cover")
+                    dl_url = d.get("play")
+                    duration = d.get("duration")
+                    formats = [
+                        {
+                            "format_id": "best",
+                            "ext": "mp4",
+                            "resolution": "1080p",
+                            "vcodec": "h264",
+                            "acodec": "aac",
+                            "format_note": "Best (HD No Watermark)",
+                            "url": dl_url,
+                        }
+                    ] if dl_url else []
+                    return {
+                        "id": str(d.get("id") or ""),
+                        "title": desc,
+                        "uploader": author,
+                        "channel": author,
+                        "creator": author,
+                        "description": desc,
+                        "thumbnail": cover,
+                        "duration": duration,
+                        "duration_string": f"{duration}s" if duration else None,
+                        "view_count": d.get("play_count"),
+                        "like_count": d.get("digg_count"),
+                        "formats": formats,
+                        "webpage_url": clean_url,
+                        "extractor": "tiktok",
+                        "extractor_key": "TikTok",
+                        "_fallback_download_url": dl_url,
+                    }
+        except Exception as e:
+            LOGGER.debug("TikWM fallback inspect failed: %s", e)
+
+        # 2. TikMate lookup
+        try:
+            import urllib.request
+            import urllib.parse
+            import json as _json
+            import html as _html
             data = urllib.parse.urlencode({"url": clean_url}).encode()
             req = urllib.request.Request(
                 "https://api.tikmate.app/api/lookup",
                 data=data,
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
             )
-            with urllib.request.urlopen(req, timeout=8) as r:
+            with urllib.request.urlopen(req, timeout=6) as r:
                 res = _json.loads(r.read().decode("utf-8"))
                 if res.get("success"):
                     author = res.get("author_name") or res.get("author_id") or "TikTok Creator"
-                    desc = res.get("desc") or f"TikTok Video by {author}"
+                    raw_title = res.get("desc") or f"TikTok Video by {author}"
+                    desc = _html.unescape(raw_title)
                     cover = res.get("cover") or res.get("dynamic_cover")
                     token = res.get("token")
                     vid_id = str(res.get("id") or "")
@@ -208,56 +263,66 @@ class DownloadEngine:
         except Exception as e:
             LOGGER.debug("TikMate fallback inspect failed: %s", e)
 
-        # 2. TikWM lookup
+        return None
+
+    @staticmethod
+    def _fallback_facebook_inspect(url: str) -> Optional[dict[str, Any]]:
+        clean_url = url.split("?")[0].strip()
         try:
             import urllib.request
-            import urllib.parse
-            import json as _json
-            api_url = f"https://www.tikwm.com/api/?url={urllib.parse.quote(clean_url)}"
+            import re
+            import html as _html
             req = urllib.request.Request(
-                api_url,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+                clean_url,
+                headers={
+                    "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
             )
-            with urllib.request.urlopen(req, timeout=8) as r:
-                res = _json.loads(r.read().decode("utf-8"))
-                d = res.get("data")
-                if res.get("code") == 0 and isinstance(d, dict):
-                    author = (d.get("author") or {}).get("nickname") or "TikTok Creator"
-                    desc = d.get("title") or f"TikTok Video by {author}"
-                    cover = d.get("cover")
-                    dl_url = d.get("play")
-                    duration = d.get("duration")
-                    formats = [
-                        {
-                            "format_id": "best",
-                            "ext": "mp4",
-                            "resolution": "1080p",
-                            "vcodec": "h264",
-                            "acodec": "aac",
-                            "format_note": "Best (HD No Watermark)",
-                            "url": dl_url,
-                        }
-                    ] if dl_url else []
+            with urllib.request.urlopen(req, timeout=6) as r:
+                raw = r.read().decode("utf-8", errors="ignore")
+                title_m = re.search(r'property="og:title"\s+content="([^"]+)"', raw)
+                desc_m = re.search(r'property="og:description"\s+content="([^"]+)"', raw)
+                img_m = re.search(r'property="og:image"\s+content="([^"]+)"', raw)
+                if title_m or img_m:
+                    title = _html.unescape(title_m.group(1)) if title_m else "Facebook Video"
+                    desc = _html.unescape(desc_m.group(1)) if desc_m else ""
+                    cover = _html.unescape(img_m.group(1)) if img_m else None
+                    author = "Facebook Creator"
+                    if "|" in title:
+                        parts = title.split("|")
+                        last_p = parts[-1].strip()
+                        if last_p and len(last_p) < 60:
+                            author = last_p
                     return {
-                        "id": str(d.get("id") or ""),
-                        "title": desc,
+                        "id": clean_url.rstrip("/").split("/")[-1],
+                        "title": title,
                         "uploader": author,
                         "channel": author,
                         "creator": author,
                         "description": desc,
                         "thumbnail": cover,
-                        "duration": duration,
-                        "duration_string": f"{duration}s" if duration else None,
-                        "view_count": d.get("play_count"),
-                        "like_count": d.get("digg_count"),
-                        "formats": formats,
+                        "duration": None,
+                        "duration_string": None,
+                        "view_count": None,
+                        "formats": [
+                            {
+                                "format_id": "best",
+                                "ext": "mp4",
+                                "resolution": "1080p",
+                                "vcodec": "h264",
+                                "acodec": "aac",
+                                "format_note": "Best (HD)",
+                            }
+                        ],
                         "webpage_url": clean_url,
-                        "extractor": "tiktok",
-                        "extractor_key": "TikTok",
-                        "_fallback_download_url": dl_url,
+                        "extractor": "facebook",
+                        "extractor_key": "Facebook",
                     }
         except Exception as e:
-            LOGGER.debug("TikWM fallback inspect failed: %s", e)
+            LOGGER.debug("Facebook OpenGraph fallback inspect failed: %s", e)
+        return None
 
         return None
 

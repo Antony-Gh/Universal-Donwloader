@@ -1953,6 +1953,35 @@ def main(argv: Optional[list[str]] = None) -> int:
                             print(f"Thumbnail: {payload['thumbnail']}")
                         return 0
 
+                # Fallback for Facebook URLs if primary engine encounters network/blocking/login issues
+                if target.platform == Platform.FACEBOOK or "facebook.com" in target.normalized_url.lower() or "fb.watch" in target.normalized_url.lower():
+                    fb_info = DownloadEngine._fallback_facebook_inspect(target.normalized_url)
+                    if fb_info:
+                        payload = {
+                            "url": target.normalized_url,
+                            "platform": "facebook",
+                            "title": fb_info.get("title") or "Facebook Video",
+                            "uploader": fb_info.get("uploader") or "Facebook Creator",
+                            "duration": fb_info.get("duration"),
+                            "duration_string": fb_info.get("duration_string"),
+                            "thumbnail": fb_info.get("thumbnail"),
+                            "description": fb_info.get("description") or "",
+                            "view_count": fb_info.get("view_count"),
+                            "is_playlist": False,
+                            "playlist_count": 0,
+                            "qualities": ["Best (HD)", "Audio Only (MP3)"],
+                            "codecs": ["h264"],
+                            "is_profile": False,
+                            "entries": [],
+                        }
+                        if config.json_output or config.json_stream:
+                            print(json.dumps(payload, indent=2))
+                        else:
+                            print(f"Title:     {payload['title']}")
+                            print(f"Uploader:  {payload['uploader']}")
+                            print(f"Thumbnail: {payload['thumbnail']}")
+                        return 0
+
                 if config.json_output or config.json_stream:
                     print(json.dumps({"success": False, "error": str(exc)}))
                 else:

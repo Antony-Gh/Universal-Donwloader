@@ -1618,8 +1618,10 @@ public partial class MainWindow : Window
                         ? parsedUri.Segments.LastOrDefault()?.Trim('/')
                         : null;
                     if (VideoTitleLabel.Text == "Fetching media details..." ||
-                        VideoTitleLabel.Text.StartsWith("TikTok Video by") ||
-                        (!string.IsNullOrWhiteSpace(lastSegment) && VideoTitleLabel.Text == lastSegment))
+                        VideoTitleLabel.Text?.StartsWith("TikTok Video by") == true ||
+                        VideoTitleLabel.Text?.StartsWith("Facebook Video by") == true ||
+                        (!string.IsNullOrWhiteSpace(lastSegment) && VideoTitleLabel.Text == lastSegment) ||
+                        (parsedUri != null && VideoTitleLabel.Text == parsedUri.Host))
                     {
                         VideoTitleLabel.Text = inspection.Title;
                         if (!string.IsNullOrWhiteSpace(inspection.Uploader)) UploaderLabel.Text = inspection.Uploader;
@@ -2009,7 +2011,17 @@ public partial class MainWindow : Window
 
             if (meta == null && (uri.Host.Contains("tiktok.com", StringComparison.OrdinalIgnoreCase) || rawUrl.Contains("tiktok.com", StringComparison.OrdinalIgnoreCase)))
             {
-                meta = await DownloaderClient.FetchTikTokMetadataDirectAsync(rawUrl, token);
+                meta = await DownloaderClient.FetchTikTokMetadataDirectAsync(DownloaderClient.CleanMediaUrl(rawUrl), token);
+                if (token.IsCancellationRequested) return;
+            }
+            if (meta == null && (uri.Host.Contains("facebook.com", StringComparison.OrdinalIgnoreCase) || rawUrl.Contains("facebook.com", StringComparison.OrdinalIgnoreCase) || uri.Host.Contains("fb.watch", StringComparison.OrdinalIgnoreCase)))
+            {
+                meta = await DownloaderClient.FetchFacebookMetadataDirectAsync(DownloaderClient.CleanMediaUrl(rawUrl), token);
+                if (token.IsCancellationRequested) return;
+            }
+            if (meta == null)
+            {
+                meta = await DownloaderClient.FetchOpenGraphMetadataDirectAsync(DownloaderClient.CleanMediaUrl(rawUrl), token);
                 if (token.IsCancellationRequested) return;
             }
 
@@ -2156,6 +2168,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        thumbnailUrl = System.Net.WebUtility.HtmlDecode(thumbnailUrl).Trim();
+
         // 1. Try direct fetch
         try
         {
@@ -2164,6 +2178,10 @@ public partial class MainWindow : Window
             {
                 request.Headers.Referrer = new Uri("https://www.tiktok.com/");
             }
+            else if (thumbnailUrl.Contains("fbcdn", StringComparison.OrdinalIgnoreCase) || thumbnailUrl.Contains("facebook", StringComparison.OrdinalIgnoreCase))
+            {
+                request.Headers.Referrer = new Uri("https://www.facebook.com/");
+            }
 
             using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
             if (response.IsSuccessStatusCode)
@@ -2171,19 +2189,19 @@ public partial class MainWindow : Window
                 var bytes = await response.Content.ReadAsByteArrayAsync(token);
                 if (!token.IsCancellationRequested && bytes != null && bytes.Length > 0)
                 {
-                    try
+                    bool loaded = false;
+                    await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        using var ms = new MemoryStream(bytes);
-                        ms.Position = 0;
-                        var bmp = new Bitmap(ms);
-                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        try
                         {
-                            ThumbnailImage.Source = bmp;
+                            using var ms = new MemoryStream(bytes);
+                            ThumbnailImage.Source = new Bitmap(ms);
                             ThumbnailSpinner.IsVisible = false;
-                        });
-                        return;
-                    }
-                    catch { }
+                            loaded = true;
+                        }
+                        catch { }
+                    });
+                    if (loaded) return;
                 }
             }
         }
@@ -2200,19 +2218,19 @@ public partial class MainWindow : Window
                 var fallbackBytes = await fallbackResp.Content.ReadAsByteArrayAsync(token);
                 if (!token.IsCancellationRequested && fallbackBytes != null && fallbackBytes.Length > 0)
                 {
-                    try
+                    bool loaded = false;
+                    await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        using var ms = new MemoryStream(fallbackBytes);
-                        ms.Position = 0;
-                        var bmp = new Bitmap(ms);
-                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        try
                         {
-                            ThumbnailImage.Source = bmp;
+                            using var ms = new MemoryStream(fallbackBytes);
+                            ThumbnailImage.Source = new Bitmap(ms);
                             ThumbnailSpinner.IsVisible = false;
-                        });
-                        return;
-                    }
-                    catch { }
+                            loaded = true;
+                        }
+                        catch { }
+                    });
+                    if (loaded) return;
                 }
             }
         }
