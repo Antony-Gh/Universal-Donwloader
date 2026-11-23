@@ -477,13 +477,7 @@
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Select the desired video resolution or audio extraction. 'Best Available' automatically chooses the highest quality stream provided by the source platform."/>
                                         </StackPanel>
-                                        <ComboBox x:Name="QualityComboBox" SelectedIndex="0" HorizontalAlignment="Stretch">
-                                            <ComboBoxItem Content="Best Available (Max)"/>
-                                            <ComboBoxItem Content="1080p Full HD"/>
-                                            <ComboBoxItem Content="720p HD"/>
-                                            <ComboBoxItem Content="480p SD"/>
-                                            <ComboBoxItem Content="Audio Only (MP3)"/>
-                                        </ComboBox>
+                                        <ComboBox x:Name="QualityComboBox" SelectedIndex="0" HorizontalAlignment="Stretch"/>
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="1" Margin="0,0,10,0" Spacing="6">
@@ -492,12 +486,7 @@
                                             <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                       ToolTip.Tip="Preferred video compression codec:&#x0a;• Default (Auto): Source default stream.&#x0a;• H.264 / AVC1: Maximum compatibility with TVs, phones, and media players.&#x0a;• VP9: Efficient Google/YouTube codec for 2K/4K resolution.&#x0a;• AV1: Next-generation ultra-efficient compression."/>
                                         </StackPanel>
-                                        <ComboBox x:Name="CodecComboBox" SelectedIndex="0" HorizontalAlignment="Stretch">
-                                            <ComboBoxItem Content="Default (Auto)"/>
-                                            <ComboBoxItem Content="H.264 / AVC1 (Universal)"/>
-                                            <ComboBoxItem Content="VP9 (High Quality)"/>
-                                            <ComboBoxItem Content="AV1 (Ultra Compressed)"/>
-                                        </ComboBox>
+                                        <ComboBox x:Name="CodecComboBox" SelectedIndex="0" HorizontalAlignment="Stretch"/>
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="2" Spacing="6">

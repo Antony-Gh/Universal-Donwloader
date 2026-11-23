@@ -77,6 +77,12 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        QualityComboBox.ItemsSource = new List<string> { "Best Available (Max)", "1080p Full HD", "720p HD", "480p SD", "Audio Only (MP3)" };
+        QualityComboBox.SelectedIndex = 0;
+
+        CodecComboBox.ItemsSource = new List<string> { "Default (Auto)", "H.264 / AVC1 (Universal)", "VP9 (High Quality)", "AV1 (Ultra Compressed)" };
+        CodecComboBox.SelectedIndex = 0;
+
         AppVersionBadge.Text = $"v{UpdateChecker.GetCurrentVersion()}";
         LoadUserSettings();
         QuickLogListBox.ItemsSource = _quickLogs;
@@ -1155,6 +1161,7 @@ public partial class MainWindow : Window
             items.AddRange(new[] { "1080p Full HD", "720p HD", "480p SD" });
         }
         items.Add("Audio Only (MP3)");
+        QualityComboBox.ItemsSource = null;
         QualityComboBox.ItemsSource = items;
         QualityComboBox.SelectedIndex = 0;
     }
@@ -1175,6 +1182,7 @@ public partial class MainWindow : Window
         {
             items.AddRange(new[] { "H.264 / AVC1 (Universal)", "VP9 (High Quality)", "AV1 (Ultra Compressed)" });
         }
+        CodecComboBox.ItemsSource = null;
         CodecComboBox.ItemsSource = items;
         CodecComboBox.SelectedIndex = 0;
     }
