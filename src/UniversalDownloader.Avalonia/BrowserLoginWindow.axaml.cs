@@ -37,8 +37,12 @@ public partial class BrowserLoginWindow : Window
         }
     }
 
-    public BrowserLoginWindow(string? initialUrlOrDomain) : this()
+    public BrowserLoginWindow(string? initialUrlOrDomain, string? languageCode = null) : this()
     {
+        if (languageCode == "ar")
+        {
+            FlowDirection = global::Avalonia.Media.FlowDirection.RightToLeft;
+        }
         if (!string.IsNullOrWhiteSpace(initialUrlOrDomain))
         {
             var lowered = initialUrlOrDomain.ToLowerInvariant();

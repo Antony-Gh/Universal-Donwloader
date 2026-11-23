@@ -9,7 +9,20 @@ Core implementation has been structured into the `universal_downloader` package.
 
 from __future__ import annotations
 
+import os
 import sys
+
+try:
+    import certifi
+    ca_file = certifi.where()
+    if ca_file and os.path.exists(ca_file):
+        os.environ.setdefault("SSL_CERT_FILE", ca_file)
+        os.environ.setdefault("REQUESTS_CA_BUNDLE", ca_file)
+        os.environ.setdefault("CURL_CA_BUNDLE", ca_file)
+        import ssl
+        ssl._create_default_https_context = lambda: ssl.create_default_context(cafile=ca_file)
+except Exception:
+    pass
 
 from universal_downloader import __app_name__ as APP_NAME, __version__ as APP_VERSION
 from universal_downloader.batch import print_batch_summary, read_batch_file, run_batch

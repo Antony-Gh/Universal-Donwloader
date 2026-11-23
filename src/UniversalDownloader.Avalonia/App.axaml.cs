@@ -99,9 +99,16 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && desktop.MainWindow != null)
         {
-            desktop.MainWindow.Show();
-            desktop.MainWindow.WindowState = WindowState.Normal;
-            desktop.MainWindow.Activate();
+            if (desktop.MainWindow is MainWindow mw)
+            {
+                mw.RestoreAndActivateWindow();
+            }
+            else
+            {
+                desktop.MainWindow.Show();
+                desktop.MainWindow.WindowState = WindowState.Normal;
+                desktop.MainWindow.Activate();
+            }
         }
     }
 }

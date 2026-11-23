@@ -302,12 +302,12 @@ public class DownloaderClient
         if (IsTikTokUrl(cleanUrl))
         {
             var direct = await FetchTikTokMetadataDirectAsync(cleanUrl, cancellationToken);
-            if (direct != null) return direct;
+            if (direct != null && !string.IsNullOrWhiteSpace(direct.Title)) return direct;
         }
         if (IsFacebookUrl(cleanUrl))
         {
             var direct = await FetchFacebookMetadataDirectAsync(cleanUrl, cancellationToken);
-            if (direct != null) return direct;
+            if (direct != null && !string.IsNullOrWhiteSpace(direct.Title)) return direct;
         }
 
         // Universal OpenGraph fallback for any media URL
@@ -317,7 +317,7 @@ public class DownloaderClient
             return ogDirect;
         }
 
-        return result;
+        return (result != null && !string.IsNullOrWhiteSpace(result.Title)) ? result : null;
     }
 
     public static bool IsTikTokUrl(string? url)
@@ -489,6 +489,18 @@ public class DownloaderClient
                     var cleanTitle = System.Net.WebUtility.HtmlDecode(rawTitle);
                     var cleanDesc = System.Net.WebUtility.HtmlDecode(rawDesc);
                     var cleanImage = System.Net.WebUtility.HtmlDecode(rawImage);
+
+                    if (cleanTitle.StartsWith("Log in", StringComparison.OrdinalIgnoreCase) ||
+                        cleanTitle.StartsWith("Sign up", StringComparison.OrdinalIgnoreCase) ||
+                        cleanTitle.StartsWith("Login", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cleanTitle = string.Empty;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(cleanTitle) && string.IsNullOrWhiteSpace(cleanImage))
+                    {
+                        return null;
+                    }
 
                     string author = "Facebook Creator";
                     if (cleanTitle.Contains('|'))
@@ -1334,6 +1346,14 @@ public class DownloaderClient
         {
             var curPath = psi.EnvironmentVariables.ContainsKey("PATH") ? psi.EnvironmentVariables["PATH"] : Environment.GetEnvironmentVariable("PATH") ?? "";
             psi.EnvironmentVariables["PATH"] = $"{localBin}{Path.PathSeparator}{curPath}";
+        }
+
+        var certFile = Environment.GetEnvironmentVariable("SSL_CERT_FILE") ?? Environment.GetEnvironmentVariable("REQUESTS_CA_BUNDLE");
+        if (!string.IsNullOrWhiteSpace(certFile) && File.Exists(certFile))
+        {
+            psi.EnvironmentVariables["SSL_CERT_FILE"] = certFile;
+            psi.EnvironmentVariables["REQUESTS_CA_BUNDLE"] = certFile;
+            psi.EnvironmentVariables["CURL_CA_BUNDLE"] = certFile;
         }
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };

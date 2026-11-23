@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -34,6 +35,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _queueCts;
     private CancellationTokenSource? _playlistQualityCts;
     private CancellationTokenSource? _streamPreviewCts;
+    private CancellationTokenSource? _ipcServerCts;
     private bool _isQueueRunning;
     private readonly DispatcherTimer _logBatchTimer;
     private readonly DispatcherTimer _clipboardTimer;
@@ -112,6 +114,7 @@ public partial class MainWindow : Window
             }
         );
         _clipboardTimer.Start();
+        StartIpcServer();
 
         _miniPlayerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _miniPlayerTimer.Tick += MiniPlayerTimer_Tick;
@@ -192,10 +195,11 @@ public partial class MainWindow : Window
                 Hide();
                 var notifTitle = Localization.Get(_settings.Language, "TrayMinimizedTitle");
                 var notifMsg = Localization.Get(_settings.Language, "TrayMinimizedNotification");
-                PlatformUtils.ShowNotification(notifTitle, notifMsg);
+                PlatformUtils.ShowNotification(notifTitle, notifMsg, action: "OPEN");
                 return;
             }
             _isExiting = true;
+            _ipcServerCts?.Cancel();
             _cts?.Cancel();
             _queueCts?.Cancel();
             _metadataCts?.Cancel();
@@ -308,13 +312,109 @@ public partial class MainWindow : Window
                 var notifTitle = Localization.Get(_settings.Language, "LinkDetectedNotificationTitle");
                 var notifMsgTemplate = Localization.Get(_settings.Language, "LinkDetectedNotificationMessage");
                 var notifMsg = string.Format(notifMsgTemplate, raw);
-                PlatformUtils.ShowNotification(notifTitle, notifMsg);
+                PlatformUtils.ShowNotification(notifTitle, notifMsg, action: $"URL {raw}");
             }
         }
         catch
         {
             // Clipboard access may fail silently when locked by another app
         }
+    }
+
+    private void StartIpcServer()
+    {
+        _ipcServerCts = new CancellationTokenSource();
+        var token = _ipcServerCts.Token;
+        _ = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    using var server = new NamedPipeServerStream(
+                        "UniversalDownloader_IPC",
+                        PipeDirection.In,
+                        NamedPipeServerStream.MaxAllowedServerInstances,
+                        PipeTransmissionMode.Byte,
+                        PipeOptions.Asynchronous);
+
+                    await server.WaitForConnectionAsync(token);
+                    using var reader = new StreamReader(server, System.Text.Encoding.UTF8);
+                    var line = await reader.ReadLineAsync(token);
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        await Dispatcher.UIThread.InvokeAsync(() => HandleIpcCommand(line.Trim()));
+                    }
+                }
+                catch (OperationCanceledException) { break; }
+                catch { await Task.Delay(500, token); }
+            }
+        }, token);
+    }
+
+    private void HandleIpcCommand(string command)
+    {
+        RestoreAndActivateWindow();
+
+        if (command.StartsWith("URL ", StringComparison.OrdinalIgnoreCase))
+        {
+            var url = command.Substring(4).Trim();
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                UrlTextBox.Text = url;
+                InspectMediaDirectly(url);
+            }
+        }
+    }
+
+    public void RestoreAndActivateWindow()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                var handle = this.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+                if (handle != IntPtr.Zero)
+                {
+                    ForceForeground(handle);
+                }
+            }
+            catch { }
+        }
+    }
+
+    private void InspectMediaDirectly(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return;
+        _metadataCts?.Cancel();
+        _metadataCts?.Dispose();
+        _metadataCts = new CancellationTokenSource();
+        _ = FetchAndDisplayMetadataAsync(url, uri, _metadataCts.Token);
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+
+    public static void ForceForeground(IntPtr hWnd)
+    {
+        const int SW_RESTORE = 9;
+        ShowWindow(hWnd, SW_RESTORE);
+        BringWindowToTop(hWnd);
+        keybd_event(0, 0, 0, 0);
+        SetForegroundWindow(hWnd);
     }
 
     [DllImport("user32.dll", SetLastError = true)]

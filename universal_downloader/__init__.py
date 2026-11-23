@@ -29,6 +29,22 @@ def _load_shared_app_config() -> dict[str, Any]:
     return {}
 
 
+def _init_ssl_certs() -> None:
+    import os
+    try:
+        import certifi
+        ca_file = certifi.where()
+        if ca_file and os.path.exists(ca_file):
+            os.environ.setdefault("SSL_CERT_FILE", ca_file)
+            os.environ.setdefault("REQUESTS_CA_BUNDLE", ca_file)
+            os.environ.setdefault("CURL_CA_BUNDLE", ca_file)
+            import ssl
+            ssl._create_default_https_context = lambda: ssl.create_default_context(cafile=ca_file)
+    except Exception:
+        pass
+
+
+_init_ssl_certs()
 APP_CONFIG: dict[str, Any] = _load_shared_app_config()
 
 __version__: str = str(APP_CONFIG.get("version_name") or "4.2.0")

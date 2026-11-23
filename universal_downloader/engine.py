@@ -155,6 +155,17 @@ class DownloadEngine:
     @staticmethod
     def _fallback_tiktok_inspect(url: str) -> Optional[dict[str, Any]]:
         clean_url = url.split("?")[0].strip()
+        import ssl
+        ssl_ctx = None
+        try:
+            import certifi
+            ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        except Exception:
+            try:
+                ssl_ctx = ssl._create_unverified_context()
+            except Exception:
+                ssl_ctx = None
+
         # 1. TikWM lookup (faster & provides direct play links)
         try:
             import urllib.request
@@ -166,7 +177,11 @@ class DownloadEngine:
                 api_url,
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
             )
-            with urllib.request.urlopen(req, timeout=5) as r:
+            try:
+                r = urllib.request.urlopen(req, timeout=5, context=ssl_ctx)
+            except Exception:
+                r = urllib.request.urlopen(req, timeout=5, context=ssl._create_unverified_context() if hasattr(ssl, "_create_unverified_context") else None)
+            with r:
                 res = _json.loads(r.read().decode("utf-8"))
                 d = res.get("data")
                 if res.get("code") == 0 and isinstance(d, dict):
@@ -220,7 +235,11 @@ class DownloadEngine:
                 data=data,
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
             )
-            with urllib.request.urlopen(req, timeout=6) as r:
+            try:
+                r = urllib.request.urlopen(req, timeout=6, context=ssl_ctx)
+            except Exception:
+                r = urllib.request.urlopen(req, timeout=6, context=ssl._create_unverified_context() if hasattr(ssl, "_create_unverified_context") else None)
+            with r:
                 res = _json.loads(r.read().decode("utf-8"))
                 if res.get("success"):
                     author = res.get("author_name") or res.get("author_id") or "TikTok Creator"
@@ -268,6 +287,17 @@ class DownloadEngine:
     @staticmethod
     def _fallback_facebook_inspect(url: str) -> Optional[dict[str, Any]]:
         clean_url = url.split("?")[0].strip()
+        import ssl
+        ssl_ctx = None
+        try:
+            import certifi
+            ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        except Exception:
+            try:
+                ssl_ctx = ssl._create_unverified_context()
+            except Exception:
+                ssl_ctx = None
+
         try:
             import urllib.request
             import re
@@ -280,15 +310,27 @@ class DownloadEngine:
                     "Accept-Language": "en-US,en;q=0.9",
                 },
             )
-            with urllib.request.urlopen(req, timeout=6) as r:
+            try:
+                r = urllib.request.urlopen(req, timeout=6, context=ssl_ctx)
+            except Exception:
+                r = urllib.request.urlopen(req, timeout=6, context=ssl._create_unverified_context() if hasattr(ssl, "_create_unverified_context") else None)
+            with r:
                 raw = r.read().decode("utf-8", errors="ignore")
                 title_m = re.search(r'property="og:title"\s+content="([^"]+)"', raw)
                 desc_m = re.search(r'property="og:description"\s+content="([^"]+)"', raw)
                 img_m = re.search(r'property="og:image"\s+content="([^"]+)"', raw)
                 if title_m or img_m:
-                    title = _html.unescape(title_m.group(1)) if title_m else "Facebook Video"
+                    title = _html.unescape(title_m.group(1)) if title_m else ""
+                    # Ignore Facebook login/error walls
+                    lowered_title = title.lower()
+                    if lowered_title.startswith("log in") or lowered_title.startswith("sign up") or lowered_title.startswith("login"):
+                        title = ""
+
                     desc = _html.unescape(desc_m.group(1)) if desc_m else ""
                     cover = _html.unescape(img_m.group(1)) if img_m else None
+                    if not title and not cover:
+                        return None
+
                     author = "Facebook Creator"
                     if "|" in title:
                         parts = title.split("|")
@@ -297,7 +339,7 @@ class DownloadEngine:
                             author = last_p
                     return {
                         "id": clean_url.rstrip("/").split("/")[-1],
-                        "title": title,
+                        "title": title or f"Facebook Video by {author}",
                         "uploader": author,
                         "channel": author,
                         "creator": author,

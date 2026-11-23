@@ -257,9 +257,9 @@
                         <!-- Media Metadata & Thumbnail Preview Card -->
                         <Border x:Name="MetadataCard" IsVisible="False" Background="#181820" CornerRadius="10" Padding="14" BorderBrush="#3B82F6" BorderThickness="1">
                             <StackPanel Spacing="10">
-                                <Grid ColumnDefinitions="Auto,*">
+                                <Grid ColumnDefinitions="Auto,16,*">
                                     <!-- Thumbnail Container -->
-                                    <Border Grid.Column="0" Width="170" Height="96" CornerRadius="8" ClipToBounds="True" Background="#090A0F" Margin="0,0,16,0" VerticalAlignment="Top">
+                                    <Border Grid.Column="0" Width="170" Height="96" CornerRadius="8" ClipToBounds="True" Background="#090A0F" VerticalAlignment="Top">
                                         <Panel>
                                             <Image x:Name="ThumbnailImage" Stretch="UniformToFill"/>
                                             <PathIcon x:Name="ThumbnailSpinner" Classes="spinner" Data="{StaticResource SpinnerIcon}" Width="26" Height="26" Foreground="#38BDF8" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False"/>
@@ -271,7 +271,7 @@
                                     </Border>
 
                                     <!-- Metadata Details -->
-                                    <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Top">
+                                    <StackPanel Grid.Column="2" Spacing="6" VerticalAlignment="Top">
                                         <!-- Platform & Status Badges -->
                                         <WrapPanel Orientation="Horizontal" Margin="0,0,0,2">
                                             <Border Background="#3B82F6" CornerRadius="4" Padding="6,2" Margin="0,0,6,3" VerticalAlignment="Center">

@@ -122,8 +122,9 @@ public static class PlatformUtils
     /// <summary>
     /// Displays a native desktop OS notification (Windows tray balloon / toast, Linux notify-send, macOS osascript).
     /// Safe to invoke from any thread; executes asynchronously without blocking the caller.
+    /// Supports an optional interactive click action dispatched via local IPC.
     /// </summary>
-    public static void ShowNotification(string title, string message)
+    public static void ShowNotification(string title, string message, string? action = null)
     {
         try
         {
@@ -131,7 +132,9 @@ public static class PlatformUtils
             {
                 var safeTitle = (title ?? "Universal Downloader").Replace("'", "''").Replace("\"", "`\"");
                 var safeMessage = (message ?? string.Empty).Replace("'", "''").Replace("\"", "`\"");
-                var script = $"Add-Type -AssemblyName System.Windows.Forms; $notify = New-Object System.Windows.Forms.NotifyIcon; $notify.Icon = [System.Drawing.SystemIcons]::Information; $notify.Visible = $true; $notify.ShowBalloonTip(4000, '{safeTitle}', '{safeMessage}', [System.Windows.Forms.ToolTipIcon]::Info); Start-Sleep -Milliseconds 2500; $notify.Dispose()";
+                var safeAction = (action ?? "OPEN").Replace("'", "''").Replace("\"", "`\"");
+
+                var script = $"Add-Type -AssemblyName System.Windows.Forms; $notify = New-Object System.Windows.Forms.NotifyIcon; $notify.Icon = [System.Drawing.SystemIcons]::Information; $notify.Visible = $true; $action = '{safeAction}'; $clicked = $false; $handler = {{ $clicked = $true; try {{ $pipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', 'UniversalDownloader_IPC', [System.IO.Pipes.PipeDirection]::Out); $pipe.Connect(1500); $sw = New-Object System.IO.StreamWriter($pipe, [System.Text.Encoding]::UTF8); $sw.WriteLine($action); $sw.Flush(); $sw.Close(); $pipe.Close() }} catch {{}} }}; Register-ObjectEvent -InputObject $notify -EventName BalloonTipClicked -Action $handler | Out-Null; Register-ObjectEvent -InputObject $notify -EventName MouseClick -Action $handler | Out-Null; Register-ObjectEvent -InputObject $notify -EventName Click -Action $handler | Out-Null; $notify.ShowBalloonTip(5000, '{safeTitle}', '{safeMessage}', [System.Windows.Forms.ToolTipIcon]::Info); $timer = [System.Diagnostics.Stopwatch]::StartNew(); while ($timer.ElapsedMilliseconds -lt 6500 -and -not $clicked) {{ [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 60 }}; $notify.Visible = $false; $notify.Dispose()";
 
                 var psi = new ProcessStartInfo("powershell", $"-NoProfile -WindowStyle Hidden -Command \"{script}\"")
                 {
