@@ -10,6 +10,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using UniversalDownloader.Core;
@@ -174,11 +175,20 @@ public partial class MainWindow : Window
         };
         Activated += async (s, e) => await CheckClipboardForMediaUrlAsync();
         KeyDown += MainWindow_KeyDown;
+        MinimizeToTrayCheck.IsCheckedChanged += (s, e) =>
+        {
+            _settings.MinimizeToTray = MinimizeToTrayCheck.IsChecked ?? true;
+            SaveUserSettings();
+        };
+
         Closing += (s, e) =>
         {
-            if (_settings.MinimizeToTray && !_isExiting)
+            var shouldMinimize = (MinimizeToTrayCheck?.IsChecked ?? true) || _settings.MinimizeToTray;
+            if (shouldMinimize && !_isExiting)
             {
                 e.Cancel = true;
+                _settings.MinimizeToTray = true;
+                SaveUserSettings();
                 Hide();
                 var notifTitle = Localization.Get(_settings.Language, "TrayMinimizedTitle");
                 var notifMsg = Localization.Get(_settings.Language, "TrayMinimizedNotification");
@@ -201,7 +211,8 @@ public partial class MainWindow : Window
 
         Closed += (s, e) =>
         {
-            if (!_settings.MinimizeToTray || _isExiting)
+            var shouldMinimize = (MinimizeToTrayCheck?.IsChecked ?? true) || _settings.MinimizeToTray;
+            if (!shouldMinimize || _isExiting)
             {
                 if (global::Avalonia.Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
                 {
@@ -238,9 +249,22 @@ public partial class MainWindow : Window
     {
         try
         {
-            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-            if (clipboard == null) return;
-            var raw = (await clipboard.GetTextAsync())?.Trim();
+            string? raw = null;
+            if (OperatingSystem.IsWindows())
+            {
+                raw = GetWindowsClipboardText();
+            }
+
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+                if (clipboard != null)
+                {
+                    raw = await clipboard.GetTextAsync();
+                }
+            }
+
+            raw = raw?.Trim();
             if (string.IsNullOrWhiteSpace(raw) || raw.Length > 1000) return;
 
             if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
@@ -277,7 +301,7 @@ public partial class MainWindow : Window
             if (!string.Equals(raw, _lastNotifiedClipboardUrl, StringComparison.OrdinalIgnoreCase))
             {
                 _lastNotifiedClipboardUrl = raw;
-                if (string.IsNullOrWhiteSpace(UrlTextBox.Text))
+                if (string.IsNullOrWhiteSpace(UrlTextBox.Text) || !IsVisible)
                 {
                     UrlTextBox.Text = raw;
                 }
@@ -290,6 +314,54 @@ public partial class MainWindow : Window
         catch
         {
             // Clipboard access may fail silently when locked by another app
+        }
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool OpenClipboard(IntPtr hWndNewOwner);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool CloseClipboard();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetClipboardData(uint uFormat);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GlobalLock(IntPtr hMem);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool GlobalUnlock(IntPtr hMem);
+
+    private static string? GetWindowsClipboardText()
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        try
+        {
+            if (!OpenClipboard(IntPtr.Zero)) return null;
+            try
+            {
+                const uint CF_UNICODETEXT = 13;
+                var hMem = GetClipboardData(CF_UNICODETEXT);
+                if (hMem == IntPtr.Zero) return null;
+                var ptr = GlobalLock(hMem);
+                if (ptr == IntPtr.Zero) return null;
+                try
+                {
+                    return Marshal.PtrToStringUni(ptr);
+                }
+                finally
+                {
+                    GlobalUnlock(hMem);
+                }
+            }
+            finally
+            {
+                CloseClipboard();
+            }
+        }
+        catch
+        {
+            return null;
         }
     }
 

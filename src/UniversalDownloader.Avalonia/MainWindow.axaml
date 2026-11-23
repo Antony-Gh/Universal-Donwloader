@@ -589,7 +589,7 @@
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                                        <CheckBox x:Name="MinimizeToTrayCheck" Content="Minimize to System Tray on Close" IsChecked="False"/>
+                                        <CheckBox x:Name="MinimizeToTrayCheck" Content="Minimize to System Tray on Close" IsChecked="True"/>
                                         <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
                                                   ToolTip.Tip="When enabled, clicking the window close button minimizes Universal Downloader to the Windows notification tray instead of exiting."/>
                                     </StackPanel>
