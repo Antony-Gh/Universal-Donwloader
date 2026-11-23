@@ -108,16 +108,31 @@ public record MediaMetadataModel
     public int PlaylistCount { get; init; }
 
     [JsonPropertyName("qualities")]
-    public List<string> Qualities { get; init; } = new();
+    public List<string> Qualities
+    {
+        get => _qualities ??= new();
+        init => _qualities = value ?? new();
+    }
+    private List<string>? _qualities;
 
     [JsonPropertyName("codecs")]
-    public List<string> Codecs { get; init; } = new();
+    public List<string> Codecs
+    {
+        get => _codecs ??= new();
+        init => _codecs = value ?? new();
+    }
+    private List<string>? _codecs;
 
     [JsonPropertyName("is_profile")]
     public bool IsProfile { get; init; }
 
     [JsonPropertyName("entries")]
-    public List<PlaylistEntryModel> Entries { get; init; } = new();
+    public List<PlaylistEntryModel> Entries
+    {
+        get => _entries ??= new();
+        init => _entries = value ?? new();
+    }
+    private List<PlaylistEntryModel>? _entries;
 
     [JsonPropertyName("profile_locked")]
     public bool ProfileLocked { get; init; }
@@ -135,7 +150,12 @@ public record MediaMetadataModel
     public bool IsVerified { get; init; }
 
     [JsonPropertyName("profile_info")]
-    public List<ProfileInfoItemModel> ProfileInfo { get; init; } = new();
+    public List<ProfileInfoItemModel> ProfileInfo
+    {
+        get => _profileInfo ??= new();
+        init => _profileInfo = value ?? new();
+    }
+    private List<ProfileInfoItemModel>? _profileInfo;
 
     public string DurationFormatted
     {

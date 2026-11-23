@@ -89,13 +89,26 @@ public record FormatInfoModel
 
 public record FormatInspectionResult
 {
-    public List<FormatInfoModel> Formats { get; init; } = new();
+    public List<FormatInfoModel> Formats
+    {
+        get => _formats ??= new();
+        init => _formats = value ?? new();
+    }
+    private List<FormatInfoModel>? _formats;
+
     public bool ProfileLocked { get; init; }
     public string? ProfileNotice { get; init; }
     public string? ProfileId { get; init; }
     public string? Bio { get; init; }
     public bool IsVerified { get; init; }
-    public List<ProfileInfoItemModel> ProfileInfo { get; init; } = new();
+
+    public List<ProfileInfoItemModel> ProfileInfo
+    {
+        get => _profileInfo ??= new();
+        init => _profileInfo = value ?? new();
+    }
+    private List<ProfileInfoItemModel>? _profileInfo;
+
     public string? Title { get; init; }
     public string? Uploader { get; init; }
     public string? Thumbnail { get; init; }

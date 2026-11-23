@@ -1617,37 +1617,39 @@ public partial class MainWindow : Window
                     var lastSegment = Uri.TryCreate(url, UriKind.Absolute, out var parsedUri) && parsedUri != null
                         ? parsedUri.Segments.LastOrDefault()?.Trim('/')
                         : null;
-                    if (VideoTitleLabel.Text == "Fetching media details..." ||
-                        VideoTitleLabel.Text?.StartsWith("TikTok Video by") == true ||
-                        VideoTitleLabel.Text?.StartsWith("Facebook Video by") == true ||
-                        (!string.IsNullOrWhiteSpace(lastSegment) && VideoTitleLabel.Text == lastSegment) ||
-                        (parsedUri != null && VideoTitleLabel.Text == parsedUri.Host))
+                    var currentTitle = VideoTitleLabel?.Text;
+                    if (currentTitle == "Fetching media details..." ||
+                        currentTitle?.StartsWith("TikTok Video by") == true ||
+                        currentTitle?.StartsWith("Facebook Video by") == true ||
+                        (!string.IsNullOrWhiteSpace(lastSegment) && currentTitle == lastSegment) ||
+                        (parsedUri != null && currentTitle == parsedUri.Host))
                     {
-                        VideoTitleLabel.Text = inspection.Title;
-                        if (!string.IsNullOrWhiteSpace(inspection.Uploader)) UploaderLabel.Text = inspection.Uploader;
+                        if (VideoTitleLabel != null) VideoTitleLabel.Text = inspection.Title;
+                        if (!string.IsNullOrWhiteSpace(inspection.Uploader) && UploaderLabel != null) UploaderLabel.Text = inspection.Uploader;
                         if (!string.IsNullOrWhiteSpace(inspection.Thumbnail)) _ = LoadThumbnailAsync(inspection.Thumbnail, previewToken);
                         if (!string.IsNullOrWhiteSpace(inspection.DurationFormatted))
                         {
-                            DurationLabel.Text = inspection.DurationFormatted;
-                            DurationBadge.IsVisible = true;
+                            if (DurationLabel != null) DurationLabel.Text = inspection.DurationFormatted;
+                            if (DurationBadge != null) DurationBadge.IsVisible = true;
                         }
                         if (!string.IsNullOrWhiteSpace(inspection.ViewCountFormatted))
                         {
-                            ViewsLabel.Text = inspection.ViewCountFormatted;
-                            ViewsContainer.IsVisible = true;
+                            if (ViewsLabel != null) ViewsLabel.Text = inspection.ViewCountFormatted;
+                            if (ViewsContainer != null) ViewsContainer.IsVisible = true;
                         }
                     }
                 }
 
-                if (isImageList || !string.IsNullOrWhiteSpace(inspection.ProfileId) || inspection.ProfileInfo.Count > 0 || inspection.ProfileLocked)
+                var profileInfo = inspection.ProfileInfo ?? new List<ProfileInfoItemModel>();
+                if (isImageList || !string.IsNullOrWhiteSpace(inspection.ProfileId) || profileInfo.Count > 0 || inspection.ProfileLocked)
                 {
                     ApplyProfileMetadataToCard(
                         inspection.ProfileId ?? _currentProfileId,
                         inspection.Bio ?? _currentProfileBio,
                         inspection.IsVerified,
                         inspection.ProfileLocked,
-                        PlatformBadge.Text,
-                        inspection.ProfileInfo.Count > 0 ? inspection.ProfileInfo : null);
+                        PlatformBadge?.Text,
+                        profileInfo.Count > 0 ? profileInfo : null);
                 }
                 var syncedQualities = isImageList
                     ? formats.Where(f => !string.IsNullOrWhiteSpace(f.Resolution)).Select(f => f.Resolution).Distinct().ToList()
@@ -2025,20 +2027,24 @@ public partial class MainWindow : Window
                 if (token.IsCancellationRequested) return;
             }
 
-            if (meta != null && meta.IsPlaylist && meta.Entries.Count > 0)
+            var entries = meta?.Entries ?? new List<PlaylistEntryModel>();
+            if (meta != null && meta.IsPlaylist && entries.Count > 0)
             {
                 DownloadOptionsCard.IsVisible = true;
                 DisplayPlaylistCards(meta, uri, cookiesBrowser, cookiesFile);
-                GlobalStatusText.Text = $"Loaded playlist ({meta.Entries.Count} videos): {meta.Title}";
+                GlobalStatusText.Text = $"Loaded playlist ({entries.Count} videos): {meta.Title}";
             }
             else if (meta != null && !string.IsNullOrWhiteSpace(meta.Title))
             {
-                bool isProfile = IsProfileUrl(rawUrl) || meta.IsProfile || !string.IsNullOrWhiteSpace(meta.ProfileId) || meta.ProfileInfo.Count > 0 || meta.ProfileLocked || (meta.Qualities.Count > 0 && meta.Qualities.All(q => q.Contains("x")));
+                var profileInfo = meta.ProfileInfo ?? new List<ProfileInfoItemModel>();
+                var qualities = meta.Qualities ?? new List<string>();
+                var codecs = meta.Codecs ?? new List<string>();
+                bool isProfile = IsProfileUrl(rawUrl) || meta.IsProfile || !string.IsNullOrWhiteSpace(meta.ProfileId) || profileInfo.Count > 0 || meta.ProfileLocked || (qualities.Count > 0 && qualities.All(q => q != null && q.Contains("x")));
                 DownloadOptionsCard.IsVisible = !isProfile;
                 if (!isProfile)
                 {
-                    PopulateSupportedQualities(meta.Qualities);
-                    PopulateSupportedCodecs(meta.Codecs);
+                    PopulateSupportedQualities(qualities);
+                    PopulateSupportedCodecs(codecs);
                 }
 
                 MetadataLoadingText.IsVisible = false;
@@ -2057,7 +2063,7 @@ public partial class MainWindow : Window
                     meta.IsVerified,
                     meta.ProfileLocked,
                     meta.Platform,
-                    meta.ProfileInfo);
+                    profileInfo);
 
                 if (!string.IsNullOrWhiteSpace(meta.DurationFormatted))
                 {
@@ -2069,12 +2075,12 @@ public partial class MainWindow : Window
                     DurationBadge.IsVisible = false;
                 }
 
-                ViewsLabel.Text = meta.ViewCountFormatted;
+                ViewsLabel.Text = meta.ViewCountFormatted ?? "";
                 ViewsContainer.IsVisible = !string.IsNullOrWhiteSpace(meta.ViewCountFormatted);
 
-                if (meta.Qualities.Count > 0)
+                if (qualities.Count > 0)
                 {
-                    SingleVideoQualitiesItems.ItemsSource = meta.Qualities;
+                    SingleVideoQualitiesItems.ItemsSource = qualities;
                     SingleVideoQualitiesPanel.IsVisible = true;
                 }
 
@@ -2432,16 +2438,17 @@ public partial class MainWindow : Window
         PlaylistPlatformBadge.Text = !string.IsNullOrWhiteSpace(meta.Platform)
             ? $"{meta.Platform.ToUpperInvariant()} PLAYLIST"
             : "PLAYLIST";
-        PlaylistCountBadge.Text = meta.Entries.Count == 1 ? "1 video" : $"{meta.Entries.Count} videos";
+        var entries = meta.Entries ?? new List<PlaylistEntryModel>();
+        PlaylistCountBadge.Text = entries.Count == 1 ? "1 video" : $"{entries.Count} videos";
         PlaylistTitleLabel.Text = meta.Title;
         PlaylistUploaderLabel.Text = !string.IsNullOrWhiteSpace(meta.Uploader) ? meta.Uploader : uri.Host;
 
         var autoInspectCards = new List<PlaylistVideoCardModel>();
         var manualCards = 0;
 
-        for (int i = 0; i < meta.Entries.Count; i++)
+        for (int i = 0; i < entries.Count; i++)
         {
-            var card = PlaylistVideoCardModel.FromEntry(meta.Entries[i]);
+            var card = PlaylistVideoCardModel.FromEntry(entries[i]);
             if (!card.HasQualities)
             {
                 if (autoInspectCards.Count < AutoInspectPlaylistQualityLimit)
