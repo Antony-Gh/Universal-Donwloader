@@ -23,6 +23,50 @@ VIDEO_FORMATS = {"mp4", "mkv", "mov", "webm"}
 SUPPORTED_FORMATS = AUDIO_FORMATS | VIDEO_FORMATS
 
 
+_GPU_ENCODERS_CACHE: Optional[dict[str, str]] = None
+
+
+def detect_gpu_video_encoders(ffmpeg_bin: Optional[Path] = None) -> dict[str, str]:
+    """Probe FFmpeg for available GPU/hardware-accelerated video encoders.
+
+    Returns mapping such as {'h264': 'h264_nvenc', 'hevc': 'hevc_nvenc'}.
+    Supports NVENC (NVIDIA), QSV (Intel), AMF (AMD), and VideoToolbox (Apple).
+    """
+    global _GPU_ENCODERS_CACHE
+    if _GPU_ENCODERS_CACHE is not None:
+        return _GPU_ENCODERS_CACHE
+
+    bin_path = ffmpeg_bin or find_ffmpeg() or ensure_ffmpeg(auto_download=False)
+    if not bin_path:
+        return {}
+
+    detected: dict[str, str] = {}
+    try:
+        proc = subprocess.run(
+            [str(bin_path), "-hide_banner", "-encoders"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        output = (proc.stdout or "") + (proc.stderr or "")
+
+        for enc in ("h264_nvenc", "h264_qsv", "h264_amf", "h264_videotoolbox"):
+            if enc in output:
+                detected["h264"] = enc
+                break
+
+        for enc in ("hevc_nvenc", "hevc_qsv", "hevc_amf", "hevc_videotoolbox"):
+            if enc in output:
+                detected["hevc"] = enc
+                break
+    except Exception as exc:
+        LOGGER.debug("GPU encoder detection error: %s", exc)
+
+    _GPU_ENCODERS_CACHE = detected
+    return detected
+
+
 def build_ffmpeg_convert_cmd(
     ffmpeg_bin: Path,
     input_path: Path,
@@ -32,6 +76,7 @@ def build_ffmpeg_convert_cmd(
     audio_quality: str = "192k",
     remux_only: bool = False,
     normalize_audio: bool = False,
+    gpu_transcode: bool = False,
 ) -> list[str]:
     """Build a safe argv list for FFmpeg conversion or lossless container remuxing."""
     fmt = (target_format or "").strip().lower().lstrip(".")
@@ -74,7 +119,18 @@ def build_ffmpeg_convert_cmd(
             if normalize_audio:
                 cmd.extend(["-af", "loudnorm=I=-14:TP=-1.5:LRA=11"])
         else:
-            cmd.extend(["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac", "-b:a", audio_quality])
+            gpu_enc = detect_gpu_video_encoders(ffmpeg_bin).get("h264") if gpu_transcode else None
+            if gpu_enc == "h264_nvenc":
+                cmd.extend(["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "20", "-c:a", "aac", "-b:a", audio_quality])
+            elif gpu_enc == "h264_qsv":
+                cmd.extend(["-c:v", "h264_qsv", "-global_quality", "20", "-c:a", "aac", "-b:a", audio_quality])
+            elif gpu_enc == "h264_amf":
+                cmd.extend(["-c:v", "h264_amf", "-rc", "cqp", "-qp_p", "20", "-c:a", "aac", "-b:a", audio_quality])
+            elif gpu_enc == "h264_videotoolbox":
+                cmd.extend(["-c:v", "h264_videotoolbox", "-q:v", "60", "-c:a", "aac", "-b:a", audio_quality])
+            else:
+                cmd.extend(["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac", "-b:a", audio_quality])
+
             if normalize_audio:
                 cmd.extend(["-af", "loudnorm=I=-14:TP=-1.5:LRA=11"])
 
@@ -93,6 +149,7 @@ def convert_media_file(
     audio_quality: str = "192k",
     remux_only: bool = False,
     normalize_audio: bool = False,
+    gpu_transcode: bool = False,
     ffmpeg_path: Optional[Path] = None,
 ) -> Path:
     """Convert or remux a local media file into ``target_format`` using FFmpeg."""
@@ -124,6 +181,7 @@ def convert_media_file(
         audio_quality=audio_quality,
         remux_only=remux_only,
         normalize_audio=normalize_audio,
+        gpu_transcode=gpu_transcode,
     )
     LOGGER.debug("Running FFmpeg convert command: %s", cmd)
 
@@ -136,6 +194,29 @@ def convert_media_file(
         )
     except OSError as exc:
         raise DownloadError(f"Failed to launch FFmpeg: {exc}") from exc
+
+    # If hardware-accelerated transcoding failed, retry with software encoder
+    if proc.returncode != 0 and gpu_transcode:
+        LOGGER.warning("GPU transcoding failed (exit %d), retrying with CPU software encoding", proc.returncode)
+        if output_path.exists():
+            try:
+                output_path.unlink()
+            except OSError:
+                pass
+        fallback_cmd = build_ffmpeg_convert_cmd(
+            ffmpeg_bin,
+            src,
+            output_path,
+            fmt,
+            audio_quality=audio_quality,
+            remux_only=remux_only,
+            normalize_audio=normalize_audio,
+            gpu_transcode=False,
+        )
+        try:
+            proc = subprocess.run(fallback_cmd, capture_output=True, text=True, check=False)
+        except OSError as exc:
+            raise DownloadError(f"Failed to launch FFmpeg fallback: {exc}") from exc
 
     if proc.returncode != 0:
         err_detail = (proc.stderr or proc.stdout or "").strip() or f"FFmpeg exited with code {proc.returncode}"

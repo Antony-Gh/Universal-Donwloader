@@ -34,6 +34,11 @@ def test_build_ffmpeg_convert_cmd_audio_and_video(tmp_path: Path) -> None:
     assert "libvpx-vp9" in cmd_webm
     assert "libopus" in cmd_webm
 
+    with patch("universal_downloader.converter.detect_gpu_video_encoders", return_value={"h264": "h264_nvenc"}):
+        cmd_gpu = build_ffmpeg_convert_cmd(ffmpeg, src, out_mp4, "mp4", gpu_transcode=True)
+        assert "h264_nvenc" in cmd_gpu
+        assert "-preset" in cmd_gpu and "p4" in cmd_gpu
+
 
 def test_build_ffmpeg_convert_cmd_rejects_unknown_format(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Unsupported target format"):

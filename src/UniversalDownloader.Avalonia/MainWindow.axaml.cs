@@ -556,6 +556,7 @@ public partial class MainWindow : Window
         AppTitleText.Text = T("AppTitle");
         LanguageToggleButton.Content = T("LangToggle");
         CheckUpdatesText.Text = T("CheckUpdates");
+        UpdateEngineText.Text = T("UpdateEngine");
         QuickHudText.Text = T("QuickHud");
 
         ThemeDefaultItem.Content = T("ThemeDefault");
@@ -849,6 +850,55 @@ public partial class MainWindow : Window
     {
         CookiesFileBox.Text = string.Empty;
         SaveUserSettings();
+    }
+
+    private async void UpdateEngineButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var lang = _settings.Language;
+        UpdateEngineButton.IsEnabled = false;
+        UpdateEngineIcon.IsVisible = false;
+        UpdateEngineSpinner.IsVisible = true;
+        UpdateEngineText.Text = Localization.Get(lang, "UpdatingEngine");
+        BeginGlobalActivity(Localization.Get(lang, "UpdatingEngine"));
+
+        try
+        {
+            var progress = new Progress<double>(pct =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    GlobalStatusText.Text = $"{Localization.Get(lang, "UpdatingEngine")} {pct:F0}%";
+                });
+            });
+
+            var result = await UpdateChecker.CheckAndDownloadEngineUpdateAsync(progress);
+            if (result.Success)
+            {
+                UpdateEngineText.Text = Localization.Get(lang, "EngineUpdated");
+                GlobalStatusText.Text = result.Message;
+                OnRawOutputReceived(this, $"[Engine] {result.Message}");
+            }
+            else
+            {
+                UpdateEngineText.Text = Localization.Get(lang, "EngineUpdateFailed");
+                GlobalStatusText.Text = result.Message;
+                OnRawOutputReceived(this, $"[Engine] Error: {result.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateEngineText.Text = Localization.Get(lang, "EngineUpdateFailed");
+            GlobalStatusText.Text = ex.Message;
+            OnRawOutputReceived(this, $"[Engine] Exception: {ex.Message}");
+        }
+        finally
+        {
+            EndGlobalActivity();
+            UpdateEngineSpinner.IsVisible = false;
+            UpdateEngineIcon.IsVisible = true;
+            UpdateEngineButton.IsEnabled = true;
+            DispatcherTimer.RunOnce(() => UpdateEngineText.Text = Localization.Get(_settings.Language, "UpdateEngine"), TimeSpan.FromSeconds(4));
+        }
     }
 
     private async void CheckUpdatesButton_Click(object? sender, RoutedEventArgs e)

@@ -12,6 +12,10 @@ public static class Localization
         // App Frame & Navigation
         ["AppTitle"] = "Universal Media Downloader",
         ["CheckUpdates"] = "Check Updates",
+        ["UpdateEngine"] = "Update Engine",
+        ["UpdatingEngine"] = "Updating Engine...",
+        ["EngineUpdated"] = "Engine updated successfully!",
+        ["EngineUpdateFailed"] = "Engine update failed",
         ["QuickHud"] = "Quick HUD",
         ["LangToggle"] = "عربي",
 
@@ -171,6 +175,10 @@ public static class Localization
         // App Frame & Navigation
         ["AppTitle"] = "المحمل الشامل للوسائط",
         ["CheckUpdates"] = "التحقق من التحديثات",
+        ["UpdateEngine"] = "تحديث المحرك",
+        ["UpdatingEngine"] = "جاري تحديث المحرك...",
+        ["EngineUpdated"] = "تم تحديث المحرك بنجاح!",
+        ["EngineUpdateFailed"] = "فشل تحديث المحرك",
         ["QuickHud"] = "التحميل السريع",
         ["LangToggle"] = "EN",
 

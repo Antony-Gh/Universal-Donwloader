@@ -576,6 +576,104 @@ del "%~f0"
         return null;
     }
 
+    /// <summary>
+    /// Checks for and downloads the latest standalone yt-dlp binary into %LOCALAPPDATA%\UniversalDownloader\bin.
+    /// Works across Windows, macOS, and Linux without requiring Python or pip.
+    /// </summary>
+    public static async Task<(bool Success, string Message, string Version)> CheckAndDownloadEngineUpdateAsync(
+        IProgress<double>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var localAppDataDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "UniversalDownloader",
+            "bin"
+        );
+        Directory.CreateDirectory(localAppDataDir);
+
+        string assetName;
+        string targetExeName;
+        if (PlatformUtils.IsWindows)
+        {
+            assetName = "yt-dlp.exe";
+            targetExeName = "yt-dlp.exe";
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            assetName = "yt-dlp_macos";
+            targetExeName = "yt-dlp";
+        }
+        else
+        {
+            assetName = "yt-dlp_linux";
+            targetExeName = "yt-dlp";
+        }
+
+        var downloadUrl = $"https://github.com/yt-dlp/yt-dlp/releases/latest/download/{assetName}";
+        var finalPath = Path.Combine(localAppDataDir, targetExeName);
+        var tempPath = Path.Combine(localAppDataDir, $"{targetExeName}.tmp_{Guid.NewGuid():N}");
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
+            req.Headers.Add("User-Agent", $"UniversalDownloader/{GetCurrentVersion()}");
+            using var resp = await DownloadHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            resp.EnsureSuccessStatusCode();
+
+            var totalBytes = resp.Content.Headers.ContentLength ?? 0;
+            await using (var remoteStream = await resp.Content.ReadAsStreamAsync(cancellationToken))
+            await using (var localStream = File.Create(tempPath))
+            {
+                var buffer = new byte[81920];
+                long totalRead = 0;
+                int read;
+                while ((read = await remoteStream.ReadAsync(buffer, cancellationToken)) > 0)
+                {
+                    await localStream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                    totalRead += read;
+                    if (totalBytes > 0)
+                    {
+                        progress?.Report(Math.Clamp(totalRead * 100.0 / totalBytes, 0, 100));
+                    }
+                }
+            }
+
+            if (File.Exists(finalPath))
+            {
+                try
+                {
+                    File.Delete(finalPath);
+                }
+                catch (IOException)
+                {
+                    var backup = finalPath + ".old";
+                    if (File.Exists(backup)) File.Delete(backup);
+                    File.Move(finalPath, backup);
+                }
+            }
+            File.Move(tempPath, finalPath);
+
+            if (!OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    File.SetUnixFileMode(finalPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                                                    UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                                                    UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                }
+                catch { }
+            }
+
+            progress?.Report(100);
+            return (true, $"Extraction engine updated successfully to {finalPath}", "latest");
+        }
+        catch (Exception ex)
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+            return (false, $"Failed to update engine: {ex.Message}", string.Empty);
+        }
+    }
+
     public static string NormalizeVersion(string raw)
     {
         var cleaned = raw.Trim().TrimStart('v', 'V');
