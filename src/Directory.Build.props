@@ -12,8 +12,8 @@
     <ShowTelemetryInfo Condition="'$(_AppConfigText)' != ''">$([System.Text.RegularExpressions.Regex]::Match('$(_AppConfigText)', '"show_telemetry_info"\s*:\s*(true|false)').Groups[1].Value)</ShowTelemetryInfo>
 
     <!-- Fallback defaults -->
-    <Version Condition="'$(Version)' == ''">4.2.0</Version>
-    <AppVersionCode Condition="'$(AppVersionCode)' == ''">420</AppVersionCode>
+    <Version Condition="'$(Version)' == ''">4.3.0</Version>
+    <AppVersionCode Condition="'$(AppVersionCode)' == ''">430</AppVersionCode>
     <AppDisplayName Condition="'$(AppDisplayName)' == ''">Universal Media Downloader</AppDisplayName>
     <GitHubOwner Condition="'$(GitHubOwner)' == ''">Antony-Gh</GitHubOwner>
     <GitHubRepo Condition="'$(GitHubRepo)' == ''">Universal-Donwloader</GitHubRepo>

@@ -47,8 +47,8 @@ def _init_ssl_certs() -> None:
 _init_ssl_certs()
 APP_CONFIG: dict[str, Any] = _load_shared_app_config()
 
-__version__: str = str(APP_CONFIG.get("version_name") or "4.2.0")
-__version_code__: int = int(APP_CONFIG.get("version_code") or 420)
+__version__: str = str(APP_CONFIG.get("version_name") or "4.3.0")
+__version_code__: int = int(APP_CONFIG.get("version_code") or 430)
 __app_name__: str = str(APP_CONFIG.get("app_name") or "Universal Media Downloader")
 __github_owner__: str = str(APP_CONFIG.get("github_owner") or "Antony-Gh")
 __github_repo__: str = str(APP_CONFIG.get("github_repo") or "Universal-Donwloader")
