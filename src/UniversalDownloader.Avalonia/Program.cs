@@ -34,6 +34,23 @@ sealed class Program
             .StartWithClassicDesktopLifetime(args);
     }
 
+    public static string NormalizeArgumentUrl(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        var trimmed = raw.Trim();
+        if (trimmed.StartsWith("udloader://", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed.Substring(11).TrimStart('/');
+            try { trimmed = Uri.UnescapeDataString(trimmed); } catch { }
+        }
+        else if (trimmed.StartsWith("udloader:", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed.Substring(9).TrimStart('/');
+            try { trimmed = Uri.UnescapeDataString(trimmed); } catch { }
+        }
+        return trimmed;
+    }
+
     private static bool TryForwardToExistingInstance(string[] args)
     {
         try
@@ -41,11 +58,28 @@ sealed class Program
             using var client = new NamedPipeClientStream(".", "UniversalDownloader_IPC", PipeDirection.Out);
             client.Connect(250);
             using var writer = new StreamWriter(client, System.Text.Encoding.UTF8);
-            var payload = args != null && args.Length > 0 ? string.Join(" ", args) : "OPEN";
-            if (!payload.StartsWith("URL ", StringComparison.OrdinalIgnoreCase) && !payload.Equals("OPEN", StringComparison.OrdinalIgnoreCase))
+
+            string payload;
+            if (args != null && args.Length > 0)
             {
-                payload = $"URL {payload}";
+                var combined = string.Join(" ", args).Trim();
+                if (combined.Equals("--hud", StringComparison.OrdinalIgnoreCase) || combined.Equals("/hud", StringComparison.OrdinalIgnoreCase))
+                {
+                    payload = "HUD";
+                }
+                else
+                {
+                    var normalized = NormalizeArgumentUrl(combined);
+                    payload = string.IsNullOrWhiteSpace(normalized) || normalized.Equals("OPEN", StringComparison.OrdinalIgnoreCase)
+                        ? "OPEN"
+                        : $"URL {normalized}";
+                }
             }
+            else
+            {
+                payload = "OPEN";
+            }
+
             writer.WriteLine(payload);
             writer.Flush();
             return true;

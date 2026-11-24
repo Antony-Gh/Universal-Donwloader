@@ -449,6 +449,19 @@ RunTest("GetMetadataAsync extracts full TikTok and Facebook metadata", () =>
     }
 });
 
+RunTest("PlatformUtils.RegisterProtocolHandler registers or cleanly returns on platform", () =>
+{
+    var res = PlatformUtils.RegisterProtocolHandler("udloader_test");
+    if (PlatformUtils.IsWindows)
+    {
+        AssertTrue(res, "RegisterProtocolHandler returns true on Windows");
+    }
+    else
+    {
+        AssertTrue(!res, "RegisterProtocolHandler returns false on non-Windows");
+    }
+});
+
 
 Console.WriteLine($"\nResult: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

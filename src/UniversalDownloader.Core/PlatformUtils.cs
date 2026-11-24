@@ -531,4 +531,48 @@ public static class PlatformUtils
             return false;
         }
     }
+
+    /// <summary>
+    /// Registers a custom URI protocol handler (e.g. 'udloader://') in HKCU\Software\Classes without requiring admin rights.
+    /// Works across Windows 10/11 so browser links or desktop shortcuts automatically open Universal Downloader.
+    /// </summary>
+    public static bool RegisterProtocolHandler(string protocol = "udloader", string? executablePath = null)
+    {
+        if (!IsWindows) return false;
+
+        try
+        {
+            var exe = executablePath ?? Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe)) return false;
+
+            var rootKey = $@"HKCU\Software\Classes\{protocol}";
+            var cmdKey = $@"{rootKey}\shell\open\command";
+
+            RunRegCommand($"add \"{rootKey}\" /ve /d \"URL:Universal Downloader Protocol\" /f");
+            RunRegCommand($"add \"{rootKey}\" /v \"URL Protocol\" /d \"\" /f");
+            RunRegCommand($"add \"{cmdKey}\" /ve /d \"\\\"{exe}\\\" \\\"%1\\\"\" /f");
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void RunRegCommand(string args)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "reg.exe",
+                Arguments = args,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            };
+            using var proc = Process.Start(psi);
+            proc?.WaitForExit(2000);
+        }
+        catch { }
+    }
 }

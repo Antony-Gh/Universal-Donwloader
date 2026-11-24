@@ -195,6 +195,32 @@ public partial class MainWindow : Window
             }
             _ = PlatformUtils.SendTelemetryHeartbeatAsync(_settings);
             await CheckClipboardForMediaUrlAsync();
+
+            if (PlatformUtils.IsWindows)
+            {
+                _ = Task.Run(() => PlatformUtils.RegisterProtocolHandler("udloader"));
+            }
+
+            var cmdArgs = Environment.GetCommandLineArgs();
+            if (cmdArgs != null && cmdArgs.Length > 1)
+            {
+                for (int i = 1; i < cmdArgs.Length; i++)
+                {
+                    var arg = cmdArgs[i];
+                    if (arg.Equals("--hud", StringComparison.OrdinalIgnoreCase) || arg.Equals("/hud", StringComparison.OrdinalIgnoreCase))
+                    {
+                        OpenQuickHud();
+                        break;
+                    }
+                    var norm = Program.NormalizeArgumentUrl(arg);
+                    if (norm.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || norm.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        UrlTextBox.Text = norm;
+                        InspectMediaDirectly(norm);
+                        break;
+                    }
+                }
+            }
         };
         Activated += async (s, e) => await CheckClipboardForMediaUrlAsync();
         KeyDown += MainWindow_KeyDown;
@@ -374,11 +400,18 @@ public partial class MainWindow : Window
 
     private void HandleIpcCommand(string command)
     {
+        if (command.Equals("HUD", StringComparison.OrdinalIgnoreCase))
+        {
+            OpenQuickHud();
+            return;
+        }
+
         RestoreAndActivateWindow();
 
         if (command.StartsWith("URL ", StringComparison.OrdinalIgnoreCase))
         {
-            var url = command.Substring(4).Trim();
+            var raw = command.Substring(4).Trim();
+            var url = Program.NormalizeArgumentUrl(raw);
             if (!string.IsNullOrWhiteSpace(url))
             {
                 UrlTextBox.Text = url;
