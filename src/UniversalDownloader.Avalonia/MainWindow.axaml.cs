@@ -139,6 +139,26 @@ public partial class MainWindow : Window
             _miniPlayer.SetVolume((int)MiniPlayerVolumeSlider.Value);
         };
 
+        StreamsMiniPlayerSeekBar.AddHandler(PointerReleasedEvent, (s, e) =>
+        {
+            if (_miniPlayer.IsLoaded && _miniPlayer.DurationSeconds > 0)
+            {
+                double targetSec = (_miniPlayer.DurationSeconds * StreamsMiniPlayerSeekBar.Value) / 100.0;
+                _miniPlayer.Seek(targetSec);
+            }
+            _isMiniPlayerSeeking = false;
+        }, RoutingStrategies.Bubble, true);
+
+        StreamsMiniPlayerSeekBar.AddHandler(PointerPressedEvent, (s, e) =>
+        {
+            _isMiniPlayerSeeking = true;
+        }, RoutingStrategies.Bubble, true);
+
+        StreamsMiniPlayerVolumeSlider.ValueChanged += (s, e) =>
+        {
+            _miniPlayer.SetVolume((int)StreamsMiniPlayerVolumeSlider.Value);
+        };
+
         _client = new DownloaderClient();
         _client.ProgressChanged += OnProgressChanged;
         _client.DownloadCompleted += OnDownloadCompleted;
@@ -3124,8 +3144,18 @@ public partial class MainWindow : Window
             double dur = _miniPlayer.DurationSeconds;
             if (dur > 0)
             {
-                MiniPlayerSeekBar.Value = Math.Clamp((pos / dur) * 100.0, 0, 100);
-                MiniPlayerTimeText.Text = $"{FormatPlayerTime(pos)} / {FormatPlayerTime(dur)}";
+                double pct = Math.Clamp((pos / dur) * 100.0, 0, 100);
+                string timeStr = $"{FormatPlayerTime(pos)} / {FormatPlayerTime(dur)}";
+                if (MiniPlayerCard.IsVisible)
+                {
+                    MiniPlayerSeekBar.Value = pct;
+                    MiniPlayerTimeText.Text = timeStr;
+                }
+                if (StreamsMiniPlayerCard.IsVisible)
+                {
+                    StreamsMiniPlayerSeekBar.Value = pct;
+                    StreamsMiniPlayerTimeText.Text = timeStr;
+                }
             }
         }
     }
@@ -3134,6 +3164,74 @@ public partial class MainWindow : Window
     {
         var ts = TimeSpan.FromSeconds(Math.Max(0, sec));
         return ts.TotalHours >= 1 ? ts.ToString(@"hh\:mm\:ss") : ts.ToString(@"mm\:ss");
+    }
+
+    private void PreviewStream_Click(object? sender, RoutedEventArgs e)
+    {
+        var fmt = sender is Button btn
+            ? (btn.DataContext is StreamItemViewModel vm ? vm.Format : btn.DataContext as FormatInfoModel)
+            : null;
+
+        if (fmt == null) return;
+
+        var target = !string.IsNullOrWhiteSpace(fmt.DirectUrl) ? fmt.DirectUrl : UrlTextBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(target)) return;
+
+        if (_miniPlayer.Load(target))
+        {
+            StreamsMiniPlayerCard.IsVisible = true;
+            StreamsMiniPlayerTitle.Text = $"{fmt.ResolutionFormatted} • {fmt.CodecSummary}";
+            StreamsMiniPlayerBadge.Text = string.IsNullOrEmpty(fmt.Extension) ? "STREAM" : fmt.Extension.ToUpperInvariant();
+            _miniPlayer.Play();
+            StreamsMiniPlayerPauseIcon.IsVisible = true;
+            StreamsMiniPlayerPlayIcon.IsVisible = false;
+            _miniPlayerTimer.Start();
+        }
+        else
+        {
+            PlatformUtils.OpenFile(target);
+        }
+    }
+
+    private void StreamsMiniPlayerPlayToggle_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!_miniPlayer.IsLoaded) return;
+        if (_miniPlayer.IsPlaying)
+        {
+            _miniPlayer.Pause();
+            StreamsMiniPlayerPauseIcon.IsVisible = false;
+            StreamsMiniPlayerPlayIcon.IsVisible = true;
+        }
+        else
+        {
+            _miniPlayer.Resume();
+            StreamsMiniPlayerPauseIcon.IsVisible = true;
+            StreamsMiniPlayerPlayIcon.IsVisible = false;
+        }
+    }
+
+    private void StreamsMiniPlayerStopButton_Click(object? sender, RoutedEventArgs e)
+    {
+        _miniPlayer.Stop();
+        StreamsMiniPlayerPauseIcon.IsVisible = false;
+        StreamsMiniPlayerPlayIcon.IsVisible = true;
+        StreamsMiniPlayerSeekBar.Value = 0;
+    }
+
+    private void StreamsMiniPlayerCloseButton_Click(object? sender, RoutedEventArgs e)
+    {
+        _miniPlayer.Stop();
+        _miniPlayer.Close();
+        _miniPlayerTimer.Stop();
+        StreamsMiniPlayerCard.IsVisible = false;
+    }
+
+    private void StreamsMiniPlayerExternalButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_miniPlayer.CurrentFilePath))
+        {
+            PlatformUtils.OpenFile(_miniPlayer.CurrentFilePath);
+        }
     }
 
     private void MiniPlayerPlayToggle_Click(object? sender, RoutedEventArgs e)

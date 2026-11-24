@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -6,8 +7,9 @@ using System.Text;
 namespace UniversalDownloader.Core.Media;
 
 /// <summary>
-/// Lightweight, zero-dependency in-app media player for audio and video files.
-/// Uses native OS multimedia subsystems on Windows (MCI / winmm) and process fallbacks on POSIX.
+/// Lightweight in-app media player for audio and video files and streams.
+/// Uses native OS multimedia subsystems on Windows (MCI / winmm) for local files,
+/// with seamless automatic fallback to bundled/system ffplay for WebM/MKV/Opus and direct streams.
 /// </summary>
 public sealed class MiniMediaPlayer : IDisposable
 {
@@ -18,11 +20,15 @@ public sealed class MiniMediaPlayer : IDisposable
     private readonly bool _isWindows;
     private bool _isLoaded;
     private bool _isPlaying;
+    private bool _isProcessPlayback;
+    private Process? _playerProcess;
     private double _durationSeconds;
     private string? _currentFilePath;
+    private int _currentVolume = 85;
 
     public bool IsPlaying => _isPlaying;
     public bool IsLoaded => _isLoaded;
+    public bool IsProcessPlayback => _isProcessPlayback;
     public double DurationSeconds => _durationSeconds;
     public string? CurrentFilePath => _currentFilePath;
 
@@ -32,33 +38,109 @@ public sealed class MiniMediaPlayer : IDisposable
     }
 
     /// <summary>
-    /// Load a media file for playback.
+    /// Find ffplay binary if installed on the system or in the application bin directory.
     /// </summary>
-    public bool Load(string filePath)
+    public static string? FindFfplay()
+    {
+        var exeName = OperatingSystem.IsWindows() ? "ffplay.exe" : "ffplay";
+
+        // 1. Check local bin directory
+        var localBin = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "UniversalDownloader",
+            "bin",
+            exeName
+        );
+        if (File.Exists(localBin)) return localBin;
+
+        // 2. Check standard Windows ffmpeg paths
+        if (OperatingSystem.IsWindows())
+        {
+            var candidates = new[]
+            {
+                @"C:\ffmpeg\bin\ffplay.exe",
+                @"C:\Program Files\ffmpeg\bin\ffplay.exe",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "scoop", "shims", "ffplay.exe"),
+            };
+            foreach (var c in candidates)
+            {
+                if (File.Exists(c)) return c;
+            }
+        }
+
+        // 3. Search PATH
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                var candidate = Path.Combine(dir.Trim(), exeName);
+                if (File.Exists(candidate)) return candidate;
+            }
+            catch { }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Load a local media file or streaming URL for playback.
+    /// </summary>
+    public bool Load(string filePathOrUrl)
     {
         Close();
 
-        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        if (string.IsNullOrWhiteSpace(filePathOrUrl))
             return false;
 
-        _currentFilePath = Path.GetFullPath(filePath);
+        bool isUrl = filePathOrUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                     filePathOrUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+
+        if (!isUrl && !File.Exists(filePathOrUrl))
+            return false;
+
+        _currentFilePath = isUrl ? filePathOrUrl : Path.GetFullPath(filePathOrUrl);
+
+        if (isUrl)
+        {
+            _isLoaded = true;
+            _isProcessPlayback = true;
+            _durationSeconds = 0.0;
+            return true;
+        }
 
         if (_isWindows)
         {
-            // Escape path or quote it for MCI
-            string shortPath = GetShortPath(_currentFilePath);
-            int res = MciSendString($"open \"{shortPath}\" type mpegvideo alias {Alias}", null, 0, IntPtr.Zero);
-            if (res != 0)
+            string ext = Path.GetExtension(_currentFilePath).ToLowerInvariant();
+            // Native MCI supports mp3, mp4, wav, wma, avi
+            bool isMciCandidate = ext is ".mp3" or ".wav" or ".wma" or ".mp4" or ".avi";
+
+            if (isMciCandidate)
             {
-                // Fallback attempt without type specification
-                res = MciSendString($"open \"{shortPath}\" alias {Alias}", null, 0, IntPtr.Zero);
+                string shortPath = GetShortPath(_currentFilePath);
+                int res = MciSendString($"open \"{shortPath}\" type mpegvideo alias {Alias}", null, 0, IntPtr.Zero);
+                if (res != 0)
+                {
+                    res = MciSendString($"open \"{shortPath}\" alias {Alias}", null, 0, IntPtr.Zero);
+                }
+
+                if (res == 0)
+                {
+                    MciSendString($"set {Alias} time format milliseconds", null, 0, IntPtr.Zero);
+                    _durationSeconds = QueryLengthMilliseconds() / 1000.0;
+                    _isLoaded = true;
+                    _isProcessPlayback = false;
+                    SetVolume(_currentVolume);
+                    return true;
+                }
             }
 
-            if (res == 0)
+            // Fallback to process playback (ffplay) for MKV, WebM, FLAC, Opus
+            if (FindFfplay() != null)
             {
-                MciSendString($"set {Alias} time format milliseconds", null, 0, IntPtr.Zero);
-                _durationSeconds = QueryLengthMilliseconds() / 1000.0;
                 _isLoaded = true;
+                _isProcessPlayback = true;
+                _durationSeconds = 0.0;
                 return true;
             }
 
@@ -73,7 +155,41 @@ public sealed class MiniMediaPlayer : IDisposable
 
     public bool Play()
     {
-        if (!_isLoaded) return false;
+        if (!_isLoaded || string.IsNullOrWhiteSpace(_currentFilePath)) return false;
+
+        if (_isProcessPlayback)
+        {
+            var ffplay = FindFfplay();
+            if (ffplay == null) return false;
+
+            StopProcess();
+            try
+            {
+                var isVideo = _currentFilePath.Contains(".mp4", StringComparison.OrdinalIgnoreCase) ||
+                              _currentFilePath.Contains(".webm", StringComparison.OrdinalIgnoreCase) ||
+                              _currentFilePath.Contains(".mkv", StringComparison.OrdinalIgnoreCase) ||
+                              _currentFilePath.Contains(".mov", StringComparison.OrdinalIgnoreCase);
+
+                var args = isVideo
+                    ? $"-autoexit -volume {_currentVolume} -window_title \"Media Preview\" \"{_currentFilePath}\""
+                    : $"-autoexit -nodisp -volume {_currentVolume} \"{_currentFilePath}\"";
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = ffplay,
+                    Arguments = args,
+                    UseShellExecute = false,
+                    CreateNoWindow = !isVideo,
+                };
+                _playerProcess = Process.Start(psi);
+                _isPlaying = _playerProcess != null && !_playerProcess.HasExited;
+                return _isPlaying;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         if (_isWindows)
         {
@@ -90,6 +206,13 @@ public sealed class MiniMediaPlayer : IDisposable
     {
         if (!_isLoaded) return false;
 
+        if (_isProcessPlayback)
+        {
+            StopProcess();
+            _isPlaying = false;
+            return true;
+        }
+
         if (_isWindows)
         {
             MciSendString($"pause {Alias}", null, 0, IntPtr.Zero);
@@ -104,6 +227,11 @@ public sealed class MiniMediaPlayer : IDisposable
     public bool Resume()
     {
         if (!_isLoaded) return false;
+
+        if (_isProcessPlayback)
+        {
+            return Play();
+        }
 
         if (_isWindows)
         {
@@ -120,6 +248,13 @@ public sealed class MiniMediaPlayer : IDisposable
     {
         if (!_isLoaded) return false;
 
+        if (_isProcessPlayback)
+        {
+            StopProcess();
+            _isPlaying = false;
+            return true;
+        }
+
         if (_isWindows)
         {
             MciSendString($"stop {Alias}", null, 0, IntPtr.Zero);
@@ -134,7 +269,7 @@ public sealed class MiniMediaPlayer : IDisposable
 
     public bool Seek(double seconds)
     {
-        if (!_isLoaded) return false;
+        if (!_isLoaded || _isProcessPlayback) return false;
 
         double clamped = Math.Max(0, Math.Min(seconds, _durationSeconds));
         long ms = (long)(clamped * 1000.0);
@@ -154,11 +289,10 @@ public sealed class MiniMediaPlayer : IDisposable
 
     public void SetVolume(int volumePercent)
     {
-        if (!_isLoaded) return;
+        _currentVolume = Math.Clamp(volumePercent, 0, 100);
+        if (!_isLoaded || _isProcessPlayback) return;
 
-        int clamped = Math.Clamp(volumePercent, 0, 100);
-        int mciVolume = clamped * 10; // MCI volume scale 0-1000
-
+        int mciVolume = _currentVolume * 10; // MCI volume scale 0-1000
         if (_isWindows)
         {
             MciSendString($"setaudio {Alias} volume to {mciVolume}", null, 0, IntPtr.Zero);
@@ -167,7 +301,7 @@ public sealed class MiniMediaPlayer : IDisposable
 
     public double GetCurrentPositionSeconds()
     {
-        if (!_isLoaded) return 0.0;
+        if (!_isLoaded || _isProcessPlayback) return 0.0;
 
         if (_isWindows)
         {
@@ -196,8 +330,30 @@ public sealed class MiniMediaPlayer : IDisposable
         return 0;
     }
 
+    private void StopProcess()
+    {
+        if (_playerProcess != null)
+        {
+            try
+            {
+                if (!_playerProcess.HasExited)
+                {
+                    _playerProcess.Kill(entireProcessTree: true);
+                }
+            }
+            catch { }
+            finally
+            {
+                _playerProcess.Dispose();
+                _playerProcess = null;
+            }
+        }
+    }
+
     public void Close()
     {
+        StopProcess();
+
         if (_isWindows)
         {
             MciSendString($"stop {Alias}", null, 0, IntPtr.Zero);
@@ -206,6 +362,7 @@ public sealed class MiniMediaPlayer : IDisposable
 
         _isLoaded = false;
         _isPlaying = false;
+        _isProcessPlayback = false;
         _durationSeconds = 0.0;
         _currentFilePath = null;
     }
@@ -224,10 +381,7 @@ public sealed class MiniMediaPlayer : IDisposable
                 return sb.ToString();
             }
         }
-        catch
-        {
-            // fallback to original path
-        }
+        catch { }
         return path;
     }
 
