@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         requestOptionalPermissions()
-        handleIncomingShareIntent(intent)
+        handleIncomingIntent(intent)
 
         setContent {
             UniversalDownloaderTheme {
@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleIncomingShareIntent(intent)
+        handleIncomingIntent(intent)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -57,11 +57,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun handleIncomingShareIntent(incomingIntent: Intent?) {
-        if (incomingIntent?.action == Intent.ACTION_SEND && incomingIntent.type == "text/plain") {
-            val sharedText = incomingIntent.getStringExtra(Intent.EXTRA_TEXT)
-            if (!sharedText.isNullOrBlank()) {
-                viewModel.onSharedTextReceived(sharedText)
+    private fun handleIncomingIntent(incomingIntent: Intent?) {
+        if (incomingIntent == null) return
+
+        when (incomingIntent.action) {
+            Intent.ACTION_SEND -> {
+                val text = incomingIntent.getStringExtra(Intent.EXTRA_TEXT)
+                    ?: incomingIntent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+                    ?: incomingIntent.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+                if (!text.isNullOrBlank()) {
+                    viewModel.onSharedTextReceived(text)
+                }
+            }
+            Intent.ACTION_VIEW -> {
+                val dataUri = incomingIntent.dataString ?: incomingIntent.data?.toString()
+                if (!dataUri.isNullOrBlank()) {
+                    viewModel.onSharedTextReceived(dataUri)
+                }
             }
         }
     }

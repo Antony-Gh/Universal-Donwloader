@@ -292,6 +292,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     appendLog("[Success] Embedded yt-dlp$verSuffix & FFmpeg runtime ready.")
 
+                    // If a URL was queued via cold-boot Share Intent while engine was initializing, trigger metadata fetch now
+                    val pendingUrl = _uiState.value.urlInput
+                    if (pendingUrl.isNotBlank() && repo.isValidUrl(pendingUrl) && _uiState.value.metadata == null) {
+                        triggerMetadataFetch(pendingUrl, immediate = true)
+                    }
+
                     // Auto-update check: if bundled version is from 2025 or missing, silently update in background
                     if (currentVer == null || currentVer.startsWith("2025")) {
                         viewModelScope.launch(Dispatchers.IO) {

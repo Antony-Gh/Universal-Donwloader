@@ -1,6 +1,7 @@
 package com.universaldownloader.app.engine
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaScannerConnection
@@ -136,13 +137,21 @@ class DownloaderRepository(private val appContext: Context) {
     }
 
     fun normalizeUrl(rawInput: String): String {
-        val (cleanedHint, _) = extractFormatHint(rawInput)
-        val trimmed = (if (cleanedHint.isNotEmpty()) cleanedHint else rawInput).trim().trim('"', '\'')
+        var input = rawInput.trim().trim('"', '\'')
+        if (input.startsWith("udloader://", ignoreCase = true)) {
+            input = input.substring("udloader://".length).trim()
+        } else if (input.startsWith("udloader:", ignoreCase = true)) {
+            input = input.substring("udloader:".length).trim()
+        }
+
+        val (cleanedHint, _) = extractFormatHint(input)
+        val trimmed = (if (cleanedHint.isNotEmpty()) cleanedHint else input).trim().trim('"', '\'')
         if (trimmed.isEmpty()) return ""
 
         // Extract first URL if user shared text containing a title + link (e.g. from YouTube/TikTok Share Sheet)
         val urlRegex = Regex("""https?://[^\s"'<>]+""")
-        val extracted = urlRegex.find(trimmed)?.value ?: trimmed
+        val rawExtracted = urlRegex.find(trimmed)?.value ?: trimmed
+        val extracted = rawExtracted.trimEnd('.', ',', ')', ']', ';', '>', '"', '\'')
 
         return try {
             val uri = Uri.parse(extracted)
@@ -628,7 +637,7 @@ class DownloaderRepository(private val appContext: Context) {
                 if (!outFile.exists()) {
                     throw RuntimeException("FFmpeg conversion did not produce output file.")
                 }
-                MediaScannerConnection.scanFile(appContext, arrayOf(outFile.absolutePath), null, null)
+                scanMediaFile(outFile)
                 outFile
             } finally {
                 tempIn.delete()
@@ -672,6 +681,40 @@ class DownloaderRepository(private val appContext: Context) {
         if (cleaned.isEmpty() || cleaned == stem) return file
         val target = File(file.parentFile, "$cleaned.${file.extension}")
         return if (!target.exists() && file.renameTo(target)) target else file
+    }
+
+    fun scanMediaFile(file: File) {
+        if (!file.exists()) return
+        val mimeType = when (file.extension.lowercase(Locale.US)) {
+            "mp4" -> "video/mp4"
+            "mkv" -> "video/x-matroska"
+            "webm" -> "video/webm"
+            "avi" -> "video/x-msvideo"
+            "mov" -> "video/quicktime"
+            "flv" -> "video/x-flv"
+            "mp3" -> "audio/mpeg"
+            "m4a" -> "audio/mp4"
+            "opus" -> "audio/opus"
+            "ogg" -> "audio/ogg"
+            "wav" -> "audio/wav"
+            "flac" -> "audio/flac"
+            "aac" -> "audio/aac"
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "webp" -> "image/webp"
+            else -> null
+        }
+        MediaScannerConnection.scanFile(
+            appContext,
+            arrayOf(file.absolutePath),
+            if (mimeType != null) arrayOf(mimeType) else null,
+        ) { _, _ -> }
+        try {
+            val mediaScanIntent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
+            mediaScanIntent.data = Uri.fromFile(file)
+            appContext.sendBroadcast(mediaScanIntent)
+        } catch (_: Exception) {
+        }
     }
 
     fun getOutputDirectory(audioOnly: Boolean): File {
@@ -858,12 +901,7 @@ class DownloaderRepository(private val appContext: Context) {
                 if (options.cleanFilenames) {
                     createdFile = cleanClickbaitFilename(createdFile)
                 }
-                MediaScannerConnection.scanFile(
-                    appContext,
-                    arrayOf(createdFile.absolutePath),
-                    null,
-                    null,
-                )
+                scanMediaFile(createdFile)
                 onLog("[Complete] Saved: ${createdFile.name}")
             } else {
                 onLog("[Complete] Download finished in ${outDir.absolutePath}")
@@ -1381,7 +1419,7 @@ class DownloaderRepository(private val appContext: Context) {
 
             val dest = File(outDir, "${safeName}${suffix}_${System.currentTimeMillis()}.$ext")
             dest.writeBytes(rawBytes)
-            MediaScannerConnection.scanFile(appContext, arrayOf(dest.absolutePath), null, null)
+            scanMediaFile(dest)
             onLog("[Complete] Image saved: ${dest.name}")
             dest
         }
