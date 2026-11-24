@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Universal Media Downloader Companion",
   "short_name": "Universal Downloader",
-  "version": "4.3.0",
+  "version": "4.4.0",
   "description": "1-click Video & MP3 download, page stream sniffer (.m3u8 / .mpd / <video>), and Native Messaging companion for Universal Media Downloader.",
   "icons": {
     "16": "icons/icon16.png",

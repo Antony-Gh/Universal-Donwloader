@@ -159,7 +159,7 @@ def get_default_version() -> str:
         match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', text)
         if match:
             return match.group(1).lstrip("v")
-    return "4.3.0"
+    return "4.4.0"
 
 
 def compute_sha256(filepath: Path) -> str:
