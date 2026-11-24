@@ -112,6 +112,32 @@ def build_msi(exe_path: Path, output_path: Path, version_override: str | None = 
     return output_path
 
 
+def publish_avalonia_binary(output_dir: Path) -> Path:
+    """Build single-file self-contained win-x64 binary using dotnet publish."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    proj_path = ROOT_DIR / "src" / "UniversalDownloader.Avalonia" / "UniversalDownloader.Avalonia.csproj"
+    cmd = [
+        "dotnet",
+        "publish",
+        str(proj_path),
+        "-c", "Release",
+        "-r", "win-x64",
+        "--self-contained", "true",
+        "-p:PublishSingleFile=true",
+        "-p:IncludeNativeLibrariesForSelfExtract=true",
+        "-p:EnableCompressionInSingleFile=true",
+        "-o", str(output_dir.resolve()),
+    ]
+    print(f"Publishing self-contained win-x64 binary from {proj_path.name}...")
+    proc = subprocess.run(cmd, cwd=str(ROOT_DIR), text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"dotnet publish failed with exit code {proc.returncode}")
+    exe = output_dir / "UniversalDownloader.exe"
+    if not exe.exists():
+        raise FileNotFoundError(f"Published binary not found at {exe}")
+    return exe
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build Windows MSI installer for Universal Media Downloader")
     parser.add_argument(
@@ -126,11 +152,19 @@ def main() -> int:
         default=ROOT_DIR / "releases" / "UniversalDownloader-Setup-x64.msi",
         help="Output .msi file path",
     )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="Automatically publish self-contained single-file Avalonia exe before packaging",
+    )
     parser.add_argument("--version", default=None, help="Override MSI version (defaults to app_config.json)")
     args = parser.parse_args()
 
     try:
-        build_msi(args.exe, args.out, args.version)
+        exe_path = args.exe
+        if args.publish or not exe_path.exists():
+            exe_path = publish_avalonia_binary(exe_path.parent)
+        build_msi(exe_path, args.out, args.version)
         return 0
     except Exception as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)

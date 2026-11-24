@@ -77,10 +77,20 @@
                      KeyPath="yes" />
     </Component>
 
-    <!-- Custom downloader:// URL Protocol Handler -->
+    <!-- Custom udloader:// & downloader:// URL Protocol Handlers -->
     <Component Id="ProtocolHandlerComponent" Directory="INSTALLFOLDER" Guid="D4F8A217-9E35-4C1B-B6A2-58E1C9F73A44">
-      <RegistryKey Root="HKLM" Key="Software\Classes\downloader">
+      <RegistryKey Root="HKLM" Key="Software\Classes\udloader">
         <RegistryValue Type="string" Value="URL:Universal Media Downloader Protocol" KeyPath="yes" />
+        <RegistryValue Name="URL Protocol" Type="string" Value="" />
+        <RegistryKey Key="DefaultIcon">
+          <RegistryValue Type="string" Value="&quot;[#UniversalDownloaderExe]&quot;,0" />
+        </RegistryKey>
+        <RegistryKey Key="shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[#UniversalDownloaderExe]&quot; &quot;%1&quot;" />
+        </RegistryKey>
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Classes\downloader">
+        <RegistryValue Type="string" Value="URL:Universal Media Downloader Protocol" />
         <RegistryValue Name="URL Protocol" Type="string" Value="" />
         <RegistryKey Key="DefaultIcon">
           <RegistryValue Type="string" Value="&quot;[#UniversalDownloaderExe]&quot;,0" />
