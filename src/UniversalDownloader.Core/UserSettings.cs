@@ -27,6 +27,8 @@ public class UserSettings
     public bool MinimizeToTray { get; set; } = true;
     public bool WatchClipboard { get; set; } = true;
     public string ThemePreset { get; set; } = "default";
+    public int SpeedLimitIndex { get; set; } = 0;
+    public bool UseAria2 { get; set; } = false;
 
     public static string SettingsFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

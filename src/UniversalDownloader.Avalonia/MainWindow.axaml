@@ -666,6 +666,40 @@
                                             </StackPanel>
                                         </Grid>
 
+                                        <!-- Bandwidth Limiter, Download Scheduler, and Aria2c Engine Acceleration -->
+                                        <Grid ColumnDefinitions="*,*,*" Margin="0,4,0,0">
+                                            <StackPanel Grid.Column="0" Margin="0,0,10,0" Spacing="5">
+                                                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="SpeedLimitHeader" Text="Speed / Bandwidth Limit" Foreground="#9CA3AF" FontSize="12"/>
+                                                    <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                              ToolTip.Tip="Throttle download bandwidth rate to prevent network saturation (e.g. 10 MB/s, 2 MB/s, 500 KB/s)."/>
+                                                </StackPanel>
+                                                <ComboBox x:Name="SpeedLimitComboBox" HorizontalAlignment="Stretch" SelectedIndex="0">
+                                                    <ComboBoxItem Content="Unlimited (Maximum Speed)"/>
+                                                    <ComboBoxItem Content="10 MB/s"/>
+                                                    <ComboBoxItem Content="5 MB/s"/>
+                                                    <ComboBoxItem Content="2 MB/s"/>
+                                                    <ComboBoxItem Content="1 MB/s"/>
+                                                    <ComboBoxItem Content="500 KB/s"/>
+                                                    <ComboBoxItem Content="250 KB/s"/>
+                                                </ComboBox>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="1" Margin="0,0,10,0" Spacing="5">
+                                                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="ScheduleTimeHeader" Text="Schedule Download (HH:MM)" Foreground="#9CA3AF" FontSize="12"/>
+                                                    <PathIcon Classes="info-icon" Data="{StaticResource InfoCircleIcon}"
+                                                              ToolTip.Tip="Delay download until scheduled 24-hour time (e.g. 02:30 or 23:00). Stays queued and starts automatically."/>
+                                                </StackPanel>
+                                                <TextBox x:Name="DownloadScheduleBox" FlowDirection="LeftToRight" Watermark="e.g. 02:00 (Optional)"/>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="2" Spacing="5" VerticalAlignment="Bottom">
+                                                <CheckBox x:Name="Aria2Check" Content="Aria2c Multi-Connection Engine" IsChecked="False"
+                                                          ToolTip.Tip="Use aria2c external downloader with 16 parallel connections per file for multi-gigabit speeds."/>
+                                            </StackPanel>
+                                        </Grid>
+
                                         <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
                                             <Button x:Name="ConvertLocalMp3Button" Margin="0,0,8,4" Padding="10,6" Background="#374151" Foreground="#F8FAFC" FontSize="12" Content="Convert Local File → MP3" Click="ConvertLocalMp3Button_Click"/>
                                             <Button x:Name="RemuxLocalMp4Button" Margin="0,0,8,4" Padding="10,6" Background="#374151" Foreground="#F8FAFC" FontSize="12" Content="Remux Local File → MP4" Click="RemuxLocalMp4Button_Click"/>
@@ -783,6 +817,19 @@
                                                        Width="105" Height="32" Margin="6,0,0,0" FormatString="0"
                                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                                        VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,6">
+                                        <TextBlock Text="Speed Limit:" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                                        <ComboBox x:Name="QueueSpeedLimitComboBox" SelectedIndex="0" Height="32">
+                                            <ComboBoxItem Content="Unlimited"/>
+                                            <ComboBoxItem Content="10 MB/s"/>
+                                            <ComboBoxItem Content="5 MB/s"/>
+                                            <ComboBoxItem Content="2 MB/s"/>
+                                            <ComboBoxItem Content="1 MB/s"/>
+                                            <ComboBoxItem Content="500 KB/s"/>
+                                            <ComboBoxItem Content="250 KB/s"/>
+                                        </ComboBox>
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,6">

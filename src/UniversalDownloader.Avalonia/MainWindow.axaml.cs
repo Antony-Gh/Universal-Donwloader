@@ -515,6 +515,8 @@ public partial class MainWindow : Window
         WriteThumbnailCheck.IsChecked = _settings.WriteThumbnail;
         MinimizeToTrayCheck.IsChecked = _settings.MinimizeToTray;
         SponsorBlockCheck.IsChecked = _settings.SponsorBlockEnabled;
+        SpeedLimitComboBox.SelectedIndex = Math.Clamp(_settings.SpeedLimitIndex, 0, Math.Max(0, SpeedLimitComboBox.ItemCount - 1));
+        Aria2Check.IsChecked = _settings.UseAria2;
         ThemeComboBox.SelectedIndex = _settings.ThemePreset switch
         {
             "amoled" => 1,
@@ -738,6 +740,8 @@ public partial class MainWindow : Window
         _settings.WriteThumbnail = WriteThumbnailCheck.IsChecked ?? false;
         _settings.MinimizeToTray = MinimizeToTrayCheck.IsChecked ?? false;
         _settings.SponsorBlockEnabled = SponsorBlockCheck.IsChecked ?? false;
+        _settings.SpeedLimitIndex = SpeedLimitComboBox.SelectedIndex;
+        _settings.UseAria2 = Aria2Check.IsChecked ?? false;
         _settings.TelemetryEnabled = !(OptOutTelemetryCheckBox.IsChecked ?? false);
         _settings.Save();
     }
@@ -1275,6 +1279,17 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(recordDuration)) options.RecordDuration = recordDuration;
         options.LiveFromStart = LiveFromStartCheck.IsChecked == true;
 
+        var speedLimit = GetSelectedSpeedLimitString();
+        if (!string.IsNullOrWhiteSpace(speedLimit)) options.LimitRate = speedLimit;
+
+        var downloadSched = DownloadScheduleBox?.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(downloadSched))
+        {
+            options.ScheduleTime = downloadSched;
+        }
+
+        options.UseAria2 = Aria2Check?.IsChecked == true;
+
         if (GetSelectedQualityString() == "audio")
         {
             options.AudioOnly = true;
@@ -1318,6 +1333,36 @@ public partial class MainWindow : Window
         if (text.Contains("VP9", StringComparison.OrdinalIgnoreCase)) return "vp9";
         if (text.Contains("AV1", StringComparison.OrdinalIgnoreCase)) return "av01";
         return null; // Auto
+    }
+
+    private string? GetSelectedSpeedLimitString()
+    {
+        int idx = SpeedLimitComboBox?.SelectedIndex ?? 0;
+        return idx switch
+        {
+            1 => "10M",
+            2 => "5M",
+            3 => "2M",
+            4 => "1M",
+            5 => "500K",
+            6 => "250K",
+            _ => null,
+        };
+    }
+
+    private string? GetQueueSelectedSpeedLimitString()
+    {
+        int idx = QueueSpeedLimitComboBox?.SelectedIndex ?? 0;
+        return idx switch
+        {
+            1 => "10M",
+            2 => "5M",
+            3 => "2M",
+            4 => "1M",
+            5 => "500K",
+            6 => "250K",
+            _ => null,
+        };
     }
 
     public static bool IsProfileUrl(string? rawUrl)
@@ -1672,6 +1717,13 @@ public partial class MainWindow : Window
                 try
                 {
                     if (token.IsCancellationRequested) return;
+
+                    var qSpeed = GetQueueSelectedSpeedLimitString();
+                    if (!string.IsNullOrWhiteSpace(qSpeed))
+                    {
+                        item.Options.LimitRate = qSpeed;
+                    }
+
                     Dispatcher.UIThread.Post(() =>
                     {
                         item.Status = QueueItemStatus.Downloading;
