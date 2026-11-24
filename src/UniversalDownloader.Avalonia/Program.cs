@@ -48,6 +48,16 @@ sealed class Program
             trimmed = trimmed.Substring(9).TrimStart('/');
             try { trimmed = Uri.UnescapeDataString(trimmed); } catch { }
         }
+        else if (trimmed.StartsWith("downloader://", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed.Substring(13).TrimStart('/');
+            try { trimmed = Uri.UnescapeDataString(trimmed); } catch { }
+        }
+        else if (trimmed.StartsWith("downloader:", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed.Substring(11).TrimStart('/');
+            try { trimmed = Uri.UnescapeDataString(trimmed); } catch { }
+        }
         return trimmed;
     }
 

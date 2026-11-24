@@ -12,6 +12,7 @@
   "permissions": [
     "activeTab",
     "contextMenus",
+    "cookies",
     "nativeMessaging",
     "scripting",
     "tabs"

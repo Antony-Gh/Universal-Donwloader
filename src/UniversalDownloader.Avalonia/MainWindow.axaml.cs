@@ -198,7 +198,11 @@ public partial class MainWindow : Window
 
             if (PlatformUtils.IsWindows)
             {
-                _ = Task.Run(() => PlatformUtils.RegisterProtocolHandler("udloader"));
+                _ = Task.Run(() =>
+                {
+                    PlatformUtils.RegisterProtocolHandler("udloader");
+                    PlatformUtils.RegisterProtocolHandler("downloader");
+                });
             }
 
             var cmdArgs = Environment.GetCommandLineArgs();
@@ -408,10 +412,60 @@ public partial class MainWindow : Window
 
         RestoreAndActivateWindow();
 
-        if (command.StartsWith("URL ", StringComparison.OrdinalIgnoreCase))
+        if (command.StartsWith("URL_WITH_COOKIES ", StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = command.Substring(17).Trim();
+            var pipeIdx = rest.IndexOf('|');
+            string urlRaw;
+            string? cookieFile = null;
+            if (pipeIdx >= 0)
+            {
+                urlRaw = rest.Substring(0, pipeIdx).Trim();
+                cookieFile = rest.Substring(pipeIdx + 1).Trim();
+            }
+            else
+            {
+                urlRaw = rest;
+            }
+
+            if (!string.IsNullOrWhiteSpace(cookieFile) && File.Exists(cookieFile))
+            {
+                CookiesFileBox.Text = cookieFile;
+                OnRawOutputReceived(null, $"[Browser Extension] Session cookies loaded: {Path.GetFileName(cookieFile)}");
+            }
+
+            var url = Program.NormalizeArgumentUrl(urlRaw);
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                UrlTextBox.Text = url;
+                InspectMediaDirectly(url);
+            }
+        }
+        else if (command.StartsWith("URL ", StringComparison.OrdinalIgnoreCase))
         {
             var raw = command.Substring(4).Trim();
             var url = Program.NormalizeArgumentUrl(raw);
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                UrlTextBox.Text = url;
+                InspectMediaDirectly(url);
+            }
+        }
+        else if (command.StartsWith("COOKIES ", StringComparison.OrdinalIgnoreCase))
+        {
+            var cookieFile = command.Substring(8).Trim();
+            if (File.Exists(cookieFile))
+            {
+                CookiesFileBox.Text = cookieFile;
+                OnRawOutputReceived(null, $"[Browser Extension] Session cookies loaded: {Path.GetFileName(cookieFile)}");
+            }
+        }
+        else if (command.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                 command.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                 command.StartsWith("udloader://", StringComparison.OrdinalIgnoreCase) ||
+                 command.StartsWith("downloader://", StringComparison.OrdinalIgnoreCase))
+        {
+            var url = Program.NormalizeArgumentUrl(command);
             if (!string.IsNullOrWhiteSpace(url))
             {
                 UrlTextBox.Text = url;

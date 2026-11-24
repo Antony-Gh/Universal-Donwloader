@@ -14,7 +14,9 @@ from universal_downloader.models import AppConfig, DownloadResult
 from universal_downloader.native_host import (
     HOST_NAME,
     build_native_host_manifest,
+    forward_to_desktop_ipc,
     handle_native_command,
+    parse_and_save_cookies,
     read_native_message,
     run_native_host,
     write_native_message,
@@ -117,3 +119,27 @@ def test_build_native_host_manifest_chrome_and_firefox() -> None:
     assert firefox["name"] == HOST_NAME
     assert "allowed_extensions" in firefox
     assert "allowed_origins" not in firefox
+
+
+def test_parse_and_save_cookies(tmp_path: Path) -> None:
+    cookies = [
+        {"domain": ".tiktok.com", "path": "/", "secure": True, "expirationDate": 1800000000, "name": "sessionid", "value": "xyz123"},
+        {"domain": ".facebook.com", "path": "/", "secure": True, "expirationDate": 1800000000, "name": "c_user", "value": "10001"},
+    ]
+    saved_file = parse_and_save_cookies(cookies, output_dir=tmp_path)
+    assert saved_file is not None
+    assert saved_file.exists()
+    content = saved_file.read_text(encoding="utf-8")
+    assert ".tiktok.com\tTRUE\t/\tTRUE" in content
+    assert "sessionid\txyz123" in content
+    assert "c_user\t10001" in content
+
+
+@patch("universal_downloader.native_host.forward_to_desktop_ipc")
+def test_handle_native_command_open_in_gui(mock_ipc: MagicMock) -> None:
+    mock_ipc.return_value = True
+    reply = handle_native_command({"action": "open_in_gui", "url": "https://www.tiktok.com/@user/video/123"}, AppConfig())
+    assert reply["ok"] is True
+    assert reply["delivered"] == "ipc"
+    mock_ipc.assert_called_once()
+    assert "https://www.tiktok.com/@user/video/123" in mock_ipc.call_args[0][0]

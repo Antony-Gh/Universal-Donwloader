@@ -45,8 +45,8 @@ function triggerDownload(targetUrl, audioOnly) {
       (resp) => {
         if (chrome.runtime.lastError || !resp || !resp.ok) {
           const suffix = audioOnly ? "#mp3" : "#mp4";
-          window.open("downloader://" + encodeURI(url + suffix), "_blank");
-          setStatus("Launched via downloader:// protocol.");
+          window.open("udloader://" + encodeURI(url + suffix), "_blank");
+          setStatus("Launched via udloader:// protocol.");
         } else {
           setStatus("Completed: " + (resp.title || url));
         }
@@ -54,8 +54,8 @@ function triggerDownload(targetUrl, audioOnly) {
     );
   } catch (_err) {
     const suffix = audioOnly ? "#mp3" : "#mp4";
-    window.open("downloader://" + encodeURI(url + suffix), "_blank");
-    setStatus("Launched via downloader:// protocol.");
+    window.open("udloader://" + encodeURI(url + suffix), "_blank");
+    setStatus("Launched via udloader:// protocol.");
   }
 }
 
@@ -132,5 +132,21 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("downloadVideoBtn").addEventListener("click", () => triggerDownload(urlInput.value, false));
   document.getElementById("downloadMp3Btn").addEventListener("click", () => triggerDownload(urlInput.value, true));
+  document.getElementById("openInAppBtn").addEventListener("click", () => {
+    const url = (urlInput.value || "").trim();
+    if (!url) {
+      setStatus("Please enter or select a media URL.");
+      return;
+    }
+    setStatus("Forwarding to Universal Downloader Desktop...");
+    chrome.runtime.sendMessage({ action: "open_in_app", url: url }, (resp) => {
+      if (chrome.runtime.lastError || !resp || !resp.ok) {
+        window.open("udloader://" + encodeURI(url), "_blank");
+        setStatus("Opened via udloader:// protocol.");
+      } else {
+        setStatus("Forwarded to Desktop App!");
+      }
+    });
+  });
   document.getElementById("sniffTabBtn").addEventListener("click", sniffActiveTab);
 });
